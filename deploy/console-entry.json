@@ -1,0 +1,8 @@
+{
+  "id": "casierul-clasei",
+  "name": "Casierul clasei",
+  "api": "/casierul-clasei",
+  "push": false,
+  "message": "Acces la Casierul clasei — evidența contribuțiilor și a banilor clasei.\n\nDeschide {link}, apoi apasă Activează.\n\nPoți instala aplicația pe ecranul principal. Codul este valabil {days} zile și înregistrează un singur dispozitiv al casierului.",
+  "invite_note": "Înregistrează un dispozitiv al casierului în aceeași clasă. Nu distribui părinților. Valabil {days} zile, o singură utilizare."
+}

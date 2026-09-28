@@ -1,0 +1,16 @@
+{
+  "name": "casierul-clasei",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "start": "node server/index.mjs",
+    "test": "node --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "pdfkit": "^0.20.2"
+  }
+}

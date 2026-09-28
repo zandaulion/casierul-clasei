@@ -1,0 +1,289 @@
+<div id="cc-collection-preview" aria-label="Casierul clasei — încasare rapidă">
+  <style>
+    #cc-collection-preview { --cc-bg: light-dark(#f5f4ee, #191e1c); --cc-surface: light-dark(#ffffff, #242b27); --cc-text: light-dark(#1d3027, #edf3ef); --cc-muted: light-dark(#58665f, #b2c0b8); --cc-line: light-dark(#dce3dd, #424e46); --cc-brand: light-dark(#205d42, #a6ddbd); --cc-on-brand: light-dark(#ffffff, #153724); --cc-soft: light-dark(#e8f0e9, #2c3d31); --cc-error: light-dark(#a92d26, #ffaaa2); font: 400 15px/1.5 system-ui, sans-serif; color: var(--cc-text); width: 100%; }
+    #cc-collection-preview * { box-sizing: border-box; }
+    #cc-collection-preview .cc-phone { max-width: 460px; margin: 0 auto; background: var(--cc-bg); border: 1px solid var(--cc-line); border-radius: 22px; overflow: hidden; }
+    #cc-collection-preview .cc-top { padding: 16px 20px; border-bottom: 1px solid var(--cc-line); }
+    #cc-collection-preview .cc-brand { font-weight: 500; }
+    #cc-collection-preview .cc-caption { font-size: 13px; color: var(--cc-muted); }
+    #cc-collection-preview .cc-main { padding: 18px; }
+    #cc-collection-preview h2 { font: 500 24px/1.25 system-ui, sans-serif; margin: 0 0 5px; letter-spacing: -.025em; overflow-wrap: anywhere; }
+    #cc-collection-preview .cc-section-label { display: block; font-weight: 500; margin: 17px 0 8px; }
+    #cc-collection-preview button { font: inherit; color: inherit; }
+    #cc-collection-preview button:disabled { opacity: .5; cursor: not-allowed; }
+    #cc-collection-preview .cc-children { display: grid; gap: 9px; margin-top: 20px; }
+    #cc-collection-preview .cc-child { width: 100%; min-height: var(--cc-child-height, 78px); padding: 14px; border: 1px solid var(--cc-line); border-radius: 14px; background: var(--cc-surface); display: flex; align-items: center; justify-content: space-between; gap: 10px; text-align: left; }
+    #cc-collection-preview .cc-child-name { display: block; font-size: 20px; font-weight: 500; }
+    #cc-collection-preview .cc-child-due { white-space: nowrap; font-variant-numeric: tabular-nums; }
+    #cc-collection-preview .cc-back { min-height: 44px; border: 0; padding: 0 12px 0 0; background: transparent; color: var(--cc-brand); margin: -6px 0 6px; }
+    #cc-collection-preview .cc-choice { width: 100%; min-height: 62px; padding: 12px 14px; background: var(--cc-surface); border: 1px solid var(--cc-line); border-radius: 12px; display: flex; align-items: center; justify-content: space-between; gap: 12px; text-align: left; }
+    #cc-collection-preview .cc-choice[aria-pressed="true"], #cc-collection-preview .cc-round[aria-pressed="true"] { background: var(--cc-brand); color: var(--cc-on-brand); border-color: var(--cc-brand); }
+    #cc-collection-preview .cc-choice[aria-pressed="true"] .cc-caption, #cc-collection-preview .cc-round[aria-pressed="true"] .cc-caption { color: inherit; }
+    #cc-collection-preview .cc-total-choice { margin-top: 17px; min-height: 83px; }
+    #cc-collection-preview .cc-total-number { font-size: 30px; font-weight: 500; white-space: nowrap; font-variant-numeric: tabular-nums; }
+    #cc-collection-preview .cc-expenses { display: grid; gap: 7px; }
+    #cc-collection-preview .cc-choice-money { white-space: nowrap; font-size: 19px; font-weight: 500; font-variant-numeric: tabular-nums; }
+    #cc-collection-preview .cc-rounds { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px; }
+    #cc-collection-preview .cc-round { padding: 10px 4px; min-height: 74px; background: var(--cc-surface); border: 1px solid var(--cc-line); border-radius: 12px; }
+    #cc-collection-preview .cc-round-value { display: block; font-size: 20px; font-weight: 500; font-variant-numeric: tabular-nums; }
+    #cc-collection-preview .cc-round .cc-caption { display: block; font-size: 12px; }
+    #cc-collection-preview .cc-money { display: flex; align-items: center; gap: 12px; padding: 8px 13px; background: var(--cc-surface); border: 1px solid var(--cc-line); border-radius: 12px; }
+    #cc-collection-preview .cc-money input { width: 100%; min-width: 0; height: 44px; border: 0; padding: 0; background: transparent; color: var(--cc-text); font: 500 27px/1.3 system-ui, sans-serif; font-variant-numeric: tabular-nums; }
+    #cc-collection-preview .cc-excess { border: 0; padding: 0; margin: 14px 0; min-width: 0; }
+    #cc-collection-preview .cc-excess legend { padding: 0; margin-bottom: 8px; font-weight: 500; }
+    #cc-collection-preview .cc-switch { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+    #cc-collection-preview .cc-switch button { border: 1px solid var(--cc-line); border-radius: 10px; min-height: 50px; padding: 10px 5px; background: var(--cc-surface); }
+    #cc-collection-preview .cc-switch button[aria-pressed="true"] { background: var(--cc-brand); color: var(--cc-on-brand); border-color: var(--cc-brand); }
+    #cc-collection-preview .cc-summary { background: var(--cc-soft); padding: 12px 14px; border-radius: 12px; margin: 14px 0; font-variant-numeric: tabular-nums; }
+    #cc-collection-preview .cc-summary dl { margin: 0; }
+    #cc-collection-preview .cc-summary dl > div { display: flex; justify-content: space-between; gap: 12px; padding: 2px 0; }
+    #cc-collection-preview .cc-summary dd { margin: 0; text-align: right; white-space: nowrap; }
+    #cc-collection-preview .cc-primary { width: 100%; min-height: 52px; border: 0; border-radius: 12px; background: var(--cc-brand); color: var(--cc-on-brand); padding: 12px; font-weight: 500; }
+    #cc-collection-preview .cc-error { color: var(--cc-error); font-size: 13px; }
+    #cc-collection-preview .cc-confirmation { font-size: 13px; padding: 12px; background: var(--cc-soft); border-radius: 12px; }
+    #cc-collection-preview details { margin-top: 12px; }
+    #cc-collection-preview summary { min-height: 44px; padding: 10px 0; color: var(--cc-muted); }
+    #cc-collection-preview .cc-check { display: flex; align-items: center; gap: 9px; min-height: 44px; }
+    #cc-collection-preview .cc-check input { width: 20px; height: 20px; accent-color: var(--cc-brand); }
+    #cc-collection-preview .cc-allocation-line { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 8px 0; }
+    #cc-collection-preview .cc-allocation-line input { width: 90px; height: 44px; border: 1px solid var(--cc-line); border-radius: 9px; background: var(--cc-surface); color: var(--cc-text); padding: 8px; font: 400 16px system-ui, sans-serif; text-align: right; }
+    #cc-collection-preview .cc-allocation-line input:read-only { opacity: .7; }
+    #cc-collection-preview .cc-empty { padding: 24px 0; }
+    #cc-collection-preview [hidden] { display: none !important; }
+    @media (max-width: 360px) { #cc-collection-preview .cc-main { padding: 14px; } #cc-collection-preview .cc-child { padding: 12px; } #cc-collection-preview .cc-child-name { font-size: 18px; } #cc-collection-preview .cc-total-number { font-size: 27px; } }
+  </style>
+  <section class="cc-phone">
+    <header class="cc-top"><div class="cc-brand">Casierul clasei</div><div class="cc-caption">Previzualizare · date fictive</div></header>
+    <div class="cc-main" id="cc-roster-screen">
+      <h2>Alege copilul</h2>
+      <div class="cc-caption">În ordine alfabetică, după numele de familie</div>
+      <div id="cc-children" class="cc-children" aria-label="Copii"></div>
+    </div>
+    <div class="cc-main" id="cc-payment-screen" hidden>
+      <button type="button" class="cc-back cursor-interaction" id="cc-back">‹ Copii</button>
+      <h2 id="cc-child-name"></h2>
+      <div class="cc-caption">Încasare rapidă</div>
+      <div id="cc-no-debt" class="cc-empty" hidden>Totul este achitat.</div>
+      <div id="cc-payment-controls">
+        <button type="button" id="cc-total" class="cc-choice cc-total-choice cursor-interaction" data-target="all" aria-pressed="true"><span>Total de achitat</span><span id="cc-total-amount" class="cc-total-number"></span></button>
+        <div class="cc-section-label">Sau doar o cheltuială</div>
+        <div id="cc-expenses" class="cc-expenses"></div>
+        <div class="cc-section-label" id="cc-round-label">Rotunjește totalul în sus</div>
+        <div class="cc-rounds" id="cc-rounds">
+          <button type="button" class="cc-round cursor-interaction" data-round="10" aria-pressed="false"><span class="cc-round-value"></span><span class="cc-caption">multiplu de 10</span></button>
+          <button type="button" class="cc-round cursor-interaction" data-round="50" aria-pressed="false"><span class="cc-round-value"></span><span class="cc-caption">multiplu de 50</span></button>
+          <button type="button" class="cc-round cursor-interaction" data-round="100" aria-pressed="false"><span class="cc-round-value"></span><span class="cc-caption">multiplu de 100</span></button>
+        </div>
+        <label class="cc-section-label" for="cc-received">Primesc</label>
+        <div class="cc-money"><input id="cc-received" type="text" inputmode="decimal" autocomplete="off" spellcheck="false"><span>lei</span></div>
+        <fieldset class="cc-excess" id="cc-excess" hidden>
+          <legend id="cc-excess-label"></legend>
+          <div class="cc-switch">
+            <button type="button" class="cursor-interaction" data-excess="change" aria-pressed="true">Dau rest</button>
+            <button type="button" class="cursor-interaction" data-excess="credit" aria-pressed="false">Păstrez în avans</button>
+          </div>
+        </fieldset>
+        <p id="cc-error" class="cc-error" role="alert" hidden></p>
+        <div class="cc-summary" id="cc-summary" aria-live="polite" aria-atomic="true"><dl>
+          <div><dt>Acoperă contribuții</dt><dd id="cc-covered"></dd></div>
+          <div id="cc-change-row" hidden><dt>Rest de dat</dt><dd id="cc-change"></dd></div>
+          <div id="cc-credit-row" hidden><dt>Avans nou</dt><dd id="cc-credit"></dd></div>
+          <div><dt>Rămâne de achitat</dt><dd id="cc-due"></dd></div>
+          <div><dt>Intră în fondul clasei</dt><dd id="cc-net"></dd></div>
+        </dl></div>
+        <button type="button" id="cc-preview" class="cc-primary cursor-interaction">Previzualizează încasarea</button>
+        <p id="cc-confirmation" class="cc-confirmation" role="status" hidden></p>
+        <details id="cc-custom"><summary class="cursor-interaction">Ajustează repartizarea</summary>
+          <label class="cc-check"><input type="checkbox" id="cc-manual">Aleg manual sumele pentru cheltuieli</label>
+          <div id="cc-allocations"></div>
+        </details>
+      </div>
+    </div>
+  </section>
+  <script>
+    (() => {
+      const root = document.getElementById('cc-collection-preview');
+      const find = id => root.querySelector('#' + id);
+      const children = [
+        { id: 'popescu', surname: 'Popescu', first: 'Andrei', expenses: [{ id: 'books', name: 'Culegeri', due: 6000 }, { id: 'trip', name: 'Excursie', due: 4000 }] },
+        { id: 'avram', surname: 'Avram', first: 'Ana', expenses: [{ id: 'books', name: 'Culegeri', due: 6000 }, { id: 'trip', name: 'Excursie', due: 2500 }] },
+        { id: 'serban', surname: 'Șerban', first: 'Maria', expenses: [{ id: 'books', name: 'Culegeri', due: 6800 }, { id: 'trip', name: 'Excursie', due: 5000 }, { id: 'materials', name: 'Materiale', due: 2500 }] },
+        { id: 'exemplu', surname: 'Exemplu', first: 'Ioana', expenses: [{ id: 'trip', name: 'Excursie', due: 5000 }] },
+        { id: 'ionescu', surname: 'Ionescu', first: 'Luca', expenses: [] },
+        { id: 'balan', surname: 'Bălan', first: 'David', expenses: [{ id: 'books', name: 'Culegeri', due: 7550 }, { id: 'trip', name: 'Excursie', due: 5000 }] }
+      ];
+      const collator = new Intl.Collator('ro', { sensitivity: 'base', numeric: true });
+      children.sort((a, b) => collator.compare(a.surname, b.surname) || collator.compare(a.first, b.first) || a.id.localeCompare(b.id));
+      const format = new Intl.NumberFormat('ro-RO', { maximumFractionDigits: 2 });
+      const money = amount => format.format(amount / 100) + ' lei';
+      const decimal = amount => String(Math.floor(amount / 100)) + (amount % 100 ? ',' + String(amount % 100).padStart(2, '0') : '');
+      const parse = value => {
+        const normalized = value.trim().replace(',', '.');
+        if (!/^\d{1,7}(\.\d{0,2})?$/.test(normalized)) return null;
+        const [whole, fraction = ''] = normalized.split('.');
+        return Number(whole) * 100 + Number(fraction.padEnd(2, '0'));
+      };
+      const total = child => child.expenses.reduce((sum, expense) => sum + expense.due, 0);
+      const fullName = child => child.surname + ' ' + child.first;
+      const selected = () => children.find(child => child.id === state.childId);
+      const state = { childId: null, target: 'all', amount: '', round: null, excess: 'change', manual: false, allocations: {} };
+      const appearance = { childSize: 'large' };
+      let renderedChild = null;
+      function node(tag, className, text) {
+        const result = document.createElement(tag); result.className = className;
+        if (text !== undefined) result.textContent = text;
+        return result;
+      }
+      for (const child of children) {
+        const button = node('button', 'cc-child cursor-interaction');
+        button.type = 'button'; button.dataset.child = child.id;
+        const name = node('span', '');
+        name.append(node('span', 'cc-child-name', child.surname), node('span', 'cc-caption', child.first));
+        button.append(name, node('span', 'cc-child-due', total(child) ? money(total(child)) : 'Achitat'));
+        button.setAttribute('aria-label', fullName(child) + ', ' + (total(child) ? money(total(child)) + ' de achitat' : 'totul achitat'));
+        find('cc-children').append(button);
+      }
+      function baseAmount(child) {
+        return state.target === 'all' ? total(child) : (child.expenses.find(expense => expense.id === state.target)?.due || 0);
+      }
+      function calculate(child) {
+        const amount = parse(state.amount); const allocations = {};
+        if (amount === null || amount <= 0) return { error: 'Introdu o sumă mai mare decât zero, cu cel mult două zecimale.' };
+        let available = amount;
+        for (const expense of child.expenses) {
+          if (state.manual) {
+            const value = parse(state.allocations[expense.id] ?? '0');
+            if (value === null || value > expense.due) return { error: 'Repartizarea trebuie să fie o sumă validă, cel mult cât a rămas de achitat.' };
+            allocations[expense.id] = value;
+          } else {
+            const value = (state.target === 'all' || state.target === expense.id) ? Math.min(available, expense.due) : 0;
+            allocations[expense.id] = value; available -= value;
+          }
+        }
+        const covered = Object.values(allocations).reduce((sum, value) => sum + value, 0);
+        if (covered > amount) return { error: 'Sumele repartizate depășesc suma primită.' };
+        const difference = amount - covered;
+        const change = state.excess === 'change' ? difference : 0;
+        const credit = state.excess === 'credit' ? difference : 0;
+        return { amount, allocations, covered, difference, change, credit, due: total(child) - covered, net: amount - change };
+      }
+      function buildChild(child) {
+        find('cc-child-name').textContent = fullName(child); find('cc-total-amount').textContent = money(total(child));
+        find('cc-expenses').replaceChildren(); find('cc-allocations').replaceChildren(); find('cc-custom').open = state.manual;
+        for (const expense of child.expenses) {
+          const button = node('button', 'cc-choice cursor-interaction');
+          button.type = 'button'; button.dataset.target = expense.id; button.setAttribute('aria-pressed', 'false');
+          button.append(node('span', '', expense.name), node('span', 'cc-choice-money', money(expense.due)));
+          find('cc-expenses').append(button);
+          const label = node('label', 'cc-allocation-line', expense.name + ' (lei)');
+          const input = node('input', ''); input.type = 'text'; input.inputMode = 'decimal'; input.dataset.expense = expense.id;
+          input.id = 'cc-allocation-' + expense.id; input.value = '0';
+          label.htmlFor = input.id; label.append(input); find('cc-allocations').append(label);
+        }
+        renderedChild = child.id;
+      }
+      function render() {
+        root.style.setProperty('--cc-child-height', appearance.childSize === 'extra-large' ? '96px' : '78px');
+        const child = selected();
+        find('cc-roster-screen').hidden = !!child; find('cc-payment-screen').hidden = !child; find('cc-confirmation').hidden = true;
+        if (!child) return null;
+        if (renderedChild !== child.id) buildChild(child);
+        const noDebt = total(child) === 0;
+        find('cc-no-debt').hidden = !noDebt; find('cc-payment-controls').hidden = noDebt;
+        if (noDebt) return null;
+        if (find('cc-received').value !== state.amount) find('cc-received').value = state.amount;
+        root.querySelectorAll('[data-target]').forEach(button => button.setAttribute('aria-pressed', String(!state.manual && button.dataset.target === state.target)));
+        root.querySelectorAll('[data-round]').forEach(button => {
+          const unit = Number(button.dataset.round);
+          button.querySelector('.cc-round-value').textContent = money(Math.ceil(baseAmount(child) / (unit * 100)) * unit * 100);
+          button.setAttribute('aria-pressed', String(state.round === unit));
+        });
+        find('cc-rounds').hidden = state.manual; find('cc-round-label').hidden = state.manual;
+        find('cc-round-label').textContent = state.target === 'all' ? 'Rotunjește totalul în sus' : 'Rotunjește cheltuiala în sus';
+        root.querySelectorAll('[data-excess]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.excess === state.excess)));
+        find('cc-manual').checked = state.manual;
+        const result = calculate(child);
+        find('cc-error').hidden = !result.error; find('cc-error').textContent = result.error || '';
+        find('cc-summary').hidden = !!result.error; find('cc-preview').disabled = !!result.error;
+        find('cc-excess').hidden = !!result.error || !result.difference;
+        if (!result.error) {
+          for (const key of ['covered', 'change', 'credit', 'due', 'net']) find('cc-' + key).textContent = money(result[key]);
+          find('cc-change-row').hidden = !result.change; find('cc-credit-row').hidden = !result.credit;
+          find('cc-excess-label').textContent = 'Diferență: ' + money(result.difference);
+        }
+        root.querySelectorAll('[data-expense]').forEach(input => {
+          input.readOnly = !state.manual;
+          const value = state.manual ? (state.allocations[input.dataset.expense] ?? '0') : decimal(result.allocations?.[input.dataset.expense] || 0);
+          if (input.value !== value) input.value = value;
+        });
+        return result;
+      }
+      function save(result) {
+        if (!window.openai?.setWidgetState) return;
+        window.openai.setWidgetState({
+          modelContent: { preview: 'casierul-clasei-quick-collection', child: selected() ? fullName(selected()) : null, target: state.target, excess: state.excess, ...(result && !result.error ? { receivedLei: result.amount / 100, changeLei: result.change / 100, creditLei: result.credit / 100 } : {}) },
+          privateContent: { version: 2, ...state }
+        }).catch(() => {});
+      }
+      function resetForChild(child) {
+        Object.assign(state, { childId: child.id, target: 'all', amount: decimal(total(child)), round: null, excess: 'change', manual: false, allocations: {} });
+        find('cc-custom').open = false;
+      }
+      function applySaved(saved) {
+        const data = saved?.privateContent;
+        if (data?.version !== 2) return;
+        const child = children.find(item => item.id === data.childId);
+        if (!child) { state.childId = null; return; }
+        const editorWasOpen = state.childId === child.id && find('cc-custom').open;
+        resetForChild(child);
+        if (data.target === 'all' || child.expenses.some(expense => expense.id === data.target)) state.target = data.target;
+        if (typeof data.amount === 'string' && data.amount.length <= 12) state.amount = data.amount;
+        state.excess = data.excess === 'credit' ? 'credit' : 'change'; state.round = [10, 50, 100].includes(data.round) ? data.round : null;
+        state.manual = data.manual === true;
+        for (const expense of child.expenses) if (typeof data.allocations?.[expense.id] === 'string' && data.allocations[expense.id].length <= 12) state.allocations[expense.id] = data.allocations[expense.id];
+        find('cc-custom').open = editorWasOpen || state.manual;
+      }
+      root.addEventListener('click', event => {
+        const button = event.target.closest('button'); if (!button) return;
+        if (button.dataset.child) {
+          resetForChild(children.find(child => child.id === button.dataset.child)); save(render());
+          find('cc-back').focus({ preventScroll: true }); return;
+        }
+        if (button.id === 'cc-back') {
+          const previous = state.childId; state.childId = null; save(render());
+          root.querySelector('[data-child="' + previous + '"]')?.focus({ preventScroll: true }); return;
+        }
+        const child = selected(); if (!child) return;
+        if (button.dataset.target) {
+          state.target = button.dataset.target; state.manual = false; state.round = null; state.allocations = {};
+          state.amount = decimal(baseAmount(child)); find('cc-custom').open = false; save(render());
+        } else if (button.dataset.round) {
+          state.round = Number(button.dataset.round);
+          state.amount = decimal(Math.ceil(baseAmount(child) / (state.round * 100)) * state.round * 100); save(render());
+        } else if (button.dataset.excess) {
+          state.excess = button.dataset.excess; save(render());
+        } else if (button.id === 'cc-preview') {
+          const result = render(); if (!result || result.error) return;
+          const target = state.manual ? 'repartizare manuală' : state.target === 'all' ? 'toate contribuțiile' : child.expenses.find(expense => expense.id === state.target).name;
+          find('cc-confirmation').textContent = fullName(child) + ': ' + money(result.amount) + ' primiți; ' + money(result.covered) + ' pentru ' + target + '; ' + money(result.change) + ' rest; ' + money(result.credit) + ' avans. Nicio operațiune nu a fost salvată.';
+          find('cc-confirmation').hidden = false;
+        }
+      });
+      find('cc-received').addEventListener('input', event => { state.amount = event.target.value; state.round = null; save(render()); });
+      find('cc-manual').addEventListener('change', event => {
+        const result = calculate(selected());
+        for (const expense of selected().expenses) state.allocations[expense.id] = decimal(result.allocations?.[expense.id] || 0);
+        state.manual = event.target.checked; state.round = null; save(render());
+      });
+      find('cc-allocations').addEventListener('input', event => {
+        if (event.target.dataset.expense && state.manual) { state.allocations[event.target.dataset.expense] = event.target.value; save(render()); }
+      });
+      applySaved(window.openai?.widgetState); render();
+      window.addEventListener('openai:set_globals', event => { if (event.detail?.globals?.widgetState) { applySaved(event.detail.globals.widgetState); render(); } });
+      if (globalThis.Tweak) {
+        const tweak = new globalThis.Tweak({ container: root, onChange: render });
+        tweak.addSelect(appearance, 'childSize', { label: 'Butoane copii', options: [{ label: 'Mari', value: 'large' }, { label: 'Foarte mari', value: 'extra-large' }] });
+      }
+    })();
+  </script>
+</div>
