@@ -49,3 +49,7 @@ Detalii: [operare și backup](docs/operations.md), [contract API](docs/api.md).
 Testele folosesc baze temporare și verifică registrul, autentificarea, calculele interfeței și integrarea HTTP. `scripts/browser-check.mjs` verifică fluxurile complete într-un context Chromium separat, cu server temporar pe portul 18018 și Chromium disponibil prin debugging pe portul 9222.
 
 Schița interactivă inițială rămâne în `design/collection-flow.html`; `preview/` păstrează exportul ei pentru revenire la instalarea inițială. Aplicația funcțională este în `web/` și `server/`.
+
+## Licență
+
+Acest proiect este distribuit sub licența [GNU General Public License v3.0](LICENSE).
