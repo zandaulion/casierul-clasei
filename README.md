@@ -4,6 +4,29 @@ PWA pentru evidența fondului unei clase, folosită de casier. Interfață în r
 
 Aplicația: https://casierul-clasei.zandaulion.com
 
+## Capturi de ecran
+
+Datele afișate în capturi sunt integral sintetice.
+
+<table>
+  <tr>
+    <td align="center"><img src="docs/screenshots/01-copii-mobile-390x844.png" alt="Lista copiilor pe telefon" width="300"><br><strong>Lista copiilor · 390×844</strong></td>
+    <td align="center"><img src="docs/screenshots/02-incasare-mobile-412x915.png" alt="Încasare rapidă pe telefon" width="300"><br><strong>Încasare rapidă · 412×915</strong></td>
+  </tr>
+</table>
+
+<table>
+  <tr>
+    <td align="center"><img src="docs/screenshots/03-cheltuieli-tableta-768x1024.png" alt="Cheltuieli pe tabletă" width="440"><br><strong>Cheltuieli · 768×1024</strong></td>
+    <td align="center"><img src="docs/screenshots/04-rapoarte-tableta-1024x768.png" alt="Rapoarte pe tabletă" width="440"><br><strong>Rapoarte · 1024×768</strong></td>
+  </tr>
+</table>
+
+<p align="center">
+  <img src="docs/screenshots/05-registru-desktop-1440x900.png" alt="Registrul clasei pe desktop" width="900"><br>
+  <strong>Registru · 1440×900</strong>
+</p>
+
 ## Începe
 
 1. Generează o invitație în consola PWA privată și activează telefonul.
