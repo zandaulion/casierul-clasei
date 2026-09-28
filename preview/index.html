@@ -1,0 +1,2211 @@
+<!doctype html>
+<html lang="en" data-visualize-standalone>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; style-src 'unsafe-inline' blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; img-src blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; font-src blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; media-src blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; worker-src blob:; connect-src blob: data:; frame-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<title>Casierul clasei</title>
+<style>:root{color-scheme:light dark;background:light-dark(rgb(255 255 255), rgb(24 24 24))}html,body{margin:0}body{box-sizing:border-box;padding:1rem;background:inherit}iframe{display:block;width:100%;height:calc(100vh - 2rem);margin:0 auto;border:0}</style>
+</head>
+<body>
+<iframe id="codex-visualization" sandbox="allow-scripts" referrerpolicy="no-referrer" title="Casierul clasei" data-srcdoc="&lt;!doctype html&gt;
+&lt;html lang=&quot;en&quot; data-visualize-standalone&gt;
+&lt;head&gt;
+&lt;meta charset=&quot;utf-8&quot;&gt;
+&lt;meta name=&quot;viewport&quot; content=&quot;width=device-width, initial-scale=1&quot;&gt;
+&lt;meta name=&quot;referrer&quot; content=&quot;no-referrer&quot;&gt;
+&lt;meta http-equiv=&quot;Content-Security-Policy&quot; content=&quot;default-src &#x27;none&#x27;; script-src &#x27;unsafe-inline&#x27; &#x27;unsafe-eval&#x27; &#x27;wasm-unsafe-eval&#x27; blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; style-src &#x27;unsafe-inline&#x27; blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; img-src blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; font-src blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; media-src blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; worker-src blob:; connect-src blob: data:; frame-src &#x27;none&#x27;; object-src &#x27;none&#x27;; base-uri &#x27;none&#x27;; form-action &#x27;none&#x27;&quot;&gt;
+&lt;title&gt;Casierul clasei&lt;/title&gt;
+&lt;style&gt;:root {
+  color-scheme: light dark;
+  background-color: var(
+    --background,
+    var(--color-background-primary, light-dark(rgb(255 255 255), rgb(24 24 24)))
+  ) !important;
+
+  /* Agent-facing contract; keep in sync with SKILL.md. */
+  --background: var(
+    --color-background-primary,
+    light-dark(rgb(255 255 255), rgb(24 24 24))
+  );
+  --foreground: var(
+    --color-text-primary,
+    light-dark(rgb(26 28 31), rgb(255 255 255))
+  );
+  --card: color-mix(in oklab, var(--foreground) 5%, var(--background));
+  --card-foreground: var(
+    --color-text-primary,
+    light-dark(rgb(26 28 31), rgb(255 255 255))
+  );
+  --popover: var(
+    --color-background-secondary,
+    light-dark(rgb(255 255 255), rgb(45 45 45))
+  );
+  --popover-foreground: var(
+    --color-text-primary,
+    light-dark(rgb(26 28 31), rgb(255 255 255))
+  );
+  --primary: var(
+    --color-text-info,
+    light-dark(rgb(51 156 255), rgb(131 195 255))
+  );
+  --primary-foreground: var(
+    --color-text-inverse,
+    light-dark(rgb(255 255 255), rgb(13 13 13))
+  );
+  --secondary: var(
+    --color-background-secondary,
+    light-dark(rgb(255 255 255 / 96%), rgb(54 54 54 / 96%))
+  );
+  --secondary-foreground: var(
+    --color-text-primary,
+    light-dark(rgb(26 28 31), rgb(255 255 255))
+  );
+  --muted: color-mix(in srgb, var(--foreground) 10%, transparent);
+  --muted-foreground: var(
+    --color-text-secondary,
+    light-dark(rgb(26 28 31 / 49.4%), rgb(255 255 255 / 49.8%))
+  );
+  --accent: var(
+    --color-background-info,
+    light-dark(rgb(229 242 255), rgb(13 39 63))
+  );
+  --accent-foreground: var(
+    --color-text-info,
+    light-dark(rgb(51 156 255), rgb(131 195 255))
+  );
+  --destructive: var(
+    --color-text-warning,
+    light-dark(rgb(226 85 7), rgb(255 133 73))
+  );
+  --border: var(
+    --color-border-secondary,
+    light-dark(rgb(26 28 31 / 8%), rgb(255 255 255 / 8.2%))
+  );
+  --input: var(
+    --color-border-primary,
+    light-dark(
+      rgb(26 28 31 / 11.8%),
+      color-mix(in oklab, rgb(0 0 0) 10%, transparent)
+    )
+  );
+  --ring: var(
+    --color-ring-primary,
+    light-dark(rgb(51 156 255), rgb(131 195 255 / 76%))
+  );
+  --font-size-base: var(--font-text-md-size, 14px);
+  --blue: light-dark(rgb(51 156 255), rgb(51 156 255));
+  --orange: light-dark(rgb(226 85 7), rgb(251 106 34));
+  --green: light-dark(rgb(0 162 64), rgb(64 201 119));
+  --red: light-dark(rgb(224 46 42), rgb(255 103 100));
+  --purple: light-dark(rgb(146 79 247), rgb(173 123 249));
+  --yellow: light-dark(rgb(255 195 0), rgb(255 210 64));
+  --viz-series-1: var(--primary);
+  --viz-series-2: light-dark(rgb(243 136 59), rgb(245 154 86));
+  --viz-series-3: light-dark(rgb(93 201 119), rgb(116 213 139));
+  --viz-series-4: light-dark(rgb(235 119 177), rgb(240 143 192));
+  --viz-series-5: light-dark(rgb(155 121 236), rgb(170 145 239));
+  --viz-series-6: light-dark(rgb(58 185 177), rgb(90 203 194));
+
+  /* Internal implementation variables; not part of the agent contract. */
+  --font-sans: -apple-system, system-ui, &quot;Segoe UI&quot;, sans-serif;
+  --font-mono:
+    ui-monospace, SFMono-Regular, &quot;SF Mono&quot;, Menlo, Consolas, &quot;Liberation Mono&quot;,
+    monospace;
+  --font-size-normal: max(11px, var(--font-size-base));
+  --font-size-tooltip: calc(var(--font-size-base) - 1px);
+  --font-size-small: max(11px, calc(var(--font-size-base) - 2px));
+  --font-size-h1: calc(var(--font-size-normal) * 1.7142857143);
+  --font-size-h2: calc(var(--font-size-normal) * 1.4285714286);
+  --font-size-h3: calc(var(--font-size-normal) * 1.2857142857);
+  --font-weight-normal: 430;
+  --font-weight-medium: 500;
+  --icon-size: 16px;
+  --line-height-normal: calc(var(--font-size-normal) * 1.5);
+  --line-height-tooltip: calc(var(--font-size-tooltip) * 1.4285714286);
+  --line-height-small: calc(var(--font-size-small) + 4px);
+  --corner-shape: round;
+  --radius: var(--border-radius-lg, 10px);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-2xl: calc(var(--radius) * 1.6);
+  --radius-full: 9999px;
+  --shadow-sm: 0 1px 2px -1px rgb(0 0 0 / 8%);
+  --checkmark-image: url(&quot;data:image/svg+xml,%3Csvg xmlns=&#x27;http://www.w3.org/2000/svg&#x27; viewBox=&#x27;0 0 17 17&#x27;%3E%3Cpath d=&#x27;M12.8961 3.64101C13.1297 3.41418 13.4984 3.37523 13.7779 3.56581C14.0571 3.75635 14.1554 4.11331 14.0299 4.41347L13.9615 4.53847L7.71151 13.7045C7.59411 13.8767 7.4063 13.9877 7.19881 14.0072C6.99136 14.0267 6.78564 13.9533 6.63826 13.806L2.88826 10.056L2.79842 9.9457C2.6192 9.67407 2.64927 9.30496 2.88826 9.06581C3.12738 8.82669 3.49647 8.79676 3.76815 8.97597L3.8785 9.06581L7.03084 12.2182L12.8053 3.74941L12.8961 3.64101Z&#x27;/%3E%3C/svg%3E&quot;);
+
+  /* Legacy aliases; not part of the current agent contract. */
+  --viz-bg: transparent;
+  --viz-panel: var(--card);
+  --viz-border: var(--border);
+  --viz-text: var(--foreground);
+  --viz-muted: var(--muted-foreground);
+  --viz-accent: var(--primary);
+  --viz-accent-text: var(--primary-foreground);
+  --viz-accent-bg: var(--accent);
+  --viz-font-size: var(--font-size-base);
+  --viz-warning: var(--destructive);
+}
+
+:root[data-theme=&quot;light&quot;] {
+  color-scheme: light;
+}
+
+:root[data-theme=&quot;dark&quot;] {
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html &gt; body {
+  /* Preserve MCP aliases for older inline renderers without creating :root cycles. */
+  --color-background-primary: var(
+    --background,
+    light-dark(rgb(255 255 255), rgb(24 24 24))
+  );
+  --color-text-primary: var(
+    --foreground,
+    light-dark(rgb(26 28 31), rgb(255 255 255))
+  );
+  --color-border-secondary: var(
+    --border,
+    light-dark(rgb(26 28 31 / 8%), rgb(255 255 255 / 8.2%))
+  );
+
+  margin: 0;
+  padding: var(--visualize-paint-gutter, 0px);
+  color: var(--foreground);
+  background: transparent !important;
+  font-family: var(--font-sans) !important;
+  font-size: var(--font-size-normal);
+  font-weight: var(--font-weight-normal);
+  line-height: var(--line-height-normal);
+}
+
+.cursor-interaction {
+  cursor: var(--cursor-interaction, pointer);
+}
+
+a {
+  color: color-mix(in srgb, var(--viz-accent) 80%, var(--viz-text) 20%);
+  cursor: var(--cursor-interaction, pointer);
+  font-weight: var(--font-weight-medium, 500);
+  text-decoration: none;
+  text-underline-offset: 2px;
+}
+
+a:is(:hover, :focus-visible) {
+  text-decoration-line: underline;
+  text-decoration-style: dashed;
+  text-decoration-thickness: 0.5px;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+p {
+  margin-block: 0;
+}
+
+h1 {
+  font-size: var(--font-size-h1);
+  font-weight: var(--font-weight-medium);
+  line-height: 1.25;
+}
+
+h2 {
+  font-size: var(--font-size-h2);
+  font-weight: var(--font-weight-medium);
+  line-height: 1.25;
+}
+
+h3,
+h4,
+h5,
+h6 {
+  font-size: var(--font-size-h3);
+  font-weight: var(--font-weight-medium);
+  line-height: 1.3;
+}
+
+b,
+strong,
+th {
+  font-weight: var(--font-weight-medium);
+}
+
+code:not(pre code) {
+  display: inline;
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
+  corner-shape: var(--corner-shape);
+  background: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+  overflow-wrap: anywhere;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  word-break: break-word;
+}
+
+.table-responsive {
+  width: 100%;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  color: var(--foreground);
+  font: inherit;
+  text-align: start;
+}
+
+.table :is(th, td) {
+  padding-block: 10px;
+  padding-inline: 0 24px;
+  overflow-wrap: anywhere;
+  border-bottom: 1px solid var(--border);
+  text-align: start;
+  vertical-align: top;
+}
+
+.table-responsive &gt; .table :is(th, td) {
+  overflow-wrap: break-word;
+}
+
+.table :is(th, td):last-child {
+  padding-inline-end: 0;
+}
+
+.table :is(caption, thead th) {
+  font-weight: 600;
+}
+
+.table thead th {
+  padding-block: 8px;
+  border-bottom-color: color-mix(in srgb, var(--foreground) 16%, transparent);
+}
+
+.table tbody tr:last-child :is(th, td) {
+  border-bottom: 0;
+}
+
+.table.table-sm :is(th, td) {
+  padding-block: 6px;
+}
+
+.table.table-sm :is(th, td):not(:last-child) {
+  padding-inline-end: 16px;
+}
+
+.table :is(.text-end, [align=&quot;right&quot;]) {
+  text-align: end;
+  font-variant-numeric: tabular-nums;
+}
+
+.table :is(.text-center, [align=&quot;center&quot;]) {
+  text-align: center;
+}
+
+.table .text-nowrap {
+  white-space: nowrap;
+}
+
+#widget {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  padding: 0;
+  background: transparent !important;
+}
+
+.card {
+  min-width: 0;
+  padding: 12px;
+  overflow: hidden;
+  overflow-wrap: break-word;
+  border-radius: var(--radius-2xl);
+  corner-shape: var(--corner-shape);
+  color: var(--card-foreground);
+  background: var(--card);
+}
+
+#widget &gt; :not(.card, .progress) {
+  width: 100% !important;
+  max-width: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.tooltip {
+  position: fixed;
+  z-index: 50;
+  top: 0;
+  left: 0;
+  width: max-content;
+  max-width: min(
+    20rem,
+    var(--tooltip-available-width, calc(100vw - 10px)),
+    calc(100vw - 10px)
+  );
+  max-height: min(
+    var(--tooltip-available-height, calc(100vh - 10px)),
+    calc(100vh - 10px)
+  );
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  corner-shape: var(--corner-shape);
+  color: var(--popover-foreground);
+  background: var(--popover);
+  box-shadow: none;
+  font-size: var(--font-size-tooltip);
+  line-height: var(--line-height-tooltip);
+  overflow-wrap: break-word;
+  white-space: normal;
+  pointer-events: none;
+  user-select: none;
+}
+
+.viz-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(max(180px, 24%), 1fr));
+  gap: 10px;
+}
+
+.viz-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.viz-stat-value {
+  font-size: var(--font-size-h2);
+  font-weight: var(--font-weight-medium);
+  line-height: 1.25;
+}
+
+.viz-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+hr {
+  width: 100%;
+  height: 1px;
+  margin-block: 6px;
+  border: 0;
+  background: var(--border);
+}
+
+.nav {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 4px;
+}
+
+.progress {
+  display: flex;
+  height: 8px;
+  margin-block: calc((var(--line-height-normal, 1.5em) - 8px) / 2);
+  overflow: hidden;
+  border: 0;
+  border-radius: var(--radius-full);
+  background: var(--muted);
+}
+
+.progress-bar:only-child {
+  border-radius: var(--radius-full);
+}
+
+.progress-bar {
+  height: 100%;
+  flex-shrink: 0;
+  border: 0;
+  background: var(--viz-series-1);
+}
+
+.viz-badge {
+  padding: 3px 8px;
+  border-radius: var(--radius-full);
+  color: var(--accent-foreground);
+  background: var(--accent);
+  font-weight: var(--font-weight-medium);
+}
+
+small,
+.text-small,
+.viz-badge {
+  font-size: var(--font-size-small);
+  line-height: var(--line-height-small);
+}
+
+.text-muted {
+  color: var(--muted-foreground);
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.viz-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.viz-controls &gt; .form-label {
+  display: grid;
+  min-width: min(100%, 260px);
+  flex: 1 1 280px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 2px 12px;
+  margin-bottom: 0;
+}
+
+.viz-controls &gt; .form-label &gt; :is(.form-control, .form-range, .form-select) {
+  grid-column: 1 / -1;
+}
+
+.btn,
+.nav-link,
+.form-check-input,
+.form-control,
+.form-range,
+.form-select {
+  font: inherit;
+}
+
+.btn,
+.nav-link {
+  appearance: button;
+  display: inline-flex;
+  inline-size: fit-content;
+  max-inline-size: 100%;
+  min-height: 28px;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  margin: 0;
+  padding: 0 8px;
+  -webkit-app-region: no-drag;
+  border: 1px solid var(--input);
+  border-radius: var(--radius-lg);
+  corner-shape: var(--corner-shape);
+  color: var(--secondary-foreground);
+  background: var(--secondary);
+  cursor: var(--cursor-interaction, pointer);
+  text-align: center;
+  text-decoration: none;
+  white-space: nowrap;
+  user-select: none;
+  -webkit-font-smoothing: antialiased;
+}
+
+.btn:is(.btn-block, .viz-tile) {
+  inline-size: 100%;
+}
+
+.btn.viz-tile {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+a.btn {
+  cursor: var(--cursor-interaction, pointer);
+  text-decoration: none;
+}
+
+.btn:not(:disabled):hover,
+.nav-link:not(:disabled):not([aria-disabled=&quot;true&quot;]):hover {
+  background: color-mix(in srgb, var(--foreground) 6%, var(--secondary));
+}
+
+.btn-primary {
+  border-color: transparent;
+  color: var(--primary-foreground);
+  background: var(--foreground);
+  background-clip: padding-box;
+}
+
+.btn-primary .text-muted {
+  color: color-mix(in srgb, var(--primary-foreground) 50%, transparent);
+}
+
+.btn-primary:not(:disabled):hover {
+  background: color-mix(in srgb, var(--foreground) 80%, transparent);
+  background-clip: padding-box;
+}
+
+.btn-ghost {
+  border-color: transparent;
+  color: var(--muted-foreground);
+  background: transparent;
+}
+
+.btn-ghost:not(:disabled):hover {
+  color: var(--foreground);
+  background: color-mix(in srgb, var(--foreground) 6%, var(--secondary));
+}
+
+.nav-pills .nav-link {
+  min-width: 0;
+  border-color: transparent;
+  color: var(--muted-foreground);
+  background: transparent;
+}
+
+.nav-justified .nav-link {
+  flex: 1 1 0;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.nav-pills .nav-link.active {
+  color: var(--foreground);
+  background: var(--muted);
+}
+
+.btn:disabled,
+.nav-link:disabled,
+.nav-link[aria-disabled=&quot;true&quot;] {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+[data-lucide] {
+  stroke-width: 1.6;
+}
+
+.form-label {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--foreground);
+}
+
+.form-control {
+  display: block;
+  width: 100%;
+  min-height: 28px;
+  padding: 0 8px;
+  outline: none;
+  border: 1px solid var(--input);
+  border-radius: var(--radius-lg);
+  corner-shape: var(--corner-shape);
+  color: var(--foreground);
+  background: var(--secondary);
+}
+
+.form-control::placeholder {
+  color: var(--muted-foreground);
+}
+
+.form-control[type=&quot;file&quot;] {
+  padding: 0;
+  overflow: hidden;
+  cursor: var(--cursor-interaction, pointer);
+}
+
+.form-control[type=&quot;file&quot;]::file-selector-button {
+  min-height: 26px;
+  margin-right: 8px;
+  padding: 0 8px;
+  border: 0;
+  border-right: 1px solid var(--input);
+  color: var(--secondary-foreground);
+  background: var(--secondary);
+  cursor: inherit;
+  font: inherit;
+}
+
+.form-control[type=&quot;file&quot;]:not(:disabled):hover::file-selector-button {
+  background: color-mix(in srgb, var(--foreground) 6%, var(--secondary));
+}
+
+.form-control-color[type=&quot;color&quot;] {
+  width: 40px;
+  height: 28px;
+  padding: 3px;
+  cursor: var(--cursor-interaction, pointer);
+}
+
+.form-control-color[type=&quot;color&quot;]::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+.form-control-color[type=&quot;color&quot;]::-webkit-color-swatch {
+  border: 0;
+  border-radius: calc(var(--radius-lg) - 4px);
+  corner-shape: var(--corner-shape);
+}
+
+textarea.form-control {
+  height: auto;
+  min-height: 72px;
+  padding: 8px 10px;
+  resize: vertical;
+}
+
+.form-control:focus-visible {
+  border-color: var(--ring);
+  box-shadow: inset 0 0 0 1px var(--ring);
+}
+
+.form-control:disabled,
+.form-select:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+.form-select {
+  appearance: none;
+  display: block;
+  width: 100%;
+  min-height: 28px;
+  margin: 0;
+  padding: 0 32px 0 8px;
+  outline: none;
+  border: 1px solid var(--input);
+  border-radius: var(--radius-lg);
+  corner-shape: var(--corner-shape);
+  color: var(--foreground);
+  background-color: var(--secondary);
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--muted-foreground) 50%),
+    linear-gradient(135deg, var(--muted-foreground) 50%, transparent 50%);
+  background-position:
+    calc(100% - 14px) 50%,
+    calc(100% - 10px) 50%;
+  background-repeat: no-repeat;
+  background-size: 4px 4px;
+  cursor: var(--cursor-interaction, default);
+}
+
+.form-select:not(:disabled):hover {
+  background-color: color-mix(in srgb, var(--foreground) 6%, var(--secondary));
+}
+
+.form-select:focus-visible {
+  border-color: var(--ring);
+  box-shadow: inset 0 0 0 1px var(--ring);
+}
+
+.form-check {
+  display: flex;
+  min-height: 20px;
+  align-items: center;
+  gap: 6px;
+}
+
+.form-check-input {
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+  margin: 0;
+  border: 1px solid var(--input);
+  color: var(--primary-foreground);
+  background-color: transparent;
+  cursor: var(--cursor-interaction, default);
+  transition:
+    background-color 150ms,
+    border-color 150ms,
+    box-shadow 150ms;
+}
+
+.form-check:not(.form-switch) .form-check-input[type=&quot;checkbox&quot;] {
+  border-color: var(--input);
+  border-radius: var(--radius-sm);
+  corner-shape: var(--corner-shape);
+  background-color: var(--secondary);
+  box-shadow: var(--shadow-sm);
+}
+
+.form-check:not(.form-switch)
+  .form-check-input:not(:disabled):not(:checked):hover {
+  background-color: var(--card);
+}
+
+.form-check:not(.form-switch) .form-check-input[type=&quot;checkbox&quot;]:checked {
+  border-color: var(--primary);
+  background-color: var(--primary);
+}
+
+.form-check:not(.form-switch)
+  .form-check-input[type=&quot;checkbox&quot;]:checked::before {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: var(--primary-foreground);
+  content: &quot;&quot;;
+  mask: var(--checkmark-image) center / 12px 12px no-repeat;
+}
+
+.form-check-input[type=&quot;radio&quot;] {
+  width: 14px;
+  height: 14px;
+  border-radius: var(--radius-full);
+}
+
+.form-check-input[type=&quot;radio&quot;]:checked {
+  border: 2px solid var(--primary);
+  background:
+    radial-gradient(circle, var(--primary-foreground) 0 2.5px, transparent 3px),
+    var(--primary);
+}
+
+.form-check:not(.form-switch) .form-check-input:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+.form-check:not(.form-switch) .form-check-input:disabled {
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.form-check:not(.form-switch) .form-check-input:disabled + .form-check-label {
+  cursor: not-allowed;
+}
+
+.form-switch .form-check-input:disabled,
+.form-switch .form-check-input:disabled + .form-check-label {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.form-check-label {
+  color: var(--foreground);
+  cursor: var(--cursor-interaction, default);
+}
+
+.form-switch .form-check-input {
+  position: relative;
+  width: 32px;
+  height: 20px;
+  border: 0;
+  border-radius: var(--radius-full);
+  background: var(--muted);
+  box-shadow: none;
+  transition: background-color 200ms cubic-bezier(0, 0, 0.2, 1);
+}
+
+.form-switch .form-check-input::before {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 16px;
+  height: 16px;
+  box-sizing: border-box;
+  border: 1px solid light-dark(var(--primary-foreground), var(--foreground));
+  border-radius: var(--radius-full);
+  background: light-dark(var(--primary-foreground), var(--foreground));
+  box-shadow: var(--shadow-sm);
+  content: &quot;&quot;;
+  transform: translate(2px, -50%);
+  transition: transform 200ms cubic-bezier(0, 0, 0.2, 1);
+}
+
+.form-switch .form-check-input:checked {
+  background: var(--primary);
+}
+
+.form-switch .form-check-input:checked::before {
+  transform: translate(14px, -50%);
+}
+
+.form-switch .form-check-input:focus-visible {
+  box-shadow: 0 0 0 2px var(--ring);
+}
+
+.form-range {
+  appearance: none;
+  display: block;
+  width: 100%;
+  height: 28px;
+  flex: 1;
+  margin: 0;
+  padding: 0;
+  outline: none;
+  border: 0;
+  accent-color: var(--primary);
+  background: linear-gradient(
+      color-mix(in srgb, var(--foreground) 7%, transparent),
+      color-mix(in srgb, var(--foreground) 7%, transparent)
+    )
+    center / 100% 2px no-repeat;
+}
+
+.form-range::-webkit-slider-runnable-track {
+  height: 28px;
+  background: transparent;
+}
+
+.form-range::-webkit-slider-thumb {
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  margin-top: 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  background: light-dark(var(--primary-foreground), var(--foreground));
+}
+
+.form-range:focus-visible::-webkit-slider-thumb {
+  border-color: var(--ring);
+  box-shadow: inset 0 0 0 1px var(--ring);
+}
+
+.form-range::-moz-range-track {
+  height: 28px;
+  background: transparent;
+}
+
+.form-range::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  background: light-dark(var(--primary-foreground), var(--foreground));
+}
+
+.form-range:focus-visible::-moz-range-thumb {
+  border-color: var(--ring);
+  box-shadow: inset 0 0 0 1px var(--ring);
+}
+
+.form-range:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+.btn:not(.btn-primary, .viz-tile):is(
+  [aria-pressed=&quot;true&quot;],
+  [aria-selected=&quot;true&quot;],
+  .is-selected
+) {
+  border-color: var(--primary);
+  color: var(--primary-foreground);
+  background: var(--primary);
+}
+
+.btn.viz-tile:is([aria-pressed=&quot;true&quot;], [aria-selected=&quot;true&quot;], .is-selected) {
+  border-color: var(--primary);
+  box-shadow: inset 0 0 0 1px var(--primary);
+}
+
+.btn:focus-visible,
+.nav-link:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+@media (pointer: coarse) {
+  .btn,
+  .nav-link,
+  .form-control,
+  .form-select {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  /* Keep small-screen WebKit from zooming when a text field receives focus. */
+  .form-control,
+  .form-select {
+    font-size: max(16px, var(--font-size-normal));
+  }
+
+  .form-control[type=&quot;file&quot;]::file-selector-button {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .form-control-color[type=&quot;color&quot;] {
+    width: 44px;
+    height: 44px;
+  }
+
+  .form-control:is(
+    [type=&quot;date&quot;],
+    [type=&quot;datetime-local&quot;],
+    [type=&quot;month&quot;],
+    [type=&quot;time&quot;],
+    [type=&quot;week&quot;]
+  ) {
+    min-width: 0;
+    max-width: 100%;
+    padding-block: 8px;
+  }
+
+  .form-check {
+    min-height: 44px;
+    padding-inline: 15px;
+  }
+
+  .form-check-input {
+    position: relative;
+  }
+
+  .form-check-input::after {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 44px;
+    height: 44px;
+    content: &quot;&quot;;
+    transform: translate(-50%, -50%);
+  }
+
+  .form-check-label {
+    display: inline-flex;
+    min-width: 44px;
+    min-height: 44px;
+    align-items: center;
+  }
+
+  .form-range {
+    height: 44px;
+    touch-action: pan-y;
+  }
+
+  .form-range::-webkit-slider-runnable-track {
+    height: 44px;
+  }
+
+  .form-range::-moz-range-track {
+    height: 44px;
+  }
+
+  .form-range::-webkit-slider-thumb {
+    margin-top: 12px;
+  }
+}
+
+svg {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+#widget &gt; svg {
+  width: 100%;
+}
+
+/* Model-authored chart rules can otherwise stretch icons after these styles load. */
+svg.lucide {
+  display: block;
+  width: var(--icon-size) !important;
+  height: var(--icon-size) !important;
+  flex: none;
+  margin: 0 !important;
+  stroke-width: 1.6;
+}
+
+.text-warning,
+.text-destructive {
+  color: var(--destructive);
+}
+
+html&gt;body{padding:0}&lt;/style&gt;
+&lt;/head&gt;
+&lt;body&gt;
+&lt;script type=&quot;application/json&quot; id=&quot;codex-visualization-widget-state&quot;&gt;__CODEX_VISUALIZATION_WIDGET_STATE__&lt;/script&gt;
+&lt;script&gt;(() =&gt; {
+  const root = document.documentElement;
+  const mediaQuery = globalThis.matchMedia(&quot;(prefers-color-scheme: dark)&quot;);
+  const apply = Reflect.apply;
+  const isArray = Array.isArray;
+  const hasOwn = Object.hasOwn;
+  const parentWindow = globalThis.parent;
+  const stringify = JSON.stringify;
+  const parse = JSON.parse;
+  const encode = TextEncoder.prototype.encode.bind(new TextEncoder());
+  const initialStateElement = document.getElementById(
+    &quot;codex-visualization-widget-state&quot;,
+  );
+  const initialGlobals = parse(initialStateElement?.textContent ?? &quot;{}&quot;);
+  initialStateElement?.remove();
+  /** @type {Record&lt;string, unknown&gt; | null} */
+  let state = initialGlobals.widgetState ?? null;
+  const statePersistence = initialGlobals.statePersistence ?? &quot;none&quot;;
+  let nextStateRequestId = 0;
+  /** @type {Map&lt;number, { resolve: () =&gt; void; reject: (error: Error) =&gt; void; timeout: ReturnType&lt;typeof globalThis.setTimeout&gt;; serializedState: string }&gt;} */
+  const pendingStateWrites = new Map();
+  const persistenceError = () =&gt;
+    Object.assign(
+      new Error(&quot;The host could not persist the widget state update&quot;),
+      {
+        code: -32000,
+        data: { code: &quot;widget_state_persistence_failed&quot;, retryable: false },
+      },
+    );
+  /**
+   * @param {object} prototype
+   * @param {string} property
+   */
+  const getPrototypeGetter = (prototype, property) =&gt; {
+    // oxlint-disable-next-line typescript/unbound-method -- invoked through captured Reflect.apply
+    const getter = Object.getOwnPropertyDescriptor(prototype, property)?.get;
+    if (getter == null) {
+      throw new Error(`Missing ${property} getter`);
+    }
+    return getter;
+  };
+  const getMessageData = getPrototypeGetter(MessageEvent.prototype, &quot;data&quot;);
+  const getMessagePorts = getPrototypeGetter(MessageEvent.prototype, &quot;ports&quot;);
+  const getMessageSource = getPrototypeGetter(MessageEvent.prototype, &quot;source&quot;);
+  // oxlint-disable-next-line typescript/unbound-method -- captured before the untrusted fragment runs
+  const addHostMessageListener = MessagePort.prototype.addEventListener;
+  // oxlint-disable-next-line typescript/unbound-method -- captured before the untrusted fragment runs
+  const postHostMessage = MessagePort.prototype.postMessage;
+  // oxlint-disable-next-line typescript/unbound-method -- captured before the untrusted fragment runs
+  const startHostPort = MessagePort.prototype.start;
+  // oxlint-disable-next-line typescript/unbound-method -- captured before the untrusted fragment runs
+  const stopMessagePropagation = Event.prototype.stopImmediatePropagation;
+  /** @type {MessagePort | null} */
+  let hostPort = null;
+  const postToHost = (type, payload) =&gt; {
+    if (hostPort != null) {
+      apply(postHostMessage, hostPort, [{ type, ...payload }]);
+    }
+  };
+  const openExternal = ({ href }) =&gt; {
+    if (globalThis.navigator.userActivation?.isActive === true) {
+      postToHost(&quot;open-external&quot;, { href });
+    }
+  };
+  const sendFollowUpMessage = ({ context, prompt, title }) =&gt; {
+    if (globalThis.navigator.userActivation?.isActive === true) {
+      postToHost(&quot;follow-up&quot;, { context, prompt, title });
+    }
+    return Promise.resolve();
+  };
+  /**
+   * @param {Record&lt;string, unknown&gt; | ((previous: Record&lt;string, unknown&gt; | null) =&gt; Record&lt;string, unknown&gt;)} next
+   * @returns {Promise&lt;void&gt;}
+   */
+  const setWidgetState = async (next) =&gt; {
+    const nextState = typeof next === &quot;function&quot; ? next(state) : next;
+    if (
+      nextState == null ||
+      typeof nextState !== &quot;object&quot; ||
+      isArray(nextState)
+    ) {
+      throw new TypeError(&quot;Widget state must be a JSON object&quot;);
+    }
+    const inputState = stringify(
+      nextState,
+      (_key, /** @type {unknown} */ value) =&gt; {
+        if (
+          typeof value === &quot;undefined&quot; ||
+          typeof value === &quot;function&quot; ||
+          typeof value === &quot;symbol&quot; ||
+          (typeof value === &quot;number&quot; &amp;&amp; !Number.isFinite(value))
+        ) {
+          throw new TypeError(&quot;Widget state must be a JSON object&quot;);
+        }
+        return value;
+      },
+    );
+    const parsedState = parse(inputState);
+    if (
+      parsedState == null ||
+      typeof parsedState !== &quot;object&quot; ||
+      isArray(parsedState)
+    ) {
+      throw new TypeError(&quot;Widget state must be a JSON object&quot;);
+    }
+    const storedState = {
+      modelContent: null,
+      privateContent: null,
+      ...parsedState,
+    };
+    const serializedState = stringify(storedState);
+    if (encode(serializedState).length &gt; 16 * 1024) {
+      throw new TypeError(
+        &quot;Widget state must be a JSON object of at most 16 KiB&quot;,
+      );
+    }
+    if (
+      hasOwn(storedState, &quot;imageIds&quot;) &amp;&amp;
+      (!isArray(storedState.imageIds) ||
+        storedState.imageIds.some(
+          (/** @type {unknown} */ id) =&gt; typeof id !== &quot;string&quot;,
+        ))
+    ) {
+      throw new TypeError(&quot;Widget state imageIds must be an array of strings&quot;);
+    }
+    if (storedState.imageIds?.length &gt; 0) {
+      throw Object.assign(
+        new TypeError(&quot;Visualization state does not support image attachments&quot;),
+        { code: -32602, data: { code: &quot;images_unsupported&quot; } },
+      );
+    }
+    state = storedState;
+    globalThis.openai.widgetState = state;
+    globalThis.dispatchEvent(
+      new CustomEvent(&quot;openai:set_globals&quot;, {
+        detail: { globals: { widgetState: state } },
+      }),
+    );
+    if (statePersistence === &quot;none&quot;) {
+      throw persistenceError();
+    }
+    const id = ++nextStateRequestId;
+    return new Promise((resolve, reject) =&gt; {
+      const timeout = globalThis.setTimeout(() =&gt; {
+        pendingStateWrites.delete(id);
+        reject(persistenceError());
+      }, 30_000);
+      pendingStateWrites.set(id, { resolve, reject, timeout, serializedState });
+      postToHost(&quot;widget-state-write&quot;, { id, state: serializedState });
+    });
+  };
+  const syncTheme = () =&gt; {
+    const theme = mediaQuery.matches ? &quot;dark&quot; : &quot;light&quot;;
+    root.dataset.theme = theme;
+    globalThis.openai = {
+      ...globalThis.openai,
+      openExternal,
+      sendFollowUpMessage,
+      setWidgetState,
+      theme,
+      visualizationStyleVariables: {},
+      visualizationTheme: theme,
+      widgetState: state,
+      statePersistence,
+      stateModelContext: &quot;none&quot;,
+    };
+    globalThis.dispatchEvent(
+      new CustomEvent(&quot;openai:set_globals&quot;, {
+        detail: { globals: globalThis.openai },
+      }),
+    );
+  };
+  const sendHeight = () =&gt; {
+    postToHost(&quot;height&quot;, {
+      height: Math.ceil(
+        Math.max(
+          document.body.scrollHeight,
+          document.body.getBoundingClientRect().height,
+        ),
+      ),
+    });
+  };
+
+  globalThis.addEventListener(
+    &quot;message&quot;,
+    (event) =&gt; {
+      const data = apply(getMessageData, event, []);
+      const ports = apply(getMessagePorts, event, []);
+      const source = apply(getMessageSource, event, []);
+      if (
+        hostPort != null ||
+        source !== parentWindow ||
+        typeof data !== &quot;object&quot; ||
+        data?.type !== &quot;codex-visualization-initialize&quot; ||
+        !isArray(ports) ||
+        ports.length !== 1
+      ) {
+        return;
+      }
+      apply(stopMessagePropagation, event, []);
+      const nextHostPort = ports[0];
+      try {
+        apply(addHostMessageListener, nextHostPort, [
+          &quot;message&quot;,
+          (event) =&gt; {
+            const data = apply(getMessageData, event, []);
+            if (typeof data === &quot;object&quot; &amp;&amp; data?.type === &quot;measure&quot;) {
+              sendHeight();
+            } else if (
+              typeof data === &quot;object&quot; &amp;&amp;
+              data?.type === &quot;widget-state-result&quot;
+            ) {
+              /** @type {unknown} */
+              const id = data.id;
+              if (typeof id !== &quot;number&quot;) {
+                return;
+              }
+              const pending = pendingStateWrites.get(id);
+              if (pending != null) {
+                pendingStateWrites.delete(id);
+                globalThis.clearTimeout(pending.timeout);
+                if (data.ok === true) {
+                  pending.resolve();
+                } else {
+                  pending.reject(persistenceError());
+                }
+              }
+            }
+          },
+        ]);
+        apply(startHostPort, nextHostPort, []);
+      } catch {
+        return;
+      }
+      hostPort = nextHostPort;
+      for (const [id, { serializedState }] of pendingStateWrites) {
+        postToHost(&quot;widget-state-write&quot;, { id, state: serializedState });
+      }
+      sendHeight();
+    },
+    { capture: true },
+  );
+  document.currentScript?.remove();
+  mediaQuery.addEventListener(&quot;change&quot;, syncTheme);
+  globalThis.addEventListener(&quot;click&quot;, (event) =&gt; {
+    if (event.defaultPrevented) {
+      return;
+    }
+    let element = null;
+    if (event.target instanceof globalThis.Element) {
+      element = event.target;
+    } else if (event.target instanceof globalThis.Node) {
+      element = event.target.parentElement;
+    }
+    const link = element?.closest(&quot;a[href]&quot;);
+    const href = link?.getAttribute(&quot;href&quot;);
+    if (href == null) {
+      return;
+    }
+    if (href.startsWith(&quot;#&quot;)) {
+      let id;
+      try {
+        id = decodeURIComponent(href.slice(1));
+      } catch {
+        return;
+      }
+      const target = id.length === 0 ? root : document.getElementById(id);
+      if (
+        target == null ||
+        globalThis.navigator.userActivation?.isActive !== true
+      ) {
+        return;
+      }
+      event.preventDefault();
+      postToHost(&quot;scroll-to&quot;, {
+        top: target.getBoundingClientRect().top + globalThis.scrollY,
+      });
+      return;
+    }
+    event.preventDefault();
+    openExternal({ href });
+  });
+  new ResizeObserver(sendHeight).observe(document.body);
+  syncTheme();
+})();
+&lt;/script&gt;
+&lt;div id=&quot;cc-collection-preview&quot; aria-label=&quot;Casierul clasei — încasare rapidă&quot;&gt;
+  &lt;style&gt;
+    #cc-collection-preview { --cc-bg: light-dark(#f5f4ee, #191e1c); --cc-surface: light-dark(#ffffff, #242b27); --cc-text: light-dark(#1d3027, #edf3ef); --cc-muted: light-dark(#58665f, #b2c0b8); --cc-line: light-dark(#dce3dd, #424e46); --cc-brand: light-dark(#205d42, #a6ddbd); --cc-on-brand: light-dark(#ffffff, #153724); --cc-soft: light-dark(#e8f0e9, #2c3d31); --cc-error: light-dark(#a92d26, #ffaaa2); font: 400 15px/1.5 system-ui, sans-serif; color: var(--cc-text); width: 100%; }
+    #cc-collection-preview * { box-sizing: border-box; }
+    #cc-collection-preview .cc-phone { max-width: 460px; margin: 0 auto; background: var(--cc-bg); border: 1px solid var(--cc-line); border-radius: 22px; overflow: hidden; }
+    #cc-collection-preview .cc-top { padding: 16px 20px; border-bottom: 1px solid var(--cc-line); }
+    #cc-collection-preview .cc-brand { font-weight: 500; }
+    #cc-collection-preview .cc-caption { font-size: 13px; color: var(--cc-muted); }
+    #cc-collection-preview .cc-main { padding: 18px; }
+    #cc-collection-preview h2 { font: 500 24px/1.25 system-ui, sans-serif; margin: 0 0 5px; letter-spacing: -.025em; overflow-wrap: anywhere; }
+    #cc-collection-preview .cc-section-label { display: block; font-weight: 500; margin: 17px 0 8px; }
+    #cc-collection-preview button { font: inherit; color: inherit; }
+    #cc-collection-preview button:disabled { opacity: .5; cursor: not-allowed; }
+    #cc-collection-preview .cc-children { display: grid; gap: 9px; margin-top: 20px; }
+    #cc-collection-preview .cc-child { width: 100%; min-height: var(--cc-child-height, 78px); padding: 14px; border: 1px solid var(--cc-line); border-radius: 14px; background: var(--cc-surface); display: flex; align-items: center; justify-content: space-between; gap: 10px; text-align: left; }
+    #cc-collection-preview .cc-child-name { display: block; font-size: 20px; font-weight: 500; }
+    #cc-collection-preview .cc-child-due { white-space: nowrap; font-variant-numeric: tabular-nums; }
+    #cc-collection-preview .cc-back { min-height: 44px; border: 0; padding: 0 12px 0 0; background: transparent; color: var(--cc-brand); margin: -6px 0 6px; }
+    #cc-collection-preview .cc-choice { width: 100%; min-height: 62px; padding: 12px 14px; background: var(--cc-surface); border: 1px solid var(--cc-line); border-radius: 12px; display: flex; align-items: center; justify-content: space-between; gap: 12px; text-align: left; }
+    #cc-collection-preview .cc-choice[aria-pressed=&quot;true&quot;], #cc-collection-preview .cc-round[aria-pressed=&quot;true&quot;] { background: var(--cc-brand); color: var(--cc-on-brand); border-color: var(--cc-brand); }
+    #cc-collection-preview .cc-choice[aria-pressed=&quot;true&quot;] .cc-caption, #cc-collection-preview .cc-round[aria-pressed=&quot;true&quot;] .cc-caption { color: inherit; }
+    #cc-collection-preview .cc-total-choice { margin-top: 17px; min-height: 83px; }
+    #cc-collection-preview .cc-total-number { font-size: 30px; font-weight: 500; white-space: nowrap; font-variant-numeric: tabular-nums; }
+    #cc-collection-preview .cc-expenses { display: grid; gap: 7px; }
+    #cc-collection-preview .cc-choice-money { white-space: nowrap; font-size: 19px; font-weight: 500; font-variant-numeric: tabular-nums; }
+    #cc-collection-preview .cc-rounds { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px; }
+    #cc-collection-preview .cc-round { padding: 10px 4px; min-height: 74px; background: var(--cc-surface); border: 1px solid var(--cc-line); border-radius: 12px; }
+    #cc-collection-preview .cc-round-value { display: block; font-size: 20px; font-weight: 500; font-variant-numeric: tabular-nums; }
+    #cc-collection-preview .cc-round .cc-caption { display: block; font-size: 12px; }
+    #cc-collection-preview .cc-money { display: flex; align-items: center; gap: 12px; padding: 8px 13px; background: var(--cc-surface); border: 1px solid var(--cc-line); border-radius: 12px; }
+    #cc-collection-preview .cc-money input { width: 100%; min-width: 0; height: 44px; border: 0; padding: 0; background: transparent; color: var(--cc-text); font: 500 27px/1.3 system-ui, sans-serif; font-variant-numeric: tabular-nums; }
+    #cc-collection-preview .cc-excess { border: 0; padding: 0; margin: 14px 0; min-width: 0; }
+    #cc-collection-preview .cc-excess legend { padding: 0; margin-bottom: 8px; font-weight: 500; }
+    #cc-collection-preview .cc-switch { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+    #cc-collection-preview .cc-switch button { border: 1px solid var(--cc-line); border-radius: 10px; min-height: 50px; padding: 10px 5px; background: var(--cc-surface); }
+    #cc-collection-preview .cc-switch button[aria-pressed=&quot;true&quot;] { background: var(--cc-brand); color: var(--cc-on-brand); border-color: var(--cc-brand); }
+    #cc-collection-preview .cc-summary { background: var(--cc-soft); padding: 12px 14px; border-radius: 12px; margin: 14px 0; font-variant-numeric: tabular-nums; }
+    #cc-collection-preview .cc-summary dl { margin: 0; }
+    #cc-collection-preview .cc-summary dl &gt; div { display: flex; justify-content: space-between; gap: 12px; padding: 2px 0; }
+    #cc-collection-preview .cc-summary dd { margin: 0; text-align: right; white-space: nowrap; }
+    #cc-collection-preview .cc-primary { width: 100%; min-height: 52px; border: 0; border-radius: 12px; background: var(--cc-brand); color: var(--cc-on-brand); padding: 12px; font-weight: 500; }
+    #cc-collection-preview .cc-error { color: var(--cc-error); font-size: 13px; }
+    #cc-collection-preview .cc-confirmation { font-size: 13px; padding: 12px; background: var(--cc-soft); border-radius: 12px; }
+    #cc-collection-preview details { margin-top: 12px; }
+    #cc-collection-preview summary { min-height: 44px; padding: 10px 0; color: var(--cc-muted); }
+    #cc-collection-preview .cc-check { display: flex; align-items: center; gap: 9px; min-height: 44px; }
+    #cc-collection-preview .cc-check input { width: 20px; height: 20px; accent-color: var(--cc-brand); }
+    #cc-collection-preview .cc-allocation-line { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 8px 0; }
+    #cc-collection-preview .cc-allocation-line input { width: 90px; height: 44px; border: 1px solid var(--cc-line); border-radius: 9px; background: var(--cc-surface); color: var(--cc-text); padding: 8px; font: 400 16px system-ui, sans-serif; text-align: right; }
+    #cc-collection-preview .cc-allocation-line input:read-only { opacity: .7; }
+    #cc-collection-preview .cc-empty { padding: 24px 0; }
+    #cc-collection-preview [hidden] { display: none !important; }
+    @media (max-width: 360px) { #cc-collection-preview .cc-main { padding: 14px; } #cc-collection-preview .cc-child { padding: 12px; } #cc-collection-preview .cc-child-name { font-size: 18px; } #cc-collection-preview .cc-total-number { font-size: 27px; } }
+  &lt;/style&gt;
+  &lt;section class=&quot;cc-phone&quot;&gt;
+    &lt;header class=&quot;cc-top&quot;&gt;&lt;div class=&quot;cc-brand&quot;&gt;Casierul clasei&lt;/div&gt;&lt;div class=&quot;cc-caption&quot;&gt;Previzualizare · date fictive&lt;/div&gt;&lt;/header&gt;
+    &lt;div class=&quot;cc-main&quot; id=&quot;cc-roster-screen&quot;&gt;
+      &lt;h2&gt;Alege copilul&lt;/h2&gt;
+      &lt;div class=&quot;cc-caption&quot;&gt;În ordine alfabetică, după numele de familie&lt;/div&gt;
+      &lt;div id=&quot;cc-children&quot; class=&quot;cc-children&quot; aria-label=&quot;Copii&quot;&gt;&lt;/div&gt;
+    &lt;/div&gt;
+    &lt;div class=&quot;cc-main&quot; id=&quot;cc-payment-screen&quot; hidden&gt;
+      &lt;button type=&quot;button&quot; class=&quot;cc-back cursor-interaction&quot; id=&quot;cc-back&quot;&gt;‹ Copii&lt;/button&gt;
+      &lt;h2 id=&quot;cc-child-name&quot;&gt;&lt;/h2&gt;
+      &lt;div class=&quot;cc-caption&quot;&gt;Încasare rapidă&lt;/div&gt;
+      &lt;div id=&quot;cc-no-debt&quot; class=&quot;cc-empty&quot; hidden&gt;Totul este achitat.&lt;/div&gt;
+      &lt;div id=&quot;cc-payment-controls&quot;&gt;
+        &lt;button type=&quot;button&quot; id=&quot;cc-total&quot; class=&quot;cc-choice cc-total-choice cursor-interaction&quot; data-target=&quot;all&quot; aria-pressed=&quot;true&quot;&gt;&lt;span&gt;Total de achitat&lt;/span&gt;&lt;span id=&quot;cc-total-amount&quot; class=&quot;cc-total-number&quot;&gt;&lt;/span&gt;&lt;/button&gt;
+        &lt;div class=&quot;cc-section-label&quot;&gt;Sau doar o cheltuială&lt;/div&gt;
+        &lt;div id=&quot;cc-expenses&quot; class=&quot;cc-expenses&quot;&gt;&lt;/div&gt;
+        &lt;div class=&quot;cc-section-label&quot; id=&quot;cc-round-label&quot;&gt;Rotunjește totalul în sus&lt;/div&gt;
+        &lt;div class=&quot;cc-rounds&quot; id=&quot;cc-rounds&quot;&gt;
+          &lt;button type=&quot;button&quot; class=&quot;cc-round cursor-interaction&quot; data-round=&quot;10&quot; aria-pressed=&quot;false&quot;&gt;&lt;span class=&quot;cc-round-value&quot;&gt;&lt;/span&gt;&lt;span class=&quot;cc-caption&quot;&gt;multiplu de 10&lt;/span&gt;&lt;/button&gt;
+          &lt;button type=&quot;button&quot; class=&quot;cc-round cursor-interaction&quot; data-round=&quot;50&quot; aria-pressed=&quot;false&quot;&gt;&lt;span class=&quot;cc-round-value&quot;&gt;&lt;/span&gt;&lt;span class=&quot;cc-caption&quot;&gt;multiplu de 50&lt;/span&gt;&lt;/button&gt;
+          &lt;button type=&quot;button&quot; class=&quot;cc-round cursor-interaction&quot; data-round=&quot;100&quot; aria-pressed=&quot;false&quot;&gt;&lt;span class=&quot;cc-round-value&quot;&gt;&lt;/span&gt;&lt;span class=&quot;cc-caption&quot;&gt;multiplu de 100&lt;/span&gt;&lt;/button&gt;
+        &lt;/div&gt;
+        &lt;label class=&quot;cc-section-label&quot; for=&quot;cc-received&quot;&gt;Primesc&lt;/label&gt;
+        &lt;div class=&quot;cc-money&quot;&gt;&lt;input id=&quot;cc-received&quot; type=&quot;text&quot; inputmode=&quot;decimal&quot; autocomplete=&quot;off&quot; spellcheck=&quot;false&quot;&gt;&lt;span&gt;lei&lt;/span&gt;&lt;/div&gt;
+        &lt;fieldset class=&quot;cc-excess&quot; id=&quot;cc-excess&quot; hidden&gt;
+          &lt;legend id=&quot;cc-excess-label&quot;&gt;&lt;/legend&gt;
+          &lt;div class=&quot;cc-switch&quot;&gt;
+            &lt;button type=&quot;button&quot; class=&quot;cursor-interaction&quot; data-excess=&quot;change&quot; aria-pressed=&quot;true&quot;&gt;Dau rest&lt;/button&gt;
+            &lt;button type=&quot;button&quot; class=&quot;cursor-interaction&quot; data-excess=&quot;credit&quot; aria-pressed=&quot;false&quot;&gt;Păstrez în avans&lt;/button&gt;
+          &lt;/div&gt;
+        &lt;/fieldset&gt;
+        &lt;p id=&quot;cc-error&quot; class=&quot;cc-error&quot; role=&quot;alert&quot; hidden&gt;&lt;/p&gt;
+        &lt;div class=&quot;cc-summary&quot; id=&quot;cc-summary&quot; aria-live=&quot;polite&quot; aria-atomic=&quot;true&quot;&gt;&lt;dl&gt;
+          &lt;div&gt;&lt;dt&gt;Acoperă contribuții&lt;/dt&gt;&lt;dd id=&quot;cc-covered&quot;&gt;&lt;/dd&gt;&lt;/div&gt;
+          &lt;div id=&quot;cc-change-row&quot; hidden&gt;&lt;dt&gt;Rest de dat&lt;/dt&gt;&lt;dd id=&quot;cc-change&quot;&gt;&lt;/dd&gt;&lt;/div&gt;
+          &lt;div id=&quot;cc-credit-row&quot; hidden&gt;&lt;dt&gt;Avans nou&lt;/dt&gt;&lt;dd id=&quot;cc-credit&quot;&gt;&lt;/dd&gt;&lt;/div&gt;
+          &lt;div&gt;&lt;dt&gt;Rămâne de achitat&lt;/dt&gt;&lt;dd id=&quot;cc-due&quot;&gt;&lt;/dd&gt;&lt;/div&gt;
+          &lt;div&gt;&lt;dt&gt;Intră în fondul clasei&lt;/dt&gt;&lt;dd id=&quot;cc-net&quot;&gt;&lt;/dd&gt;&lt;/div&gt;
+        &lt;/dl&gt;&lt;/div&gt;
+        &lt;button type=&quot;button&quot; id=&quot;cc-preview&quot; class=&quot;cc-primary cursor-interaction&quot;&gt;Previzualizează încasarea&lt;/button&gt;
+        &lt;p id=&quot;cc-confirmation&quot; class=&quot;cc-confirmation&quot; role=&quot;status&quot; hidden&gt;&lt;/p&gt;
+        &lt;details id=&quot;cc-custom&quot;&gt;&lt;summary class=&quot;cursor-interaction&quot;&gt;Ajustează repartizarea&lt;/summary&gt;
+          &lt;label class=&quot;cc-check&quot;&gt;&lt;input type=&quot;checkbox&quot; id=&quot;cc-manual&quot;&gt;Aleg manual sumele pentru cheltuieli&lt;/label&gt;
+          &lt;div id=&quot;cc-allocations&quot;&gt;&lt;/div&gt;
+        &lt;/details&gt;
+      &lt;/div&gt;
+    &lt;/div&gt;
+  &lt;/section&gt;
+  &lt;script&gt;
+    (() =&gt; {
+      const root = document.getElementById(&#x27;cc-collection-preview&#x27;);
+      const find = id =&gt; root.querySelector(&#x27;#&#x27; + id);
+      const children = [
+        { id: &#x27;popescu&#x27;, surname: &#x27;Popescu&#x27;, first: &#x27;Andrei&#x27;, expenses: [{ id: &#x27;books&#x27;, name: &#x27;Culegeri&#x27;, due: 6000 }, { id: &#x27;trip&#x27;, name: &#x27;Excursie&#x27;, due: 4000 }] },
+        { id: &#x27;avram&#x27;, surname: &#x27;Avram&#x27;, first: &#x27;Ana&#x27;, expenses: [{ id: &#x27;books&#x27;, name: &#x27;Culegeri&#x27;, due: 6000 }, { id: &#x27;trip&#x27;, name: &#x27;Excursie&#x27;, due: 2500 }] },
+        { id: &#x27;serban&#x27;, surname: &#x27;Șerban&#x27;, first: &#x27;Maria&#x27;, expenses: [{ id: &#x27;books&#x27;, name: &#x27;Culegeri&#x27;, due: 6800 }, { id: &#x27;trip&#x27;, name: &#x27;Excursie&#x27;, due: 5000 }, { id: &#x27;materials&#x27;, name: &#x27;Materiale&#x27;, due: 2500 }] },
+        { id: &#x27;exemplu&#x27;, surname: &#x27;Exemplu&#x27;, first: &#x27;Ioana&#x27;, expenses: [{ id: &#x27;trip&#x27;, name: &#x27;Excursie&#x27;, due: 5000 }] },
+        { id: &#x27;ionescu&#x27;, surname: &#x27;Ionescu&#x27;, first: &#x27;Luca&#x27;, expenses: [] },
+        { id: &#x27;balan&#x27;, surname: &#x27;Bălan&#x27;, first: &#x27;David&#x27;, expenses: [{ id: &#x27;books&#x27;, name: &#x27;Culegeri&#x27;, due: 7550 }, { id: &#x27;trip&#x27;, name: &#x27;Excursie&#x27;, due: 5000 }] }
+      ];
+      const collator = new Intl.Collator(&#x27;ro&#x27;, { sensitivity: &#x27;base&#x27;, numeric: true });
+      children.sort((a, b) =&gt; collator.compare(a.surname, b.surname) || collator.compare(a.first, b.first) || a.id.localeCompare(b.id));
+      const format = new Intl.NumberFormat(&#x27;ro-RO&#x27;, { maximumFractionDigits: 2 });
+      const money = amount =&gt; format.format(amount / 100) + &#x27; lei&#x27;;
+      const decimal = amount =&gt; String(Math.floor(amount / 100)) + (amount % 100 ? &#x27;,&#x27; + String(amount % 100).padStart(2, &#x27;0&#x27;) : &#x27;&#x27;);
+      const parse = value =&gt; {
+        const normalized = value.trim().replace(&#x27;,&#x27;, &#x27;.&#x27;);
+        if (!/^\d{1,7}(\.\d{0,2})?$/.test(normalized)) return null;
+        const [whole, fraction = &#x27;&#x27;] = normalized.split(&#x27;.&#x27;);
+        return Number(whole) * 100 + Number(fraction.padEnd(2, &#x27;0&#x27;));
+      };
+      const total = child =&gt; child.expenses.reduce((sum, expense) =&gt; sum + expense.due, 0);
+      const fullName = child =&gt; child.surname + &#x27; &#x27; + child.first;
+      const selected = () =&gt; children.find(child =&gt; child.id === state.childId);
+      const state = { childId: null, target: &#x27;all&#x27;, amount: &#x27;&#x27;, round: null, excess: &#x27;change&#x27;, manual: false, allocations: {} };
+      const appearance = { childSize: &#x27;large&#x27; };
+      let renderedChild = null;
+      function node(tag, className, text) {
+        const result = document.createElement(tag); result.className = className;
+        if (text !== undefined) result.textContent = text;
+        return result;
+      }
+      for (const child of children) {
+        const button = node(&#x27;button&#x27;, &#x27;cc-child cursor-interaction&#x27;);
+        button.type = &#x27;button&#x27;; button.dataset.child = child.id;
+        const name = node(&#x27;span&#x27;, &#x27;&#x27;);
+        name.append(node(&#x27;span&#x27;, &#x27;cc-child-name&#x27;, child.surname), node(&#x27;span&#x27;, &#x27;cc-caption&#x27;, child.first));
+        button.append(name, node(&#x27;span&#x27;, &#x27;cc-child-due&#x27;, total(child) ? money(total(child)) : &#x27;Achitat&#x27;));
+        button.setAttribute(&#x27;aria-label&#x27;, fullName(child) + &#x27;, &#x27; + (total(child) ? money(total(child)) + &#x27; de achitat&#x27; : &#x27;totul achitat&#x27;));
+        find(&#x27;cc-children&#x27;).append(button);
+      }
+      function baseAmount(child) {
+        return state.target === &#x27;all&#x27; ? total(child) : (child.expenses.find(expense =&gt; expense.id === state.target)?.due || 0);
+      }
+      function calculate(child) {
+        const amount = parse(state.amount); const allocations = {};
+        if (amount === null || amount &lt;= 0) return { error: &#x27;Introdu o sumă mai mare decât zero, cu cel mult două zecimale.&#x27; };
+        let available = amount;
+        for (const expense of child.expenses) {
+          if (state.manual) {
+            const value = parse(state.allocations[expense.id] ?? &#x27;0&#x27;);
+            if (value === null || value &gt; expense.due) return { error: &#x27;Repartizarea trebuie să fie o sumă validă, cel mult cât a rămas de achitat.&#x27; };
+            allocations[expense.id] = value;
+          } else {
+            const value = (state.target === &#x27;all&#x27; || state.target === expense.id) ? Math.min(available, expense.due) : 0;
+            allocations[expense.id] = value; available -= value;
+          }
+        }
+        const covered = Object.values(allocations).reduce((sum, value) =&gt; sum + value, 0);
+        if (covered &gt; amount) return { error: &#x27;Sumele repartizate depășesc suma primită.&#x27; };
+        const difference = amount - covered;
+        const change = state.excess === &#x27;change&#x27; ? difference : 0;
+        const credit = state.excess === &#x27;credit&#x27; ? difference : 0;
+        return { amount, allocations, covered, difference, change, credit, due: total(child) - covered, net: amount - change };
+      }
+      function buildChild(child) {
+        find(&#x27;cc-child-name&#x27;).textContent = fullName(child); find(&#x27;cc-total-amount&#x27;).textContent = money(total(child));
+        find(&#x27;cc-expenses&#x27;).replaceChildren(); find(&#x27;cc-allocations&#x27;).replaceChildren(); find(&#x27;cc-custom&#x27;).open = state.manual;
+        for (const expense of child.expenses) {
+          const button = node(&#x27;button&#x27;, &#x27;cc-choice cursor-interaction&#x27;);
+          button.type = &#x27;button&#x27;; button.dataset.target = expense.id; button.setAttribute(&#x27;aria-pressed&#x27;, &#x27;false&#x27;);
+          button.append(node(&#x27;span&#x27;, &#x27;&#x27;, expense.name), node(&#x27;span&#x27;, &#x27;cc-choice-money&#x27;, money(expense.due)));
+          find(&#x27;cc-expenses&#x27;).append(button);
+          const label = node(&#x27;label&#x27;, &#x27;cc-allocation-line&#x27;, expense.name + &#x27; (lei)&#x27;);
+          const input = node(&#x27;input&#x27;, &#x27;&#x27;); input.type = &#x27;text&#x27;; input.inputMode = &#x27;decimal&#x27;; input.dataset.expense = expense.id;
+          input.id = &#x27;cc-allocation-&#x27; + expense.id; input.value = &#x27;0&#x27;;
+          label.htmlFor = input.id; label.append(input); find(&#x27;cc-allocations&#x27;).append(label);
+        }
+        renderedChild = child.id;
+      }
+      function render() {
+        root.style.setProperty(&#x27;--cc-child-height&#x27;, appearance.childSize === &#x27;extra-large&#x27; ? &#x27;96px&#x27; : &#x27;78px&#x27;);
+        const child = selected();
+        find(&#x27;cc-roster-screen&#x27;).hidden = !!child; find(&#x27;cc-payment-screen&#x27;).hidden = !child; find(&#x27;cc-confirmation&#x27;).hidden = true;
+        if (!child) return null;
+        if (renderedChild !== child.id) buildChild(child);
+        const noDebt = total(child) === 0;
+        find(&#x27;cc-no-debt&#x27;).hidden = !noDebt; find(&#x27;cc-payment-controls&#x27;).hidden = noDebt;
+        if (noDebt) return null;
+        if (find(&#x27;cc-received&#x27;).value !== state.amount) find(&#x27;cc-received&#x27;).value = state.amount;
+        root.querySelectorAll(&#x27;[data-target]&#x27;).forEach(button =&gt; button.setAttribute(&#x27;aria-pressed&#x27;, String(!state.manual &amp;&amp; button.dataset.target === state.target)));
+        root.querySelectorAll(&#x27;[data-round]&#x27;).forEach(button =&gt; {
+          const unit = Number(button.dataset.round);
+          button.querySelector(&#x27;.cc-round-value&#x27;).textContent = money(Math.ceil(baseAmount(child) / (unit * 100)) * unit * 100);
+          button.setAttribute(&#x27;aria-pressed&#x27;, String(state.round === unit));
+        });
+        find(&#x27;cc-rounds&#x27;).hidden = state.manual; find(&#x27;cc-round-label&#x27;).hidden = state.manual;
+        find(&#x27;cc-round-label&#x27;).textContent = state.target === &#x27;all&#x27; ? &#x27;Rotunjește totalul în sus&#x27; : &#x27;Rotunjește cheltuiala în sus&#x27;;
+        root.querySelectorAll(&#x27;[data-excess]&#x27;).forEach(button =&gt; button.setAttribute(&#x27;aria-pressed&#x27;, String(button.dataset.excess === state.excess)));
+        find(&#x27;cc-manual&#x27;).checked = state.manual;
+        const result = calculate(child);
+        find(&#x27;cc-error&#x27;).hidden = !result.error; find(&#x27;cc-error&#x27;).textContent = result.error || &#x27;&#x27;;
+        find(&#x27;cc-summary&#x27;).hidden = !!result.error; find(&#x27;cc-preview&#x27;).disabled = !!result.error;
+        find(&#x27;cc-excess&#x27;).hidden = !!result.error || !result.difference;
+        if (!result.error) {
+          for (const key of [&#x27;covered&#x27;, &#x27;change&#x27;, &#x27;credit&#x27;, &#x27;due&#x27;, &#x27;net&#x27;]) find(&#x27;cc-&#x27; + key).textContent = money(result[key]);
+          find(&#x27;cc-change-row&#x27;).hidden = !result.change; find(&#x27;cc-credit-row&#x27;).hidden = !result.credit;
+          find(&#x27;cc-excess-label&#x27;).textContent = &#x27;Diferență: &#x27; + money(result.difference);
+        }
+        root.querySelectorAll(&#x27;[data-expense]&#x27;).forEach(input =&gt; {
+          input.readOnly = !state.manual;
+          const value = state.manual ? (state.allocations[input.dataset.expense] ?? &#x27;0&#x27;) : decimal(result.allocations?.[input.dataset.expense] || 0);
+          if (input.value !== value) input.value = value;
+        });
+        return result;
+      }
+      function save(result) {
+        if (!window.openai?.setWidgetState) return;
+        window.openai.setWidgetState({
+          modelContent: { preview: &#x27;casierul-clasei-quick-collection&#x27;, child: selected() ? fullName(selected()) : null, target: state.target, excess: state.excess, ...(result &amp;&amp; !result.error ? { receivedLei: result.amount / 100, changeLei: result.change / 100, creditLei: result.credit / 100 } : {}) },
+          privateContent: { version: 2, ...state }
+        }).catch(() =&gt; {});
+      }
+      function resetForChild(child) {
+        Object.assign(state, { childId: child.id, target: &#x27;all&#x27;, amount: decimal(total(child)), round: null, excess: &#x27;change&#x27;, manual: false, allocations: {} });
+        find(&#x27;cc-custom&#x27;).open = false;
+      }
+      function applySaved(saved) {
+        const data = saved?.privateContent;
+        if (data?.version !== 2) return;
+        const child = children.find(item =&gt; item.id === data.childId);
+        if (!child) { state.childId = null; return; }
+        const editorWasOpen = state.childId === child.id &amp;&amp; find(&#x27;cc-custom&#x27;).open;
+        resetForChild(child);
+        if (data.target === &#x27;all&#x27; || child.expenses.some(expense =&gt; expense.id === data.target)) state.target = data.target;
+        if (typeof data.amount === &#x27;string&#x27; &amp;&amp; data.amount.length &lt;= 12) state.amount = data.amount;
+        state.excess = data.excess === &#x27;credit&#x27; ? &#x27;credit&#x27; : &#x27;change&#x27;; state.round = [10, 50, 100].includes(data.round) ? data.round : null;
+        state.manual = data.manual === true;
+        for (const expense of child.expenses) if (typeof data.allocations?.[expense.id] === &#x27;string&#x27; &amp;&amp; data.allocations[expense.id].length &lt;= 12) state.allocations[expense.id] = data.allocations[expense.id];
+        find(&#x27;cc-custom&#x27;).open = editorWasOpen || state.manual;
+      }
+      root.addEventListener(&#x27;click&#x27;, event =&gt; {
+        const button = event.target.closest(&#x27;button&#x27;); if (!button) return;
+        if (button.dataset.child) {
+          resetForChild(children.find(child =&gt; child.id === button.dataset.child)); save(render());
+          find(&#x27;cc-back&#x27;).focus({ preventScroll: true }); return;
+        }
+        if (button.id === &#x27;cc-back&#x27;) {
+          const previous = state.childId; state.childId = null; save(render());
+          root.querySelector(&#x27;[data-child=&quot;&#x27; + previous + &#x27;&quot;]&#x27;)?.focus({ preventScroll: true }); return;
+        }
+        const child = selected(); if (!child) return;
+        if (button.dataset.target) {
+          state.target = button.dataset.target; state.manual = false; state.round = null; state.allocations = {};
+          state.amount = decimal(baseAmount(child)); find(&#x27;cc-custom&#x27;).open = false; save(render());
+        } else if (button.dataset.round) {
+          state.round = Number(button.dataset.round);
+          state.amount = decimal(Math.ceil(baseAmount(child) / (state.round * 100)) * state.round * 100); save(render());
+        } else if (button.dataset.excess) {
+          state.excess = button.dataset.excess; save(render());
+        } else if (button.id === &#x27;cc-preview&#x27;) {
+          const result = render(); if (!result || result.error) return;
+          const target = state.manual ? &#x27;repartizare manuală&#x27; : state.target === &#x27;all&#x27; ? &#x27;toate contribuțiile&#x27; : child.expenses.find(expense =&gt; expense.id === state.target).name;
+          find(&#x27;cc-confirmation&#x27;).textContent = fullName(child) + &#x27;: &#x27; + money(result.amount) + &#x27; primiți; &#x27; + money(result.covered) + &#x27; pentru &#x27; + target + &#x27;; &#x27; + money(result.change) + &#x27; rest; &#x27; + money(result.credit) + &#x27; avans. Nicio operațiune nu a fost salvată.&#x27;;
+          find(&#x27;cc-confirmation&#x27;).hidden = false;
+        }
+      });
+      find(&#x27;cc-received&#x27;).addEventListener(&#x27;input&#x27;, event =&gt; { state.amount = event.target.value; state.round = null; save(render()); });
+      find(&#x27;cc-manual&#x27;).addEventListener(&#x27;change&#x27;, event =&gt; {
+        const result = calculate(selected());
+        for (const expense of selected().expenses) state.allocations[expense.id] = decimal(result.allocations?.[expense.id] || 0);
+        state.manual = event.target.checked; state.round = null; save(render());
+      });
+      find(&#x27;cc-allocations&#x27;).addEventListener(&#x27;input&#x27;, event =&gt; {
+        if (event.target.dataset.expense &amp;&amp; state.manual) { state.allocations[event.target.dataset.expense] = event.target.value; save(render()); }
+      });
+      applySaved(window.openai?.widgetState); render();
+      window.addEventListener(&#x27;openai:set_globals&#x27;, event =&gt; { if (event.detail?.globals?.widgetState) { applySaved(event.detail.globals.widgetState); render(); } });
+      if (globalThis.Tweak) {
+        const tweak = new globalThis.Tweak({ container: root, onChange: render });
+        tweak.addSelect(appearance, &#x27;childSize&#x27;, { label: &#x27;Butoane copii&#x27;, options: [{ label: &#x27;Mari&#x27;, value: &#x27;large&#x27; }, { label: &#x27;Foarte mari&#x27;, value: &#x27;extra-large&#x27; }] });
+      }
+    })();
+  &lt;/script&gt;
+&lt;/div&gt;
+
+&lt;script src=&quot;https://unpkg.com/@floating-ui/core@1.7.3/dist/floating-ui.core.umd.min.js&quot;&gt;&lt;/script&gt;
+&lt;script src=&quot;https://unpkg.com/@floating-ui/dom@1.7.4/dist/floating-ui.dom.umd.min.js&quot;&gt;&lt;/script&gt;
+&lt;script&gt;
+(() =&gt; {
+  if (window.FloatingUIDOM == null) {
+    return;
+  }
+  const { autoUpdate, computePosition, flip, offset, shift, size } =
+    window.FloatingUIDOM;
+  const tooltipPlacements = new Set([&quot;top&quot;, &quot;right&quot;, &quot;bottom&quot;, &quot;left&quot;]);
+  const tooltipId = `codex-visualization-tooltip-${
+    window.crypto?.randomUUID?.() ?? Date.now().toString(36)
+  }`;
+  const tooltipGap = 5;
+  const hoverDelay = 700;
+  const skipDelay = 300;
+  let activeTrigger = null;
+  let pendingTrigger = null;
+  let tooltip = null;
+  let openTimeout = null;
+  let autoUpdateCleanup = null;
+  let positionRequest = 0;
+  let skipDelayUntil = 0;
+  let lastPointerWasTouch = false;
+  let pinnedByTouch = false;
+
+  const getTrigger = (event) =&gt; {
+    for (const target of event.composedPath()) {
+      if (target?.nodeType === Node.ELEMENT_NODE) {
+        const trigger = target.closest(&quot;[data-tooltip]&quot;);
+        if (trigger) return trigger;
+      }
+    }
+    return null;
+  };
+  const containsTarget = (trigger, target) =&gt;
+    target?.nodeType != null &amp;&amp; trigger.contains(target);
+  const getContent = (trigger) =&gt;
+    trigger.getAttribute(&quot;data-tooltip&quot;)?.trim() ?? &quot;&quot;;
+  const getPlacement = (trigger) =&gt; {
+    const placement = trigger.getAttribute(&quot;data-tooltip-placement&quot;);
+    return tooltipPlacements.has(placement) ? placement : &quot;top&quot;;
+  };
+  const getTooltip = () =&gt; {
+    if (tooltip == null) {
+      tooltip = document.createElement(&quot;div&quot;);
+      tooltip.id = tooltipId;
+      tooltip.className = &quot;tooltip&quot;;
+      tooltip.setAttribute(&quot;role&quot;, &quot;tooltip&quot;);
+    }
+    return tooltip;
+  };
+  const setDescribedBy = (trigger, described) =&gt; {
+    const ids = new Set(
+      (trigger.getAttribute(&quot;aria-describedby&quot;) ?? &quot;&quot;)
+        .split(/\s+/)
+        .filter(Boolean),
+    );
+    if (described) {
+      ids.add(tooltipId);
+    } else {
+      ids.delete(tooltipId);
+    }
+    if (ids.size === 0) {
+      trigger.removeAttribute(&quot;aria-describedby&quot;);
+    } else {
+      trigger.setAttribute(&quot;aria-describedby&quot;, [...ids].join(&quot; &quot;));
+    }
+  };
+  const clearOpenTimeout = () =&gt; {
+    if (openTimeout != null) {
+      window.clearTimeout(openTimeout);
+      openTimeout = null;
+    }
+    pendingTrigger = null;
+  };
+  const closeTooltip = (activateSkipDelay = true) =&gt; {
+    clearOpenTimeout();
+    pinnedByTouch = false;
+    positionRequest += 1;
+    autoUpdateCleanup?.();
+    autoUpdateCleanup = null;
+    if (activeTrigger == null) {
+      return;
+    }
+    setDescribedBy(activeTrigger, false);
+    activeTrigger = null;
+    tooltip?.remove();
+    if (activateSkipDelay) {
+      skipDelayUntil = Date.now() + skipDelay;
+    }
+  };
+  const updatePosition = (trigger, floating) =&gt; {
+    const request = ++positionRequest;
+    void computePosition(trigger, floating, {
+      middleware: [
+        offset(tooltipGap),
+        flip({ padding: tooltipGap }),
+        shift({ padding: tooltipGap }),
+        size({
+          padding: tooltipGap,
+          apply({ availableHeight, availableWidth, elements }) {
+            elements.floating.style.setProperty(
+              &quot;--tooltip-available-width&quot;,
+              `${Math.max(0, availableWidth)}px`,
+            );
+            elements.floating.style.setProperty(
+              &quot;--tooltip-available-height&quot;,
+              `${Math.max(0, availableHeight)}px`,
+            );
+          },
+        }),
+      ],
+      placement: getPlacement(trigger),
+      strategy: &quot;fixed&quot;,
+    })
+      .then(({ x, y }) =&gt; {
+        if (activeTrigger !== trigger || request !== positionRequest) {
+          return;
+        }
+        const scale = window.devicePixelRatio || 1;
+        floating.style.transform = `translate(${Math.round(x * scale) / scale}px, ${Math.round(y * scale) / scale}px)`;
+        floating.style.visibility = &quot;visible&quot;;
+      })
+      .catch(() =&gt; {
+        if (activeTrigger === trigger &amp;&amp; request === positionRequest) {
+          closeTooltip(false);
+        }
+      });
+  };
+  const openTooltip = (trigger) =&gt; {
+    const content = getContent(trigger);
+    if (!trigger.isConnected || content.length === 0) {
+      return;
+    }
+    clearOpenTimeout();
+    if (activeTrigger === trigger) {
+      return;
+    }
+    closeTooltip();
+    const floating = getTooltip();
+    floating.textContent = content;
+    floating.style.visibility = &quot;hidden&quot;;
+    floating.style.transform = &quot;translate(0, 0)&quot;;
+    document.body.appendChild(floating);
+    activeTrigger = trigger;
+    setDescribedBy(trigger, true);
+    autoUpdateCleanup = autoUpdate(trigger, floating, () =&gt; {
+      updatePosition(trigger, floating);
+    });
+  };
+  const requestOpen = (trigger, immediate = false) =&gt; {
+    if (
+      getContent(trigger).length === 0 ||
+      activeTrigger === trigger ||
+      pendingTrigger === trigger
+    ) {
+      return;
+    }
+    clearOpenTimeout();
+    pendingTrigger = trigger;
+    const delay =
+      immediate || activeTrigger != null || Date.now() &lt; skipDelayUntil
+        ? 0
+        : hoverDelay;
+    if (delay === 0) {
+      openTooltip(trigger);
+      return;
+    }
+    openTimeout = window.setTimeout(() =&gt; {
+      openTimeout = null;
+      pendingTrigger = null;
+      openTooltip(trigger);
+    }, delay);
+  };
+  const handlePointerOpen = (event) =&gt; {
+    if (event.pointerType === &quot;touch&quot;) {
+      return;
+    }
+    const trigger = getTrigger(event);
+    if (trigger == null || containsTarget(trigger, event.relatedTarget)) {
+      return;
+    }
+    requestOpen(trigger);
+  };
+  const handlePointer = (event) =&gt; {
+    lastPointerWasTouch =
+      event.type === &quot;pointerdown&quot; &amp;&amp; event.pointerType === &quot;touch&quot;;
+  };
+  const handleTouchClick = (event) =&gt; {
+    const isTouch = event.pointerType === &quot;touch&quot; || lastPointerWasTouch;
+    lastPointerWasTouch = false;
+    if (!isTouch || event.detail === 0) {
+      return;
+    }
+    const trigger = getTrigger(event);
+    if (
+      trigger == null ||
+      !trigger.isConnected ||
+      getContent(trigger).length === 0 ||
+      (pinnedByTouch &amp;&amp; activeTrigger === trigger)
+    ) {
+      if (pinnedByTouch) {
+        closeTooltip();
+      }
+      return;
+    }
+    openTooltip(trigger);
+    pinnedByTouch = activeTrigger === trigger;
+    window.setTimeout(() =&gt; {
+      if (activeTrigger === trigger &amp;&amp; !trigger.isConnected) {
+        closeTooltip(false);
+      }
+    }, 0);
+  };
+  const handleLeave = (event) =&gt; {
+    if (pinnedByTouch) {
+      return;
+    }
+    const trigger = getTrigger(event);
+    if (trigger == null || containsTarget(trigger, event.relatedTarget)) {
+      return;
+    }
+    if (activeTrigger === trigger || pendingTrigger === trigger) {
+      closeTooltip();
+    }
+  };
+  const handleFocusIn = (event) =&gt; {
+    const trigger = getTrigger(event);
+    if (trigger?.matches(&quot;:focus-visible&quot;)) {
+      requestOpen(trigger, true);
+    }
+  };
+  const handleKeyDown = (event) =&gt; {
+    if (event.key === &quot;Escape&quot;) {
+      closeTooltip();
+    }
+  };
+  const handleContextMenu = (event) =&gt; {
+    lastPointerWasTouch = false;
+    const trigger = getTrigger(event);
+    if (activeTrigger === trigger || pendingTrigger === trigger) {
+      closeTooltip();
+    }
+  };
+  const handlers = {
+    pointerover: handlePointerOpen,
+    pointerdown: handlePointer,
+    pointercancel: handlePointer,
+    click: handleTouchClick,
+    pointerout: handleLeave,
+    focusin: handleFocusIn,
+    focusout: handleLeave,
+    keydown: handleKeyDown,
+    contextmenu: handleContextMenu,
+  };
+  const roots = new Map();
+  const handledEvents = new WeakSet();
+  const handleEvent = (event) =&gt; {
+    if (handledEvents.has(event)) return;
+    handledEvents.add(event);
+    handlers[event.type](event);
+  };
+  const discoverRoots = (node) =&gt; {
+    if (node.shadowRoot) listen(node.shadowRoot);
+    for (const element of node.querySelectorAll(&quot;*&quot;)) {
+      if (element.shadowRoot) listen(element.shadowRoot);
+    }
+  };
+  const listen = (root) =&gt; {
+    if (roots.has(root)) return;
+    for (const type of Object.keys(handlers)) root.addEventListener(type, handleEvent);
+    const observer = new window.MutationObserver((records) =&gt; {
+      for (const { addedNodes } of records) {
+        for (const node of addedNodes) {
+          if (node.nodeType === Node.ELEMENT_NODE) discoverRoots(node);
+        }
+      }
+      for (const [root, cleanup] of roots) {
+        if (root.host &amp;&amp; !root.host.isConnected) {
+          cleanup();
+          roots.delete(root);
+        }
+      }
+      if (activeTrigger &amp;&amp; !activeTrigger.isConnected) closeTooltip(false);
+    });
+    observer.observe(root, { childList: true, subtree: true });
+    roots.set(root, () =&gt; {
+      observer.disconnect();
+      for (const type of Object.keys(handlers)) root.removeEventListener(type, handleEvent);
+    });
+    discoverRoots(root);
+  };
+  const destroy = () =&gt; {
+    closeTooltip(false);
+    lastPointerWasTouch = false;
+    for (const cleanup of roots.values()) cleanup();
+    roots.clear();
+    tooltip = null;
+  };
+
+  // Events between children of one shadow root never reach the document.
+  listen(document);
+  window.addEventListener(&quot;pagehide&quot;, destroy, { once: true });
+})();
+&lt;/script&gt;
+&lt;script id=&quot;codex-visualization-tabs&quot;&gt;
+(() =&gt; {
+  const selector = &#x27;.nav[role=&quot;tablist&quot;] [role=&quot;tab&quot;]&#x27;;
+  const disabled = &#x27;:disabled,[aria-disabled=&quot;true&quot;]&#x27;;
+  const selectTab = (selected) =&gt; {
+    const panelId = selected.getAttribute(&quot;aria-controls&quot;);
+    for (const tab of selected.closest(&#x27;[role=&quot;tablist&quot;]&#x27;).querySelectorAll(&#x27;[role=&quot;tab&quot;]&#x27;)) {
+      const active = tab === selected;
+      tab.classList.toggle(&quot;active&quot;, active);
+      tab.setAttribute(&quot;aria-selected&quot;, String(active));
+      const id = tab.getAttribute(&quot;aria-controls&quot;);
+      const panel = id &amp;&amp; document.getElementById(id);
+      if (panel != null) {
+        panel.hidden = id !== panelId;
+        if (!panel.hidden &amp;&amp; selected.id) {
+          panel.setAttribute(&quot;aria-labelledby&quot;, selected.id);
+        }
+      }
+    }
+  };
+  const interact = (event) =&gt; {
+    const tab = event.target?.closest?.(selector);
+    if (event.defaultPrevented || tab == null || tab.matches(disabled)) {
+      return;
+    }
+    if (event.type === &quot;click&quot;) {
+      selectTab(tab);
+      return;
+    }
+    const tabs = Array.from(
+      tab.closest(&#x27;[role=&quot;tablist&quot;]&#x27;).querySelectorAll(&#x27;[role=&quot;tab&quot;]&#x27;),
+    ).filter((candidate) =&gt; !candidate.matches(disabled));
+    const current = tabs.indexOf(tab);
+    let next;
+    if (event.key === &quot;ArrowRight&quot; || event.key === &quot;ArrowDown&quot;) {
+      next = (current + 1) % tabs.length;
+    } else if (event.key === &quot;ArrowLeft&quot; || event.key === &quot;ArrowUp&quot;) {
+      next = (current + tabs.length - 1) % tabs.length;
+    } else if (event.key === &quot;Home&quot;) {
+      next = 0;
+    } else if (event.key === &quot;End&quot;) {
+      next = tabs.length - 1;
+    } else {
+      return;
+    }
+    event.preventDefault();
+    tabs[next].focus();
+    selectTab(tabs[next]);
+  };
+
+  for (const list of document.querySelectorAll(&#x27;.nav[role=&quot;tablist&quot;]&#x27;)) {
+    const selected =
+      list.querySelector(&#x27;[role=&quot;tab&quot;][aria-selected=&quot;true&quot;]&#x27;) ??
+      list.querySelector(&#x27;[role=&quot;tab&quot;].active&#x27;) ??
+      list.querySelector(&#x27;[role=&quot;tab&quot;]&#x27;);
+    if (selected != null) {
+      selectTab(selected);
+    }
+  }
+  document.addEventListener(&quot;click&quot;, interact);
+  document.addEventListener(&quot;keydown&quot;, interact);
+  window.addEventListener(&quot;pagehide&quot;, () =&gt; {
+    document.removeEventListener(&quot;click&quot;, interact);
+    document.removeEventListener(&quot;keydown&quot;, interact);
+  }, { once: true });
+})();
+&lt;/script&gt;
+&lt;script id=&quot;codex-visualization-lucide&quot; async src=&quot;https://unpkg.com/lucide@1.17.0/dist/umd/lucide.js&quot;&gt;&lt;/script&gt;
+&lt;script&gt;
+(() =&gt; {
+  const initialize = () =&gt; {
+    globalThis.lucide?.createIcons({ attrs: { width: 16, height: 16 } });
+  };
+  if (globalThis.lucide != null) {
+    initialize();
+    return;
+  }
+  document
+    .getElementById(&quot;codex-visualization-lucide&quot;)
+    ?.addEventListener(&quot;load&quot;, initialize, { once: true });
+})();
+&lt;/script&gt;
+
+&lt;/body&gt;
+&lt;/html&gt;
+"></iframe>
+<script>(() => {
+  const frame = document.getElementById("codex-visualization");
+  if (!(frame instanceof HTMLIFrameElement)) {
+    return;
+  }
+  let viewportHeight = globalThis.innerHeight;
+  const storageKey = `codex:visualization-widget-state-v2:${JSON.stringify([
+    globalThis.location.pathname,
+    globalThis.location.search,
+  ])}`;
+  const parseState = (serializedState) => {
+    if (
+      typeof serializedState !== "string" ||
+      new TextEncoder().encode(serializedState).length > 16 * 1024
+    ) {
+      throw new TypeError(
+        "Widget state must be a JSON object of at most 16 KiB",
+      );
+    }
+    /** @type {unknown} */
+    const state = JSON.parse(serializedState);
+    if (
+      state == null ||
+      typeof state !== "object" ||
+      Array.isArray(state) ||
+      ("imageIds" in state &&
+        (!Array.isArray(state.imageIds) || state.imageIds.length > 0))
+    ) {
+      throw new TypeError("Widget state must be a JSON object");
+    }
+    const storedState = { modelContent: null, privateContent: null, ...state };
+    const canonicalState = JSON.stringify(
+      storedState,
+      (_key, /** @type {unknown} */ value) => {
+        if (typeof value === "number" && !Number.isFinite(value)) {
+          throw new TypeError("Widget state must contain finite numbers");
+        }
+        return value;
+      },
+    );
+    if (new TextEncoder().encode(canonicalState).length > 16 * 1024) {
+      throw new TypeError(
+        "Widget state must be a JSON object of at most 16 KiB",
+      );
+    }
+    return storedState;
+  };
+  let storage = null;
+  let state = null;
+  try {
+    const localStorage = globalThis.localStorage;
+    const probeKey = `${storageKey}:probe`;
+    localStorage.setItem(probeKey, "1");
+    localStorage.removeItem(probeKey);
+    storage = localStorage;
+    const savedState = storage.getItem(storageKey);
+    if (savedState != null) {
+      try {
+        state = parseState(savedState);
+      } catch {
+        // Invalid saved state does not disable future writes.
+      }
+    }
+  } catch {
+    storage = null;
+  }
+  const initialGlobals = {
+    widgetState: state,
+    statePersistence: storage == null ? "none" : "local",
+  };
+
+  const channel = new MessageChannel();
+  channel.port1.addEventListener("message", (event) => {
+    const data = event.data;
+    if (typeof data !== "object" || data == null) {
+      return;
+    }
+    if (data.type === "widget-state-write") {
+      if (!Number.isSafeInteger(data.id) || data.id <= 0) {
+        return;
+      }
+      let ok = false;
+      try {
+        if (storage != null) {
+          const state = parseState(data.state);
+          storage.setItem(storageKey, JSON.stringify(state));
+          ok = true;
+        }
+      } catch {
+        // Storage denial, quota limits, and invalid state return a failed receipt.
+      }
+      channel.port1.postMessage({
+        type: "widget-state-result",
+        id: data.id,
+        ok,
+      });
+      return;
+    }
+    if (data.type === "height") {
+      const height = data.height;
+      if (
+        typeof height === "number" &&
+        Number.isFinite(height) &&
+        height >= 0 &&
+        height <= 10_000
+      ) {
+        frame.style.height = Math.ceil(height) + "px";
+      }
+      return;
+    }
+    if (data.type === "scroll-to") {
+      const top = data.top;
+      if (
+        typeof top === "number" &&
+        Number.isFinite(top) &&
+        top >= 0 &&
+        globalThis.navigator.userActivation?.isActive === true
+      ) {
+        globalThis.scrollTo({
+          top: Math.ceil(
+            globalThis.scrollY + frame.getBoundingClientRect().top + top,
+          ),
+        });
+      }
+      return;
+    }
+    if (data.type === "open-external") {
+      const rawHref = data.href;
+      if (typeof rawHref !== "string") {
+        return;
+      }
+      let href;
+      try {
+        const url = new URL(rawHref, document.baseURI);
+        if (url.protocol !== "https:") {
+          return;
+        }
+        href = url.href;
+      } catch {
+        return;
+      }
+      if (globalThis.navigator.userActivation?.isActive === true) {
+        const anchor = document.createElement("a");
+        anchor.href = href;
+        anchor.rel = "noopener noreferrer";
+        anchor.target = "_blank";
+        document.body.appendChild(anchor);
+        anchor.click();
+        anchor.remove();
+      }
+      return;
+    }
+    if (data.type === "follow-up") {
+      const prompt = data.prompt;
+      if (
+        typeof prompt !== "string" ||
+        globalThis.navigator.userActivation?.isActive !== true
+      ) {
+        return;
+      }
+      const title = data.title;
+      globalThis.prompt(typeof title === "string" ? title : prompt, prompt);
+    }
+  });
+  channel.port1.start();
+  const srcdoc = frame.dataset.srcdoc;
+  if (srcdoc == null) {
+    return;
+  }
+  globalThis.addEventListener("resize", () => {
+    const height = Number.parseFloat(frame.style.height);
+    if (!Number.isFinite(height) || height <= viewportHeight) {
+      frame.style.removeProperty("height");
+    }
+    viewportHeight = globalThis.innerHeight;
+    channel.port1.postMessage({ type: "measure" });
+  });
+  frame.addEventListener(
+    "load",
+    () => {
+      frame.contentWindow?.postMessage(
+        { type: "codex-visualization-initialize" },
+        "*",
+        [channel.port2],
+      );
+    },
+    { once: true },
+  );
+  // Match the trusted bootstrap element, not the same text in an authored title.
+  frame.srcdoc = srcdoc.replace(
+    '<script type="application/json" id="codex-visualization-widget-state">__CODEX_VISUALIZATION_WIDGET_STATE__<\/script>',
+    () =>
+      '<script type="application/json" id="codex-visualization-widget-state">' +
+      JSON.stringify(initialGlobals).replaceAll("<", "\\u003c") +
+      "<\/script>",
+  );
+  delete frame.dataset.srcdoc;
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,16 @@
+[Unit]
+Description=Casierul clasei PWA
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/opc/projects/casierul-clasei
+EnvironmentFile=%h/.config/casierul-clasei/app.env
+ExecStart=/usr/bin/node /home/opc/projects/casierul-clasei/server/index.mjs
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+UMask=0077
+
+[Install]
+WantedBy=default.target

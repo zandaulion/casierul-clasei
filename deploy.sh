@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+PROJECT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+SERVICE_NAME=casierul-clasei.service
+cd "$PROJECT_DIR"
+
+npm test
+python3 "$PROJECT_DIR/deploy/configure-env.py" "${1:-}"
+test -s "$PROJECT_DIR/web/index.html"
+test -s "$PROJECT_DIR/server/index.mjs"
+install -d -m 0755 "$HOME/.config/systemd/user"
+install -m 0644 "$PROJECT_DIR/deploy/$SERVICE_NAME" "$HOME/.config/systemd/user/$SERVICE_NAME"
+install -m 0644 "$PROJECT_DIR/deploy/casierul-clasei-backup.service" "$HOME/.config/systemd/user/casierul-clasei-backup.service"
+install -m 0644 "$PROJECT_DIR/deploy/casierul-clasei-backup.timer" "$HOME/.config/systemd/user/casierul-clasei-backup.timer"
+systemctl --user daemon-reload
+
+sudo -n python3 "$PROJECT_DIR/deploy/install-console.py" "$HOME/.config/casierul-clasei/app.env"
+systemctl --user disable --now casierul-clasei-preview.service 2>/dev/null || true
+systemctl --user enable "$SERVICE_NAME"
+systemctl --user restart "$SERVICE_NAME"
+
+for attempt in {1..30}; do
+  if curl -fsS --max-time 2 http://127.0.0.1:8018/api/health -o /dev/null 2>/dev/null; then
+    systemctl --user enable --now casierul-clasei-backup.timer
+    systemctl --user start casierul-clasei-backup.service
+    printf 'Casierul clasei is running at http://127.0.0.1:8018\n'
+    exit 0
+  fi
+  sleep 0.5
+done
+
+printf 'Application health check failed. Restoring the preview; stored data is retained.\n' >&2
+systemctl --user stop "$SERVICE_NAME"
+systemctl --user enable --now casierul-clasei-preview.service
+systemctl --user status "$SERVICE_NAME" --no-pager || true
+exit 1

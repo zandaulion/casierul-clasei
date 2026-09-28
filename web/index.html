@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="ro">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><meta name="theme-color" content="#205d42"><meta name="color-scheme" content="light dark"><meta name="description" content="Contribuțiile copiilor și registrul fondului clasei."><meta name="referrer" content="no-referrer"><link rel="manifest" href="/manifest.webmanifest"><link rel="icon" type="image/svg+xml" href="/icons/icon.svg"><link rel="apple-touch-icon" href="/icons/icon-192.png"><link rel="stylesheet" href="/styles.css"><title>Casierul clasei</title>
+</head>
+<body>
+<a class="skip" href="#main">Mergi la conținut</a>
+<div class="app">
+<header class="top"><div><div class="brand">Casierul clasei</div><div id="class-label" class="caption">Fondul clasei, la îndemână</div></div><button id="settings-button" class="icon-button" data-action="settings" hidden aria-label="Setări">⚙</button></header>
+<div id="connection" class="notice" role="status" hidden></div><div id="pending-notice" class="notice warning" role="alert" hidden></div>
+<main id="main" tabindex="-1"><div class="empty"><h1>Se încarcă…</h1><p>Conectăm registrul clasei.</p></div></main>
+<nav id="tabs" class="tabs" aria-label="Ecrane principale" hidden><button data-tab="children" aria-current="page">Copii</button><button data-tab="expenses">Cheltuieli</button><button data-tab="ledger">Registru</button><button data-tab="reports">Rapoarte</button></nav>
+</div>
+<dialog id="dialog" aria-labelledby="dialog-title"><form id="modal-form"><div class="dialog-heading"><h2 id="dialog-title"></h2><button type="button" class="icon-button" data-action="close-modal" aria-label="Închide">×</button></div><div id="modal-content"></div><p id="modal-error" class="error" role="alert" hidden></p><div class="dialog-actions"><button type="button" data-action="close-modal">Renunță</button><button type="submit" class="primary" id="modal-submit">Salvează</button></div></form></dialog>
+<div id="toast" role="status" class="toast" hidden></div><noscript><p class="notice">Activează JavaScript pentru a folosi registrul clasei.</p></noscript>
+<script type="module" src="/app.js"></script>
+</body>
+</html>
