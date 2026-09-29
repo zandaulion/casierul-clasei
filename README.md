@@ -43,12 +43,14 @@ Datele afișate în capturi sunt integral sintetice.
 
 ## Începe
 
-1. Generează o invitație în consola PWA privată și activează telefonul.
+1. Generează o invitație în consola PWA privată și activează telefonul. Același cod poate activa și un al doilea dispozitiv, de exemplu laptopul, în cele șapte zile de valabilitate.
 2. Configurează școala, clasa, anul școlar și eventualul sold inițial.
 3. Din **Copiii clasei → Gestionează copiii**, adaugă copiii individual sau lipește lista, câte un `Nume de familie; Prenume` pe linie.
 4. Creează cheltuielile și selectează participanții: sumă fixă/copil, total împărțit sau cantitate/copil × preț unitar.
 
 Invitațiile pot acorda trei tipuri de acces. **Casierul** vede și modifică întregul registru. **Părintele** are acces doar pentru citire la situația generală și la datele copilului asociat, fără numele sau tranzacțiile celorlalți copii. **Auditorul** vede registrul complet și rapoartele, dar nu poate modifica sau exporta datele brute. Accesul doar pentru citire poate expira automat la data aleasă în consola PWA.
+
+Cele două activări acordă același rol, aceeași clasă și aceeași dată de expirare a accesului; pentru părinte, se păstrează și copilul asociat. Fiecare dispozitiv are propria sesiune și poate fi revocat separat. Un alt browser sau profil, chiar pe același telefon ori laptop, folosește o activare separată. Codurile deja consumate înainte de introducerea limitei de două activări rămân închise; pentru al doilea dispozitiv se emite o invitație nouă.
 
 Părintele cu un singur copil asociat ajunge direct la situația lui: contribuții, termene, avansuri și rapoarte disponibile.
 

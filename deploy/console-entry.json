@@ -3,8 +3,8 @@
   "name": "Casierul clasei",
   "api": "/casierul-clasei",
   "push": false,
-  "message": "Acces la Casierul clasei — evidența contribuțiilor și a banilor clasei.\n\nDeschide {link}, apoi apasă Activează.\n\nPoți instala aplicația pe ecranul principal. Codul este valabil {days} zile și se folosește o singură dată.",
-  "invite_note": "Alege clasa pentru acest acces. Invitația este valabilă {days} zile și se folosește o singură dată.",
+  "message": "Acces la Casierul clasei — evidența contribuțiilor și a banilor clasei.\n\nDeschide {link}, apoi apasă «Deschide registrul clasei».\n\nPoți instala aplicația pe ecranul principal. Același cod permite activarea a două dispozitive, de exemplu telefon și laptop, în cele {days} zile de valabilitate.",
+  "invite_note": "Alege clasa pentru acest acces. Invitația permite activarea a două dispozitive și este valabilă {days} zile de la emitere.",
   "invite_profiles": [
     {
       "value": "treasurer",
@@ -26,12 +26,12 @@
     }
   ],
   "invite_messages": {
-    "parent": "Acces doar pentru citire la Casierul clasei. Vei vedea situația generală a fondului și numai contribuțiile copilului tău.\n\nDeschide {link}, apoi apasă Activează.\n\nPoți instala aplicația pe ecranul principal. Codul este valabil {days} zile și se folosește o singură dată.",
-    "auditor": "Acces doar pentru citire la Casierul clasei. Vei putea verifica registrul și rapoartele clasei alese, fără să modifici date.\n\nDeschide {link}, apoi apasă Activează.\n\nPoți instala aplicația pe ecranul principal. Codul este valabil {days} zile și se folosește o singură dată."
+    "parent": "Acces doar pentru citire la Casierul clasei. Vei vedea situația generală a fondului și numai contribuțiile copilului tău.\n\nDeschide {link}, apoi apasă «Deschide registrul clasei».\n\nPoți instala aplicația pe ecranul principal. Același cod permite activarea a două dispozitive, de exemplu telefon și laptop, în cele {days} zile de valabilitate.",
+    "auditor": "Acces doar pentru citire la Casierul clasei. Vei putea verifica registrul și rapoartele clasei alese, fără să modifici date.\n\nDeschide {link}, apoi apasă «Deschide registrul clasei».\n\nPoți instala aplicația pe ecranul principal. Același cod permite activarea a două dispozitive, de exemplu telefon și laptop, în cele {days} zile de valabilitate."
   },
   "invite_notes": {
-    "parent": "Alege copilul din clasa potrivită. Accesul este doar pentru citire, limitat la acel copil.",
-    "auditor": "Alege opțiunea «întreaga clasă» pentru clasa dorită. Accesul este doar pentru citire.",
-    "treasurer": "Alege opțiunea «întreaga clasă» pentru clasa dorită. Accesul permite modificarea registrului."
+    "parent": "Alege copilul din clasa potrivită. Accesul este doar pentru citire, limitat la acel copil. Codul permite activarea a două dispozitive în {days} zile de la emitere.",
+    "auditor": "Alege opțiunea «întreaga clasă» pentru clasa dorită. Accesul este doar pentru citire. Codul permite activarea a două dispozitive în {days} zile de la emitere.",
+    "treasurer": "Alege opțiunea «întreaga clasă» pentru clasa dorită. Accesul permite modificarea registrului. Codul permite activarea a două dispozitive în {days} zile de la emitere."
   }
 }

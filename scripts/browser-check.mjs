@@ -366,8 +366,42 @@ try {
   await until('document.getElementById("collection-form") && document.querySelector("h1")?.textContent.includes("Bălan David")', 'session, data and current screen persist on reload');
   assert.equal(snapshot().summary.balanceMinor, 15000);
   await until('navigator.serviceWorker.getRegistration().then(r => !!r?.active)', 'shared PWA worker installed');
+
+  // Separate browser contexts model a phone and laptop with independent cookies.
+  const primarySession = sessionId;
+  const primaryDeviceId = await evaluate('fetch("/api/auth/me").then(r => r.json()).then(r => r.device.id)');
+  for (const [label, allowed] of [['Laptop', true], ['Third device', false]]) {
+    const { browserContextId } = await send('Target.createBrowserContext');
+    try {
+      const extraTarget = await send('Target.createTarget', { url: 'about:blank', browserContextId });
+      ({ sessionId } = await send('Target.attachToTarget', { targetId: extraTarget.targetId, flatten: true }));
+      await page('Page.enable'); await page('Runtime.enable');
+      await page('Emulation.setDeviceMetricsOverride', { width: 1280, height: 800, deviceScaleFactor: 1, mobile: false });
+      await page('Page.navigate', { url: origin + '/?invite=' + renewal.code });
+      await until('document.getElementById("invite-form")');
+      assert.match(await evaluate('document.getElementById("invite-form").textContent'), /două dispozitive/u);
+      await fill('#invite-form [name=label]', label);
+      await click('#invite-form button[type=submit]');
+      if (allowed) {
+        await until('document.querySelector(".children")', 'second device opens the same classroom');
+        const secondDevice = await evaluate('fetch("/api/auth/me").then(r => r.json()).then(r => r.device)');
+        assert.notEqual(secondDevice.id, primaryDeviceId);
+        assert.equal(secondDevice.label, 'Laptop');
+        assert.equal(await evaluate('fetch("/api/state").then(r => r.json()).then(r => r.summary.balanceMinor)'), 15000);
+        app.auth.setDeviceRevoked(secondDevice.id, true);
+        assert.equal(await evaluate('fetch("/api/auth/me").then(r => r.status)'), 401);
+      } else {
+        await until('document.getElementById("invite-error")?.textContent.includes("limita de dispozitive")', 'third activation displays the device limit');
+        assert.equal(await evaluate('fetch("/api/auth/me").then(r => r.status)'), 401);
+      }
+    } finally {
+      sessionId = primarySession;
+      await send('Target.disposeBrowserContext', { browserContextId });
+    }
+    assert.equal(await evaluate('fetch("/api/auth/me").then(r => r.status)'), 200, 'phone remains signed in independently');
+  }
   assert.equal(exceptions.length, 0, JSON.stringify(exceptions));
-  console.log('Browser checks passed: invitation/setup, logo upload, classroom creation/switching, navigation, roster, expense editing before and after linked money, manual allocation, quick collection, lost-response retry across reauthentication, temporary fund advances and repayments, expense/payment document attachments, payment/refund/credit/correction, PDF report generation, in-app viewing and sharing, stale-data protection, reload, offline protection, mobile/dark layout, and PWA worker.');
+  console.log('Browser checks passed: invitation/setup, two-device activation with independent sessions and third-device rejection, logo upload, classroom creation/switching, navigation, roster, expense editing before and after linked money, manual allocation, quick collection, lost-response retry across reauthentication, temporary fund advances and repayments, expense/payment document attachments, payment/refund/credit/correction, PDF report generation, in-app viewing and sharing, stale-data protection, reload, offline protection, mobile/dark layout, and PWA worker.');
 } finally {
   if (contextId) await send('Target.disposeBrowserContext', { browserContextId: contextId });
   socket.close();
