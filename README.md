@@ -36,7 +36,7 @@ Datele afișate în capturi sunt integral sintetice.
 
 Invitațiile pot acorda trei tipuri de acces. **Casierul** vede și modifică întregul registru. **Părintele** are acces doar pentru citire la situația generală și la datele copilului asociat, fără numele sau tranzacțiile celorlalți copii. **Auditorul** vede registrul complet și rapoartele, dar nu poate modifica sau exporta datele brute. Accesul doar pentru citire poate expira automat la data aleasă în consola PWA.
 
-Proprietarul poate adăuga alte clase din setări. Fiecare clasă are bază de date, copii, cheltuieli, rapoarte, sigle și drepturi proprii. Selectorul din antet apare când dispozitivul are acces la mai multe clase. Invitațiile se emit pentru o singură clasă și un singur rol; pentru părinte se alege și copilul.
+Proprietarul poate adăuga alte clase din setări. Fiecare clasă are bază de date, copii, cheltuieli, rapoarte, sigle și drepturi proprii. Selectorul din antet apare când dispozitivul are acces la mai multe clase. Invitațiile se emit pentru o singură clasă și un singur rol; pentru părinte se alege și copilul. „Adaugă acces din invitație” păstrează accesurile existente, astfel încât același dispozitiv poate avea roluri diferite în clase diferite.
 
 ## Încasare rapidă
 

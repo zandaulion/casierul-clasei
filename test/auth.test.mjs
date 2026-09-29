@@ -346,6 +346,21 @@ test('classrooms keep ledgers and permissions isolated', async (t) => {
   assert.equal((await publicRequest(`/api/children${classroomQuery}`, { method: 'POST', headers: auditorHeaders, body: {
     requestId: 'forbidden-child', expectedRevision: 2, firstName: 'Nu', lastName: 'Merge',
   } })).status, 403);
+  const addedInvite = await (await adminRequest('/api/admin/invites', { method: 'POST', body: {
+    label: 'Casier implicit', role: 'treasurer', childId: 'classroom:default',
+  } })).json();
+  const addAccess = await publicRequest('/api/auth/access', { method: 'POST', headers: auditorHeaders, body: { code: addedInvite.code } });
+  assert.equal(addAccess.status, 200);
+  const expandedSession = await addAccess.json();
+  assert.deepEqual(Object.fromEntries(expandedSession.classrooms.map(item => [item.id, item.role])), {
+    default: 'treasurer', [created.classroom.id]: 'auditor',
+  });
+  assert.equal((await publicRequest('/api/children?classroom=default', { method: 'POST', headers: auditorHeaders, body: {
+    requestId: 'allowed-default-child', expectedRevision: 0, firstName: 'Da', lastName: 'Merge',
+  } })).status, 200, 'the same device can have a different role in another classroom');
+  assert.equal((await publicRequest(`/api/children${classroomQuery}`, { method: 'POST', headers: auditorHeaders, body: {
+    requestId: 'still-forbidden-child', expectedRevision: 2, firstName: 'Tot', lastName: 'Nu',
+  } })).status, 403, 'adding another class does not widen the existing classroom permission');
   assert.ok(app.auth.listDevices().devices.find(item => item.id === session.device.id).permissions
     .some(permission => permission.classroom_id === created.classroom.id && permission.role === 'auditor'));
 });
