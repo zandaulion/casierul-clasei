@@ -84,7 +84,16 @@ try {
   await fill('#modal-form [name=schoolName]', 'Școala de verificare');
   await fill('#modal-form [name=className]', 'III A');
   await fill('#modal-form [name=openingBalance]', '0');
+  await evaluate(`(() => {
+    const bytes = Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='), character => character.charCodeAt(0));
+    const transfer = new DataTransfer();
+    transfer.items.add(new File([bytes], 'sigla.png', { type: 'image/png' }));
+    const input = document.querySelector('[data-logo-input="school"]');
+    input.files = transfer.files; input.dispatchEvent(new Event('change', { bubbles: true }));
+  })()`);
+  await until('!document.getElementById("school-logo-preview").hidden', 'school logo preview');
   await saveModal();
+  assert.equal(snapshot().settings.hasSchoolLogo, true);
   await click('[data-action=bulk-children]');
   await fill('#modal-form [name=childrenText]', 'Exemplu; Ioana\nAvram; Ana\nBălan; David');
   await saveModal();
@@ -283,7 +292,7 @@ try {
   assert.equal(snapshot().summary.balanceMinor, 15000);
   await until('navigator.serviceWorker.getRegistration().then(r => !!r?.active)', 'shared PWA worker installed');
   assert.equal(exceptions.length, 0, JSON.stringify(exceptions));
-  console.log('Browser checks passed: invitation/setup, navigation, roster, expense editing before and after linked money, manual allocation, quick collection, lost-response retry across reauthentication, payment/refund/credit/correction, PDF report generation and sharing, stale-data protection, reload, offline protection, mobile/dark layout, and PWA worker.');
+  console.log('Browser checks passed: invitation/setup, logo upload, navigation, roster, expense editing before and after linked money, manual allocation, quick collection, lost-response retry across reauthentication, payment/refund/credit/correction, PDF report generation and sharing, stale-data protection, reload, offline protection, mobile/dark layout, and PWA worker.');
 } finally {
   if (contextId) await send('Target.disposeBrowserContext', { browserContextId: contextId });
   socket.close();

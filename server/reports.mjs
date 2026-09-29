@@ -50,7 +50,7 @@ function documentTitle(report) {
   return `Fișa individuală — ${report.subjectLabel}`;
 }
 
-export async function renderReportPdf(report, state) {
+export async function renderReportPdf(report, state, branding = {}) {
   const doc = new PDFDocument({ size: 'A4', layout: report.type === 'matrix' ? 'landscape' : 'portrait', margins: { top: 46, right: 42, bottom: 58, left: 42 }, bufferPages: true,
     info: { Title: `${report.code} · ${documentTitle(report)}`, Author: 'Casierul clasei', CreationDate: new Date(report.createdAt) } });
   doc.registerFont('Regular', REGULAR).registerFont('Bold', BOLD);
@@ -59,23 +59,38 @@ export async function renderReportPdf(report, state) {
   const complete = new Promise((resolve, reject) => { doc.on('end', () => resolve(Buffer.concat(chunks))); doc.on('error', reject); });
   const width = doc.page.width - doc.page.margins.left - doc.page.margins.right;
   const green = '#205d42', dark = '#1d3027', muted = '#58665f', line = '#dce3dd', soft = '#edf4ef';
+  const tones = {
+    positive: { ink: '#17623b', fill: '#e3f3e8' },
+    warning: { ink: '#8a5a00', fill: '#fff1c7' },
+    negative: { ink: '#9b2c25', fill: '#f9dfdc' },
+    info: { ink: '#245c7a', fill: '#e2f0f7' },
+    correction: { ink: '#8a4b08', fill: '#f8e7d2' },
+  };
 
   const ensure = height => { if (doc.y + height > doc.page.height - doc.page.margins.bottom) doc.addPage(); };
   const rule = () => { doc.moveDown(.3).strokeColor(line).lineWidth(.7).moveTo(doc.page.margins.left, doc.y).lineTo(doc.page.width - doc.page.margins.right, doc.y).stroke().moveDown(.5); };
   const section = title => { ensure(48); doc.moveDown(.5).font('Bold').fontSize(14).fillColor(dark).text(title, doc.page.margins.left, doc.y, { width }); rule(); };
   const note = text => { ensure(35); doc.font('Regular').fontSize(8.5).fillColor(muted).text(text, doc.page.margins.left, doc.y, { width, lineGap: 2 }); doc.moveDown(.4); };
-  const metric = (label, value) => {
+  const metric = (label, value, tone = null) => {
     ensure(25); const y = doc.y;
-    doc.font('Regular').fontSize(9.5).fillColor(muted).text(label, doc.page.margins.left, y, { width: width * .58 });
-    doc.font('Bold').fontSize(10).fillColor(dark).text(value, doc.page.margins.left + width * .58, y, { width: width * .42, align: 'right' });
-    doc.y = Math.max(doc.y, y + 17); doc.x = doc.page.margins.left;
+    const color = tones[tone];
+    if (color) {
+      doc.roundedRect(doc.page.margins.left, y - 3, width, 21, 4).fill(color.fill);
+      doc.rect(doc.page.margins.left, y - 3, 4, 21).fill(color.ink);
+    }
+    doc.font('Regular').fontSize(9.5).fillColor(color?.ink || muted).text(label, doc.page.margins.left + (color ? 10 : 0), y, { width: width * .58 - (color ? 10 : 0) });
+    doc.font('Bold').fontSize(10).fillColor(color?.ink || dark).text(value, doc.page.margins.left + width * .58, y, { width: width * .40, align: 'right' });
+    doc.y = Math.max(doc.y, y + 21); doc.x = doc.page.margins.left;
   };
-  const item = (title, amount, details, comment = '') => {
+  const item = (title, amount, details, comment = '', tone = null) => {
     ensure(comment ? 70 : 52); const y = doc.y;
-    doc.font('Bold').fontSize(10).fillColor(dark).text(title, doc.page.margins.left, y, { width: width * .72 });
-    doc.font('Bold').fontSize(10).fillColor(dark).text(amount, doc.page.margins.left + width * .72, y, { width: width * .28, align: 'right' });
-    doc.font('Regular').fontSize(8.5).fillColor(muted).text(details, doc.page.margins.left, Math.max(doc.y, y + 16), { width, lineGap: 2 });
-    if (comment) doc.font('Regular').fontSize(8.5).fillColor(dark).text(comment, { width, lineGap: 2 });
+    const color = tones[tone];
+    if (color) doc.rect(doc.page.margins.left, y, 3, Math.min(comment ? 52 : 36, doc.page.height - y - doc.page.margins.bottom)).fill(color.ink);
+    const inset = color ? 9 : 0;
+    doc.font('Bold').fontSize(10).fillColor(color?.ink || dark).text(title, doc.page.margins.left + inset, y, { width: width * .72 - inset });
+    doc.font('Bold').fontSize(10).fillColor(color?.ink || dark).text(amount, doc.page.margins.left + width * .72, y, { width: width * .28, align: 'right' });
+    doc.font('Regular').fontSize(8.5).fillColor(muted).text(details, doc.page.margins.left + inset, Math.max(doc.y, y + 16), { width: width - inset, lineGap: 2 });
+    if (comment) doc.font('Regular').fontSize(8.5).fillColor(dark).text(comment, { width: width - inset, lineGap: 2 });
     doc.moveDown(.4); doc.strokeColor(line).lineWidth(.4).moveTo(doc.page.margins.left, doc.y).lineTo(doc.page.width - doc.page.margins.right, doc.y).stroke().moveDown(.45);
   };
   const matrixReport = () => {
@@ -147,10 +162,18 @@ export async function renderReportPdf(report, state) {
     note('Raport nominal destinat verificării interne. Culorile indică situația fiecărei contribuții la momentul emiterii.');
   };
 
-  doc.font('Bold').fontSize(9).fillColor(green).text('CASIERUL CLASEI', { characterSpacing: 1.2 });
-  doc.moveDown(.35).font('Bold').fontSize(21).fillColor(dark).text(documentTitle(report), { lineGap: 3 });
+  const headerY = doc.y, logoSize = 48, centerInset = logoSize + 14;
+  if (branding.school) doc.image(branding.school, doc.page.margins.left, headerY, { fit: [logoSize, logoSize], align: 'center', valign: 'center' });
+  if (branding.class) doc.image(branding.class, doc.page.width - doc.page.margins.right - logoSize, headerY, { fit: [logoSize, logoSize], align: 'center', valign: 'center' });
+  doc.font('Bold').fontSize(9).fillColor(green).text('CASIERUL CLASEI', doc.page.margins.left + centerInset, headerY + 5,
+    { width: width - centerInset * 2, align: 'center', characterSpacing: 1.2 });
+  doc.font('Regular').fontSize(9).fillColor(muted)
+    .text(`${state.settings.schoolName || 'Școala'} · ${state.settings.className || 'Clasa'}`, doc.page.margins.left + centerInset, headerY + 23,
+      { width: width - centerInset * 2, align: 'center' })
+    .text(state.settings.schoolYear || 'An școlar nespecificat', { width: width - centerInset * 2, align: 'center' });
+  doc.y = headerY + logoSize + 13; doc.x = doc.page.margins.left;
+  doc.font('Bold').fontSize(21).fillColor(dark).text(documentTitle(report), { lineGap: 3 });
   doc.moveDown(.35).font('Regular').fontSize(9).fillColor(muted)
-    .text(`${state.settings.schoolName || 'Școala'} · ${state.settings.className || 'Clasa'} · ${state.settings.schoolYear || 'An școlar nespecificat'}`)
     .text(`${report.code} · Situație la ${dateTimeFormat.format(new Date(report.createdAt))} · Revizia registrului ${report.stateRevision}`);
   if (report.replacesCode) doc.moveDown(.35).font('Bold').fillColor('#8a4b08').text(`Raport corectiv: înlocuiește ${report.replacesCode}.`);
   doc.moveDown(.55).fillColor(dark); rule();
@@ -162,18 +185,19 @@ export async function renderReportPdf(report, state) {
     metric('Sold inițial', money(state.settings.openingBalanceMinor));
     metric('Bani primiți și păstrați în fond', money(state.summary.totalReceivedMinor));
     metric('Bani dați mai departe și restituiți', money(state.summary.totalPaidMinor));
-    metric('Sold curent', money(state.summary.balanceMinor));
+    metric('Sold curent', money(state.summary.balanceMinor), 'info');
     metric('Din sold: avansuri nealocate', money(state.summary.totalCreditMinor));
-    metric('Total de încasat', money(state.summary.totalDueMinor));
-    metric('Copii cu cel puțin o restanță', String(state.children.filter(child => child.dueMinor > 0).length));
+    metric('Total de încasat', money(state.summary.totalDueMinor), state.summary.totalDueMinor ? 'negative' : 'positive');
+    metric('Copii cu cel puțin o restanță', String(state.children.filter(child => child.dueMinor > 0).length), state.summary.totalDueMinor ? 'negative' : 'positive');
     note('Reconciliere: sold inițial + bani primiți și păstrați − bani dați mai departe și restituiți = sold curent. Avansurile sunt incluse în soldul curent.');
 
     section('Cheltuieli');
     for (const expense of state.expenses.filter(entry => !entry.cancelled).reverse()) {
       const due = expenseStatus(state, expense);
+      const tone = due.amountMinor === 0 ? 'positive' : expense.collectedMinor > 0 ? 'warning' : 'negative';
       item(expense.title, money(expense.totalMinor),
         `Încasat ${money(expense.collectedMinor)} · Dat mai departe ${money(expense.paidOutMinor)} · Restanțe: ${due.count} copii · ${money(due.amountMinor)}`,
-        expense.comment);
+        expense.comment, tone);
     }
     const payments = transactions.filter(tx => tx.type === 'payment');
     section('Bani dați mai departe');
@@ -181,12 +205,12 @@ export async function renderReportPdf(report, state) {
     for (const payment of payments) {
       const expense = state.expenses.find(entry => entry.id === payment.expenseId);
       item(payment.destination || 'Plată', money(payment.amountMinor),
-        `${dateTimeFormat.format(new Date(payment.occurredAt))}${expense ? ` · ${expense.title}` : ' · Fără cheltuială asociată'}`, payment.comment);
+        `${dateTimeFormat.format(new Date(payment.occurredAt))}${expense ? ` · ${expense.title}` : ' · Fără cheltuială asociată'}`, payment.comment, 'info');
     }
     const corrections = state.transactions.filter(tx => tx.type === 'reversal');
     if (corrections.length) {
       section('Corecții înregistrate');
-      for (const correction of corrections) item('Corecție', money(correction.amountMinor), dateTimeFormat.format(new Date(correction.occurredAt)), correction.comment);
+      for (const correction of corrections) item('Corecție', money(correction.amountMinor), dateTimeFormat.format(new Date(correction.occurredAt)), correction.comment, 'correction');
     }
   }
 
@@ -198,30 +222,31 @@ export async function renderReportPdf(report, state) {
     const partiallyPaid = childContributions.filter(entry => entry.paidMinor > 0 && entry.remainingMinor > 0).length;
     section('Rezumat');
     metric('Necesar total', money(expense.totalMinor));
-    metric('Încasat', money(expense.collectedMinor));
-    metric('Bani dați mai departe', money(expense.paidOutMinor));
+    metric('Încasat', money(expense.collectedMinor), expense.collectedMinor >= expense.totalMinor ? 'positive' : expense.collectedMinor ? 'warning' : 'negative');
+    metric('Bani dați mai departe', money(expense.paidOutMinor), expense.paidOutMinor ? 'info' : null);
     metric('Participanți', String(expense.contributions.length));
-    metric('Contribuții achitate integral', String(fullyPaid));
-    metric('Contribuții achitate parțial', String(partiallyPaid));
-    metric('Restanțe', `${due.count} copii · ${money(due.amountMinor)}`);
+    metric('Contribuții achitate integral', String(fullyPaid), 'positive');
+    metric('Contribuții achitate parțial', String(partiallyPaid), partiallyPaid ? 'warning' : null);
+    metric('Restanțe', `${due.count} copii · ${money(due.amountMinor)}`, due.amountMinor ? 'negative' : 'positive');
     if (expense.dueDate) metric('Termen', dateFormat.format(new Date(`${expense.dueDate}T12:00:00Z`)));
     if (expense.comment) note(`Comentariu: ${expense.comment}`);
     note('Raportul nu publică numele copiilor cu restanțe.');
     const payments = transactions.filter(tx => tx.type === 'payment' && tx.expenseId === expense.id);
     section('Bani dați mai departe');
     if (!payments.length) note('Nu ai înregistrat bani dați mai departe pentru această cheltuială.');
-    for (const payment of payments) item(payment.destination || 'Plată', money(payment.amountMinor), dateTimeFormat.format(new Date(payment.occurredAt)), payment.comment);
+    for (const payment of payments) item(payment.destination || 'Plată', money(payment.amountMinor), dateTimeFormat.format(new Date(payment.occurredAt)), payment.comment, 'info');
   }
 
   if (report.type === 'child') {
     const child = state.children.find(entry => entry.id === report.subjectId);
     section('Situație curentă');
-    metric('Total restant', money(child.dueMinor));
-    metric('Avans disponibil', money(child.creditMinor));
+    metric('Total restant', money(child.dueMinor), child.dueMinor ? 'negative' : 'positive');
+    metric('Avans disponibil', money(child.creditMinor), child.creditMinor ? 'info' : null);
     section('Contribuții');
     if (!child.contributions.length) note('Copilul nu are contribuții înregistrate.');
     for (const contribution of child.contributions) item(contribution.title, money(contribution.amountMinor),
-      `Achitat ${money(contribution.paidMinor)} · Restant ${money(contribution.remainingMinor)}${contribution.dueDate ? ` · Termen ${dateFormat.format(new Date(`${contribution.dueDate}T12:00:00Z`))}` : ''}`);
+      `Achitat ${money(contribution.paidMinor)} · Restant ${money(contribution.remainingMinor)}${contribution.dueDate ? ` · Termen ${dateFormat.format(new Date(`${contribution.dueDate}T12:00:00Z`))}` : ''}`, '',
+      contribution.remainingMinor === 0 ? 'positive' : contribution.paidMinor ? 'warning' : 'negative');
     const history = state.transactions.filter(tx => tx.childId === child.id);
     section('Istoric individual');
     if (!history.length) note('Nu există operațiuni pentru acest copil.');
@@ -233,7 +258,8 @@ export async function renderReportPdf(report, state) {
         return `${expense?.title || 'Cheltuială'}: ${money(allocation.amountMinor)}`;
       }).join(' · ');
       item(`${label}${tx.reversed ? ' · corectată' : ''}`, money(retained),
-        `${dateTimeFormat.format(new Date(tx.occurredAt))}${tx.changeMinor ? ` · Rest returnat ${money(tx.changeMinor)}` : ''}${allocationText ? ` · ${allocationText}` : ''}`, tx.comment);
+        `${dateTimeFormat.format(new Date(tx.occurredAt))}${tx.changeMinor ? ` · Rest returnat ${money(tx.changeMinor)}` : ''}${allocationText ? ` · ${allocationText}` : ''}`, tx.comment,
+        tx.reversed || tx.type === 'reversal' ? 'correction' : tx.type === 'collection' ? 'positive' : tx.type === 'credit_apply' ? 'info' : 'warning');
     }
   }
 

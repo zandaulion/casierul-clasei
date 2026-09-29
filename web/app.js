@@ -16,7 +16,7 @@ const typeLabels = { fixed: 'Sumă fixă / copil', split: 'Total împărțit', q
 const reportTypeLabels = { class: 'Situația clasei', matrix: 'Raport exhaustiv', expense: 'Situația unei cheltuieli', child: 'Fișa individuală' };
 const writeActions = new Set(['add-child', 'edit-child', 'bulk-children', 'add-expense', 'edit-expense', 'payment',
   'expense-payment', 'apply-credit', 'refund', 'report-class', 'report-matrix', 'report-expense', 'report-child',
-  'replace-report', 'reverse', 'cancel-expense']);
+  'replace-report', 'reverse', 'cancel-expense', 'remove-logo']);
 const pendingKey = 'casierul.pending.v1';
 const navigationKey = 'casierulNavigation';
 const storedNavigation = history.state?.[navigationKey];
@@ -94,7 +94,7 @@ function updateNotices() {
   notice.hidden = !pending && !conflict;
   if (pending) notice.innerHTML = `<strong>${saving ? 'Se confirmă salvarea…' : 'Salvarea așteaptă confirmarea serverului.'}</strong><div>Nu înregistra încă o dată aceeași operațiune. Reîncercarea verifică aceeași înregistrare.</div><button data-action="retry" ${saving ? 'disabled' : ''}>Verifică / reîncearcă</button>`;
   else if (conflict) notice.innerHTML = '<strong>Registrul s-a schimbat pe alt dispozitiv.</strong><div>Încarcă datele actuale și verifică sumele înainte să salvezi din nou.</div><button data-action="review">Actualizează și verifică</button>';
-  $('#modal-submit').disabled = !canWrite() || saving || !!pending || conflict || !navigator.onLine || disconnected;
+  $('#modal-submit').disabled = !canWrite() || saving || !!pending || conflict || !!modal?.logoProcessing || !navigator.onLine || disconnected;
   if ($('#collection-save')) $('#collection-save').disabled = saving || !!pending || conflict || !navigator.onLine || disconnected || !!collectionResult(child(), draft).error || collectionResult(child(), draft).netMinor <= 0;
   if ($('#dialog').open && (pending || conflict)) {
     const error = $('#modal-error'); error.hidden = false;
@@ -300,7 +300,44 @@ function settingsModal() {
     return;
   }
   const year = new Date().getFullYear() - (new Date().getMonth() < 8 ? 1 : 0);
-  openModal('settings', s.className ? 'Setările clasei' : 'Configurează clasa', `${field('Școala', 'schoolName', s.schoolName, 'required maxlength="160"')}${field('Clasa', 'className', s.className, 'required maxlength="80"')}${field('An școlar', 'schoolYear', s.schoolYear || `${year}–${year + 1}`, 'required maxlength="40"')}${field('Sold inițial (lei)', 'openingBalance', decimal(s.openingBalanceMinor), `inputmode="decimal" required ${state.transactions.length ? 'readonly' : ''}`)}<p class="caption">Banii deja existenți în fond înainte să începi evidența. ${state.transactions.length ? 'Soldul inițial nu mai poate fi schimbat după înregistrarea operațiunilor.' : 'Avansurile individuale se înregistrează separat, prin încasări.'}</p>${state.settings.className ? '<div class="toolbar"><a href="/api/export" download="casierul-clasei.json">Exportă datele JSON</a><button type="button" data-action="logout">Deconectează dispozitivul</button></div>' : ''}`);
+  const logoPicker = (kind, label, exists) => `<div class="logo-picker"><div class="logo-preview"><img id="${kind}-logo-preview" ${exists ? `src="/api/branding/${kind}?v=${state.revision}"` : 'hidden'} alt="${esc(label)}"><span id="${kind}-logo-empty" ${exists ? 'hidden' : ''}>Fără siglă</span></div><strong>${esc(label)}</strong><label class="file-button">Alege imaginea<input type="file" accept="image/png,image/jpeg,image/webp" data-logo-input="${kind}" hidden></label><button type="button" data-action="remove-logo" data-logo-kind="${kind}" ${exists ? '' : 'hidden'}>Elimină</button></div>`;
+  openModal('settings', s.className ? 'Setările clasei' : 'Configurează clasa', `${field('Școala', 'schoolName', s.schoolName, 'required maxlength="160"')}${field('Clasa', 'className', s.className, 'required maxlength="80"')}${field('An școlar', 'schoolYear', s.schoolYear || `${year}–${year + 1}`, 'required maxlength="40"')}<div class="section-label">Sigle pentru rapoarte</div><div class="logo-grid">${logoPicker('school', 'Sigla școlii', s.hasSchoolLogo)}${logoPicker('class', 'Sigla clasei', s.hasClassLogo)}</div><p class="caption">Poți alege PNG, JPG sau WebP. Imaginea este redimensionată pe dispozitiv și apare în antetul PDF-urilor emise de acum înainte.</p>${field('Sold inițial (lei)', 'openingBalance', decimal(s.openingBalanceMinor), `inputmode="decimal" required ${state.transactions.length ? 'readonly' : ''}`)}<p class="caption">Banii deja existenți în fond înainte să începi evidența. ${state.transactions.length ? 'Soldul inițial nu mai poate fi schimbat după înregistrarea operațiunilor.' : 'Avansurile individuale se înregistrează separat, prin încasări.'}</p>${state.settings.className ? '<div class="toolbar"><a href="/api/export" download="casierul-clasei.json">Exportă datele JSON</a><button type="button" data-action="logout">Deconectează dispozitivul</button></div>' : ''}`, 'Salvează', { logoChanges: {} });
+}
+
+function updateLogoPreview(kind, data) {
+  const image = $(`#${kind}-logo-preview`), empty = $(`#${kind}-logo-empty`), remove = $(`[data-action="remove-logo"][data-logo-kind="${kind}"]`);
+  const visible = typeof data === 'string';
+  if (visible) image.src = data;
+  image.hidden = !visible; empty.hidden = visible; remove.hidden = !visible;
+}
+
+async function logoDataUrl(file) {
+  if (!file || file.size > 10 * 1024 * 1024) throw new Error('Imaginea trebuie să aibă cel mult 10 MB.');
+  let source;
+  try {
+    if ('createImageBitmap' in window) source = await createImageBitmap(file);
+    else source = await new Promise((resolve, reject) => {
+      const url = URL.createObjectURL(file), image = new Image();
+      image.onload = () => { URL.revokeObjectURL(url); resolve(image); };
+      image.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Imagine invalidă.')); };
+      image.src = url;
+    });
+  } catch { throw new Error('Imaginea nu a putut fi citită. Folosește PNG, JPG sau WebP.'); }
+  try {
+    for (const limit of [512, 384, 256]) {
+      const scale = Math.min(1, limit / Math.max(source.width, source.height));
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.max(1, Math.round(source.width * scale)); canvas.height = Math.max(1, Math.round(source.height * scale));
+      const context = canvas.getContext('2d');
+      if (!context) throw new Error('Imaginea nu a putut fi procesată.');
+      context.drawImage(source, 0, 0, canvas.width, canvas.height);
+      const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+      if (blob && blob.size <= 256 * 1024) return await new Promise((resolve, reject) => {
+        const reader = new FileReader(); reader.onload = () => resolve(reader.result); reader.onerror = reject; reader.readAsDataURL(blob);
+      });
+    }
+  } finally { source.close?.(); }
+  throw new Error('Sigla este prea complexă pentru raport. Încearcă o imagine mai simplă.');
 }
 function childModal(edit = false) {
   const c = edit ? child() : null;
@@ -410,6 +447,9 @@ async function submitModal() {
       const openingBalanceMinor = parseMoney(form.elements.openingBalance.value);
       if (openingBalanceMinor === null) throw new Error('Soldul inițial trebuie să fie o sumă validă, zero sau mai mare.');
       path = '/api/settings'; body = { schoolName: form.elements.schoolName.value.trim(), className: form.elements.className.value.trim(), schoolYear: form.elements.schoolYear.value.trim(), openingBalanceMinor };
+      for (const [kind, fieldName] of [['school', 'schoolLogo'], ['class', 'classLogo']]) {
+        if (Object.hasOwn(modal.logoChanges, kind)) body[fieldName] = modal.logoChanges[kind];
+      }
     } else if (modal.type === 'add-child' || modal.type === 'edit-child') {
       path = modal.type === 'add-child' ? '/api/children' : `/api/children/${encodeURIComponent(modal.childId)}`;
       body = { firstName: form.elements.firstName.value.trim(), lastName: form.elements.lastName.value.trim(), ...(modal.type === 'edit-child' ? { active: form.elements.active.checked } : {}) };
@@ -490,6 +530,10 @@ document.addEventListener('click', async event => {
   if (action === 'retry') { await sendPending(); return; }
   if (action === 'review') { await refresh(true); return; }
   if (action === 'close-modal') { closeModal(); return; }
+  if (action === 'remove-logo' && modal?.type === 'settings') {
+    modal.logoChanges[button.dataset.logoKind] = null; modalDirty = true;
+    updateLogoPreview(button.dataset.logoKind, null); return;
+  }
   if (saving || pending) { if (button.type !== 'submit') toast('Verifică mai întâi salvarea în așteptare.'); return; }
   if (button.dataset.target) {
     draft.target = button.dataset.target; draft.manual = false; draft.round = null;
@@ -575,8 +619,21 @@ document.addEventListener('input', event => {
     updateCollection();
   }
 });
-document.addEventListener('change', event => {
+document.addEventListener('change', async event => {
   const input = event.target;
+  if (input.dataset.logoInput && modal?.type === 'settings') {
+    const kind = input.dataset.logoInput, currentModal = modal;
+    currentModal.logoProcessing = true; updateNotices();
+    try {
+      const data = await logoDataUrl(input.files?.[0]);
+      if (modal !== currentModal) return;
+      currentModal.logoChanges[kind] = data; modalDirty = true;
+      updateLogoPreview(kind, data);
+      $('#modal-error').hidden = true;
+    } catch (error) { $('#modal-error').textContent = error.message; $('#modal-error').hidden = false; }
+    finally { if (modal === currentModal) { currentModal.logoProcessing = false; updateNotices(); } }
+    input.value = ''; return;
+  }
   if (input.name === 'debtFilter') { modalDirty = true; updateChildReportOptions(); return; }
   if (input.id === 'show-archived') { showArchived = input.checked; renderRosterList(); }
   if (input.id === 'manual') {

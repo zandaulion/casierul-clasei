@@ -7,7 +7,7 @@ import { Ledger } from './ledger.mjs';
 import { AuthStore, adminTokenMatches, clearSessionCookie, httpError, readSessionCookie, sessionCookie } from './auth.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const MAX_BODY_BYTES = 128 * 1024;
+const MAX_BODY_BYTES = 1024 * 1024;
 const CONTENT_TYPES = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8',
   '.css': 'text/css; charset=utf-8', '.json': 'application/json; charset=utf-8', '.webmanifest': 'application/manifest+json; charset=utf-8',
@@ -50,6 +50,12 @@ function sendPdf(res, file) {
   res.writeHead(200, { 'Content-Type': 'application/pdf', 'Content-Length': file.pdf.length,
     'Content-Disposition': `attachment; filename="${file.filename}"` });
   res.end(file.pdf);
+}
+
+function sendImage(res, image) {
+  res.writeHead(200, { 'Content-Type': image.mimeType, 'Content-Length': image.data.length,
+    'Last-Modified': new Date(image.updatedAt).toUTCString(), 'Cache-Control': 'private, no-cache' });
+  res.end(image.data);
 }
 
 function exactKeys(body, allowed, required = []) {
@@ -122,7 +128,7 @@ function loadAssets(webDir) {
 }
 
 const BUSINESS_ROUTES = [
-  [/^\/api\/settings$/u, 'settings.update', ['schoolName', 'className', 'schoolYear', 'openingBalanceMinor']],
+  [/^\/api\/settings$/u, 'settings.update', ['schoolName', 'className', 'schoolYear', 'openingBalanceMinor', 'schoolLogo', 'classLogo']],
   [/^\/api\/children$/u, 'child.create', ['firstName', 'lastName']],
   [/^\/api\/children\/bulk$/u, 'children.create', ['children']],
   [/^\/api\/children\/([A-Za-z0-9_-]{1,100})$/u, 'child.update', ['firstName', 'lastName', 'active'], 'childId'],
@@ -148,6 +154,11 @@ function validateMutation(body, fields) {
   }
   for (const key of ['occurredAt', 'dueDate', 'comment', 'expenseId']) {
     if (Object.hasOwn(body, key) && body[key] !== null && typeof body[key] !== 'string') throw httpError(400, `Câmpul ${key} trebuie să fie text.`);
+  }
+  for (const key of ['schoolLogo', 'classLogo']) {
+    if (Object.hasOwn(body, key) && body[key] !== null && typeof body[key] !== 'string') {
+      throw httpError(400, `Câmpul ${key} trebuie să fie o imagine sau gol.`);
+    }
   }
   if (Object.hasOwn(body, 'active') && typeof body.active !== 'boolean') throw httpError(400, 'Starea copilului nu este validă.');
   for (const [key, nestedFields, required] of [
@@ -246,7 +257,8 @@ export function createApp(options = {}) {
     if (pathname.startsWith('/api/')) {
       const route = BUSINESS_ROUTES.find(([pattern]) => pattern.test(pathname));
       const reportPdf = pathname.match(/^\/api\/reports\/([A-Za-z0-9_-]{1,100})\/pdf$/u);
-      if (!route && !reportPdf && !['/api/auth/me', '/api/auth/logout', '/api/state', '/api/export', '/api/reports'].includes(pathname)) throw httpError(404, 'Nu a fost găsit.');
+      const brandingImage = pathname.match(/^\/api\/branding\/(school|class)$/u);
+      if (!route && !reportPdf && !brandingImage && !['/api/auth/me', '/api/auth/logout', '/api/state', '/api/export', '/api/reports'].includes(pathname)) throw httpError(404, 'Nu a fost găsit.');
       const token = readSessionCookie(req.headers.cookie, config.cookieSecure);
       const device = auth.getDevice(token);
       if (!device) throw httpError(401, 'Activează acest dispozitiv cu o invitație.');
@@ -265,6 +277,12 @@ export function createApp(options = {}) {
       if (pathname === '/api/state') {
         requireMethod(req, 'GET');
         return sendJson(res, 200, projectState(ledger.getState(), device));
+      }
+      if (brandingImage) {
+        requireMethod(req, 'GET');
+        const image = ledger.getBrandingImage(brandingImage[1]);
+        if (!image) throw httpError(404, 'Sigla nu a fost configurată.');
+        return sendImage(res, image);
       }
       if (pathname === '/api/export') {
         requireMethod(req, 'GET');
