@@ -129,15 +129,35 @@ function openModal(type, title, content, submit = 'Salvează', extra = {}) {
   updateNotices();
 }
 function renderGate(message = '') {
-  state = null; $('.app').classList.remove('collecting'); $('#tabs').hidden = true; $('#settings-button').hidden = true; $('#class-label').textContent = 'Fondul clasei, la îndemână';
+  state = null; $('.app').classList.remove('collecting'); $('#tabs').hidden = true; $('#settings-button').hidden = true; $('#header-logos').hidden = true; $('#class-label').textContent = 'Fondul clasei, la îndemână';
   $('#main').innerHTML = `<div class="empty"><h1>Registrul tău de clasă</h1><p>Activează acest dispozitiv folosind o invitație din consola ta PWA.</p></div><form id="invite-form">${field('Cod de invitație', 'code', inviteCode, 'required autocomplete="off" autocapitalize="none" spellcheck="false"')}${field('Numele dispozitivului (opțional)', 'label', '', 'maxlength="120" placeholder="De exemplu: telefonul meu"')}<p id="invite-error" class="error" role="alert">${esc(message)}</p><button class="primary wide" type="submit">Activează dispozitivul</button></form>`;
   updateNotices();
+}
+function renderHeaderBranding() {
+  const container = $('#header-logos');
+  const entries = [['school', state.settings.hasSchoolLogo, state.settings.schoolLogoVersion],
+    ['class', state.settings.hasClassLogo, state.settings.classLogoVersion]];
+  container.hidden = !entries.some(([, present]) => present);
+  for (const [kind, present, version] of entries) {
+    const image = $(`#header-${kind}-logo`);
+    if (!present) { image.hidden = true; image.removeAttribute('src'); delete image.dataset.version; continue; }
+    if (image.dataset.version === version && image.complete && image.naturalWidth) { image.hidden = false; continue; }
+    image.hidden = true;
+    image.onload = () => { image.hidden = false; container.hidden = false; };
+    image.onerror = () => {
+      image.hidden = true;
+      container.hidden = entries.every(([entryKind]) => $(`#header-${entryKind}-logo`).hidden);
+    };
+    image.dataset.version = version || '';
+    image.src = `/api/branding/${kind}?v=${encodeURIComponent(version || '')}`;
+  }
 }
 function render() {
   if (!state) return;
   const collecting = tab === 'children' && !!childId && !!child();
   $('.app').classList.toggle('collecting', collecting);
   $('#class-label').textContent = [state.settings.schoolName, state.settings.className, state.settings.schoolYear].filter(Boolean).join(' · ') || 'Configurează clasa pentru a începe';
+  renderHeaderBranding();
   $('#settings-button').hidden = false; $('#tabs').hidden = collecting;
   $$('[data-tab]').forEach(button => { if (button.dataset.tab === tab) button.setAttribute('aria-current', 'page'); else button.removeAttribute('aria-current'); });
   if (!state.settings.className) {
@@ -300,7 +320,7 @@ function settingsModal() {
     return;
   }
   const year = new Date().getFullYear() - (new Date().getMonth() < 8 ? 1 : 0);
-  const logoPicker = (kind, label, exists) => `<div class="logo-picker"><div class="logo-preview"><img id="${kind}-logo-preview" ${exists ? `src="/api/branding/${kind}?v=${state.revision}"` : 'hidden'} alt="${esc(label)}"><span id="${kind}-logo-empty" ${exists ? 'hidden' : ''}>Fără siglă</span></div><strong>${esc(label)}</strong><label class="file-button">Alege imaginea<input type="file" accept="image/png,image/jpeg,image/webp" data-logo-input="${kind}" hidden></label><button type="button" data-action="remove-logo" data-logo-kind="${kind}" ${exists ? '' : 'hidden'}>Elimină</button></div>`;
+  const logoPicker = (kind, label, exists) => `<div class="logo-picker"><div class="logo-preview"><img id="${kind}-logo-preview" ${exists ? `src="/api/branding/${kind}?v=${encodeURIComponent(s[`${kind}LogoVersion`] || '')}"` : 'hidden'} alt="${esc(label)}"><span id="${kind}-logo-empty" ${exists ? 'hidden' : ''}>Fără siglă</span></div><strong>${esc(label)}</strong><label class="file-button">Alege imaginea<input type="file" accept="image/png,image/jpeg,image/webp" data-logo-input="${kind}" hidden></label><button type="button" data-action="remove-logo" data-logo-kind="${kind}" ${exists ? '' : 'hidden'}>Elimină</button></div>`;
   openModal('settings', s.className ? 'Setările clasei' : 'Configurează clasa', `${field('Școala', 'schoolName', s.schoolName, 'required maxlength="160"')}${field('Clasa', 'className', s.className, 'required maxlength="80"')}${field('An școlar', 'schoolYear', s.schoolYear || `${year}–${year + 1}`, 'required maxlength="40"')}<div class="section-label">Sigle pentru rapoarte</div><div class="logo-grid">${logoPicker('school', 'Sigla școlii', s.hasSchoolLogo)}${logoPicker('class', 'Sigla clasei', s.hasClassLogo)}</div><p class="caption">Poți alege PNG, JPG sau WebP. Imaginea este redimensionată pe dispozitiv și apare în antetul PDF-urilor emise de acum înainte.</p>${field('Sold inițial (lei)', 'openingBalance', decimal(s.openingBalanceMinor), `inputmode="decimal" required ${state.transactions.length ? 'readonly' : ''}`)}<p class="caption">Banii deja existenți în fond înainte să începi evidența. ${state.transactions.length ? 'Soldul inițial nu mai poate fi schimbat după înregistrarea operațiunilor.' : 'Avansurile individuale se înregistrează separat, prin încasări.'}</p>${state.settings.className ? '<div class="toolbar"><a href="/api/export" download="casierul-clasei.json">Exportă datele JSON</a><button type="button" data-action="logout">Deconectează dispozitivul</button></div>' : ''}`, 'Salvează', { logoChanges: {} });
 }
 
@@ -623,7 +643,7 @@ document.addEventListener('change', async event => {
   const input = event.target;
   if (input.dataset.logoInput && modal?.type === 'settings') {
     const kind = input.dataset.logoInput, currentModal = modal;
-    currentModal.logoProcessing = true; updateNotices();
+    currentModal.logoProcessing = (currentModal.logoProcessing || 0) + 1; updateNotices();
     try {
       const data = await logoDataUrl(input.files?.[0]);
       if (modal !== currentModal) return;
@@ -631,7 +651,7 @@ document.addEventListener('change', async event => {
       updateLogoPreview(kind, data);
       $('#modal-error').hidden = true;
     } catch (error) { $('#modal-error').textContent = error.message; $('#modal-error').hidden = false; }
-    finally { if (modal === currentModal) { currentModal.logoProcessing = false; updateNotices(); } }
+    finally { if (modal === currentModal) { currentModal.logoProcessing -= 1; updateNotices(); } }
     input.value = ''; return;
   }
   if (input.name === 'debtFilter') { modalDirty = true; updateChildReportOptions(); return; }

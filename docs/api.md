@@ -36,7 +36,7 @@ Missing roles on legacy invitations and devices migrate to `treasurer`. Treasure
 ```
 {
  revision: 0,
- settings: {schoolName:'',className:'',schoolYear:'',openingBalanceMinor:0,hasSchoolLogo:false,hasClassLogo:false},
+ settings: {schoolName:'',className:'',schoolYear:'',openingBalanceMinor:0,hasSchoolLogo:false,hasClassLogo:false,schoolLogoVersion:null,classLogoVersion:null},
  children: [{id,firstName,lastName,active,creditMinor,dueMinor,
    contributions:[{expenseId,title,dueDate,amountMinor,paidMinor,remainingMinor}]}],
  expenses: [{id,title,type,amountMinor,totalMinor,collectedMinor,paidOutMinor,

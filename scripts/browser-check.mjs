@@ -90,10 +90,17 @@ try {
     transfer.items.add(new File([bytes], 'sigla.png', { type: 'image/png' }));
     const input = document.querySelector('[data-logo-input="school"]');
     input.files = transfer.files; input.dispatchEvent(new Event('change', { bubbles: true }));
+    const classTransfer = new DataTransfer();
+    classTransfer.items.add(new File([bytes], 'sigla-clasei.png', { type: 'image/png' }));
+    const classInput = document.querySelector('[data-logo-input="class"]');
+    classInput.files = classTransfer.files; classInput.dispatchEvent(new Event('change', { bubbles: true }));
   })()`);
   await until('!document.getElementById("school-logo-preview").hidden', 'school logo preview');
+  await until('!document.getElementById("class-logo-preview").hidden', 'class logo preview');
   await saveModal();
   assert.equal(snapshot().settings.hasSchoolLogo, true);
+  assert.equal(snapshot().settings.hasClassLogo, true);
+  await until('!document.getElementById("header-school-logo").hidden && !document.getElementById("header-class-logo").hidden', 'configured logos in app header');
   await click('[data-action=bulk-children]');
   await fill('#modal-form [name=childrenText]', 'Exemplu; Ioana\nAvram; Ana\nBălan; David');
   await saveModal();
@@ -266,6 +273,7 @@ try {
     await page('Emulation.setDeviceMetricsOverride', { width, height: 915, deviceScaleFactor: 1, mobile: true });
     assert.equal(await evaluate('document.documentElement.scrollWidth <= innerWidth'), true, 'horizontal overflow at ' + width);
     assert.equal(await evaluate('[...document.querySelectorAll(".choice,.round")].every(b=>b.scrollWidth<=b.clientWidth)'), true, 'clipped amount choice at ' + width);
+    assert.equal(await evaluate('[...document.querySelectorAll(".header-logos img:not([hidden])")].every(image => { const box=image.getBoundingClientRect(); return box.left >= 0 && box.right <= innerWidth; })'), true, 'header logo overflow at ' + width);
   }
   await page('Emulation.setDeviceMetricsOverride', { width: 412, height: 915, deviceScaleFactor: 1, mobile: true });
   await page('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-color-scheme', value: 'dark' }, { name: 'prefers-reduced-motion', value: 'reduce' }] });
