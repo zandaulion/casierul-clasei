@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import http from 'node:http';
+import { createHash } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
 import { AuthStore, COOKIE_NAME, adminTokenMatches, readSessionCookie } from '../server/auth.mjs';
 import { projectState } from '../server/index.mjs';
@@ -21,17 +22,36 @@ function authStore(t, options = {}) {
   return { auth, file };
 }
 
-test('invites are single use, expire, and erase plaintext when used or revoked', (t) => {
+test('invites activate two independent devices and erase plaintext only when exhausted or revoked', (t) => {
   let time = Date.parse('2026-09-28T12:00:00Z');
   const { auth, file } = authStore(t, { now: () => time });
   const invite = auth.createInvite('Telefon casier');
   assert.match(invite.url, /^https:\/\/clasa.example\/\?invite=/u);
+  assert.equal(invite.max_uses, 2);
+  assert.equal(invite.use_count, 0);
   const result = auth.redeemInvite(invite.code.toLowerCase());
   assert.equal(result.device.label, 'Telefon casier');
   assert.equal(result.device.is_owner, true, 'first treasurer can create the initial set of classrooms');
   assert.equal(auth.getDevice(result.token).id, result.device.id);
+  const partial = auth.listInvites().invites.find((item) => item.id === invite.id);
+  assert.equal(partial.use_count, 1);
+  assert.equal(partial.max_uses, 2);
+  assert.equal(partial.code, invite.code);
+  assert.equal(partial.url, invite.url);
+  assert.equal(partial.used_at, null);
+  assert.equal(partial.device_id, result.device.id);
+  const second = auth.redeemInvite(invite.code, 'Laptop casier');
+  assert.equal(second.device.label, 'Laptop casier');
+  assert.equal(second.device.is_owner, false, 'a second activation keeps the existing first-owner policy');
+  assert.notEqual(second.device.id, result.device.id);
+  assert.notEqual(second.token, result.token);
+  assert.equal(auth.getDevice(second.token).id, second.device.id);
   assert.throws(() => auth.redeemInvite(invite.code), { status: 404 });
+  assert.equal(auth.listDevices().devices.length, 2);
   const used = auth.listInvites().invites.find((item) => item.id === invite.id);
+  assert.equal(used.use_count, 2);
+  assert.equal(used.used_at, new Date(time).toISOString());
+  assert.equal(used.device_id, second.device.id);
   assert.equal(used.code, null);
   assert.equal(used.url, null);
   const db = new DatabaseSync(file);
@@ -39,26 +59,41 @@ test('invites are single use, expire, and erase plaintext when used or revoked',
   assert.equal(stored.token_hash.length, 64);
   assert.notEqual(stored.token_hash, result.token);
   db.close();
+  auth.setDeviceRevoked(result.device.id, true);
+  assert.equal(auth.getDevice(result.token), null);
+  assert.ok(auth.getDevice(second.token), 'revoking one device leaves the other session active');
+  assert.throws(() => auth.redeemInvite(invite.code), { status: 404 }, 'revocation does not return an activation');
+  auth.deleteDevice(second.device.id);
+  assert.equal(auth.getDevice(second.token), null);
+  assert.equal(auth.listInvites().invites.find((item) => item.id === invite.id).use_count, 2);
+  assert.throws(() => auth.redeemInvite(invite.code), { status: 404 }, 'deletion does not return an activation');
   const revoked = auth.createInvite('Alt telefon');
+  const active = auth.redeemInvite(revoked.code);
   auth.revokeInvite(revoked.id);
   assert.equal(auth.listInvites().invites[0].code, null);
   assert.throws(() => auth.redeemInvite(revoked.code), { status: 404 });
+  assert.ok(auth.getDevice(active.token), 'revoking an invitation does not revoke an activated device');
   const expired = auth.createInvite();
+  auth.redeemInvite(expired.code);
   time += 8 * 86400000;
   assert.throws(() => auth.redeemInvite(expired.code), { status: 410 });
+  assert.equal(auth.listInvites().invites[0].use_count, 1);
 });
 
-test('failed redemption rolls back device creation and does not consume invite', (t) => {
+test('failed redemption rolls back devices and permissions at either activation', (t) => {
   const { auth } = authStore(t);
   const invite = auth.createInvite('Casier');
-  auth.db.exec(`CREATE TRIGGER fail_claim BEFORE UPDATE OF used_at ON invites
-    BEGIN SELECT RAISE(ABORT, 'simulated write failure'); END;`);
-  assert.throws(() => auth.redeemInvite(invite.code), /simulated write failure/u);
-  assert.equal(auth.listDevices().devices.length, 0);
-  assert.equal(auth.listInvites().invites[0].used_at, null);
-  assert.equal(auth.listInvites().invites[0].code, invite.code);
-  auth.db.exec('DROP TRIGGER fail_claim');
-  assert.ok(auth.redeemInvite(invite.code).device.id);
+  for (const useCount of [0, 1]) {
+    const before = auth.listInvites().invites[0];
+    auth.db.exec(`CREATE TRIGGER fail_claim BEFORE UPDATE OF used_at ON invites
+      BEGIN SELECT RAISE(ABORT, 'simulated write failure'); END;`);
+    assert.throws(() => auth.redeemInvite(invite.code), /simulated write failure/u);
+    assert.equal(auth.listDevices().devices.length, useCount);
+    assert.equal(auth.db.prepare('SELECT COUNT(*) AS count FROM device_permissions').get().count, useCount);
+    assert.deepEqual(auth.listInvites().invites[0], before);
+    auth.db.exec('DROP TRIGGER fail_claim');
+    assert.ok(auth.redeemInvite(invite.code).device.id);
+  }
 });
 
 test('revocation and logout invalidate the server session, and sessions expire', (t) => {
@@ -82,27 +117,148 @@ test('role, child scope and access expiry pass from invite to the device', (t) =
   const accessExpiresAt = '2027-06-30T23:59:59.999Z';
   const invite = auth.createInvite('Părinte Ana', { role: 'parent', childId: 'child-ana', accessExpiresAt });
   const redeemed = auth.redeemInvite(invite.code);
-  assert.deepEqual({ role: redeemed.device.role, child: redeemed.device.child_id, expiry: redeemed.device.access_expires_at },
-    { role: 'parent', child: 'child-ana', expiry: accessExpiresAt });
+  const second = auth.redeemInvite(invite.code);
+  for (const { device } of [redeemed, second]) {
+    assert.deepEqual({ role: device.role, child: device.child_id, expiry: device.access_expires_at },
+      { role: 'parent', child: 'child-ana', expiry: accessExpiresAt });
+    assert.deepEqual({ ...auth.resolvePermission(device.id) }, {
+      classroom_id: 'default', role: 'parent', child_id: 'child-ana', access_expires_at: accessExpiresAt,
+    });
+  }
   assert.equal(auth.listDevices().devices[0].role, 'parent');
   assert.equal(auth.listInvites().invites[0].child_id, 'child-ana');
   time = Date.parse('2027-07-01T00:00:00Z');
   assert.equal(auth.getDevice(redeemed.token), null);
+  assert.equal(auth.getDevice(second.token), null);
 });
 
-test('existing auth databases migrate legacy devices to treasurer access', (t) => {
+test('legacy migration preserves closed invites and keeps partial activation counts on reopen', (t) => {
   const dir = temporary(t), file = path.join(dir, 'auth.sqlite');
+  const now = () => Date.parse('2026-09-28T12:00:00Z');
   const db = new DatabaseSync(file);
   db.exec(`CREATE TABLE devices (id TEXT PRIMARY KEY, token_hash TEXT NOT NULL UNIQUE, label TEXT NOT NULL,
     created_at TEXT NOT NULL, last_seen TEXT NOT NULL, expires_at TEXT NOT NULL, revoked INTEGER NOT NULL DEFAULT 0);
     CREATE TABLE invites (id INTEGER PRIMARY KEY AUTOINCREMENT, code_hash TEXT NOT NULL UNIQUE, code TEXT, url TEXT,
     label TEXT, created_at TEXT NOT NULL, expires_at TEXT NOT NULL, used_at TEXT, revoked INTEGER NOT NULL DEFAULT 0,
     device_id TEXT REFERENCES devices(id) ON DELETE SET NULL);`);
+  const legacy = [
+    { code: 'AAAA-AAAA-AAAA-AAAA', used_at: null, revoked: 0, expires_at: '2026-10-01T12:00:00.000Z' },
+    { code: 'BBBB-BBBB-BBBB-BBBB', used_at: '2026-09-27T12:00:00.000Z', revoked: 0, expires_at: '2026-10-01T12:00:00.000Z' },
+    { code: 'CCCC-CCCC-CCCC-CCCC', used_at: null, revoked: 1, expires_at: '2026-10-01T12:00:00.000Z' },
+    { code: 'DDDD-DDDD-DDDD-DDDD', used_at: null, revoked: 0, expires_at: '2026-09-27T12:00:00.000Z' },
+  ];
+  for (const [index, invite] of legacy.entries()) {
+    db.prepare(`INSERT INTO invites (code_hash, code, url, label, created_at, expires_at, used_at, revoked)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).run(
+      createHash('sha256').update(invite.code.replaceAll('-', '')).digest('hex'),
+      invite.used_at || invite.revoked ? null : invite.code,
+      invite.used_at || invite.revoked ? null : `https://clasa.example/?invite=${invite.code}`,
+      `Legacy ${index}`, '2026-09-25T12:00:00.000Z', invite.expires_at, invite.used_at, invite.revoked);
+  }
   db.close();
-  const auth = new AuthStore(file);
+  let auth = new AuthStore(file, { now });
   t.after(() => auth.close());
-  const redeemed = auth.redeemInvite(auth.createInvite('Legacy').code);
+  const byLabel = Object.fromEntries(auth.listInvites().invites.map(invite => [invite.label, invite]));
+  assert.equal(byLabel['Legacy 0'].max_uses, 2);
+  assert.equal(byLabel['Legacy 0'].use_count, 0);
+  assert.equal(byLabel['Legacy 1'].max_uses, 1);
+  assert.equal(byLabel['Legacy 1'].use_count, 1);
+  assert.throws(() => auth.redeemInvite(legacy[1].code), { status: 404 }, 'previously consumed codes stay closed');
+  assert.throws(() => auth.redeemInvite(legacy[2].code), { status: 404 });
+  assert.throws(() => auth.redeemInvite(legacy[3].code), { status: 410 });
+  const redeemed = auth.redeemInvite(legacy[0].code);
   assert.equal(redeemed.device.role, 'treasurer');
+  const partial = auth.listInvites().invites.find(invite => invite.label === 'Legacy 0');
+  assert.equal(partial.use_count, 1);
+  assert.equal(partial.used_at, null);
+  auth.close();
+  auth = new AuthStore(file, { now });
+  assert.deepEqual(auth.listInvites().invites.find(invite => invite.label === 'Legacy 0'), partial);
+  assert.ok(auth.getDevice(redeemed.token));
+  assert.ok(auth.redeemInvite(legacy[0].code).token);
+  assert.throws(() => auth.redeemInvite(legacy[0].code), { status: 404 });
+  assert.throws(() => auth.redeemInvite(legacy[1].code), { status: 404 });
+});
+
+test('redeem and addAccess share two activations without charging for duplicate access', (t) => {
+  const { auth } = authStore(t);
+  const owner = auth.redeemInvite(auth.createInvite('Owner').code);
+  auth.createClassroom({ id: 'another-class', ledgerFile: 'another.sqlite', requestId: 'another-class',
+    requestFingerprint: 'another-class', ownerDeviceId: owner.device.id });
+  for (const firstMethod of ['redeem', 'addAccess']) {
+    const existing = auth.redeemInvite(auth.createInvite(`Existing ${firstMethod}`).code);
+    const invite = auth.createInvite('Părinte Ana', { classroomId: 'another-class', role: 'parent', childId: 'ana' });
+    let fresh;
+    if (firstMethod === 'redeem') fresh = auth.redeemInvite(invite.code);
+    else auth.addAccess(invite.code, existing.device.id);
+    const firstDevice = firstMethod === 'redeem' ? fresh.device : existing.device;
+    assert.throws(() => auth.addAccess(invite.code, firstDevice.id), { status: 409 });
+    const partial = auth.listInvites().invites.find(item => item.id === invite.id);
+    assert.equal(partial.use_count, 1);
+    assert.equal(partial.code, invite.code);
+    if (firstMethod === 'redeem') auth.addAccess(invite.code, existing.device.id);
+    else fresh = auth.redeemInvite(invite.code);
+    for (const device of [existing.device, fresh.device]) {
+      assert.deepEqual({ ...auth.resolvePermission(device.id, 'another-class') }, {
+        classroom_id: 'another-class', role: 'parent', child_id: 'ana', access_expires_at: null,
+      });
+    }
+    const third = auth.redeemInvite(auth.createInvite(`Third ${firstMethod}`).code);
+    const deviceCount = auth.listDevices().devices.length;
+    assert.throws(() => auth.redeemInvite(invite.code), { status: 404 });
+    assert.throws(() => auth.addAccess(invite.code, third.device.id), { status: 404 });
+    assert.equal(auth.listDevices().devices.length, deviceCount);
+    assert.throws(() => auth.resolvePermission(third.device.id, 'another-class'), { status: 403 });
+    const full = auth.listInvites().invites.find(item => item.id === invite.id);
+    assert.equal(full.use_count, 2);
+    assert.equal(full.device_id, firstMethod === 'redeem' ? existing.device.id : fresh.device.id);
+    assert.ok(full.used_at);
+    assert.equal(full.code, null);
+    assert.equal(full.url, null);
+  }
+});
+
+test('failed addAccess rolls back the permission and preserves the remaining activation', (t) => {
+  const { auth } = authStore(t);
+  const owner = auth.redeemInvite(auth.createInvite('Owner').code);
+  auth.createClassroom({ id: 'another-class', ledgerFile: 'another.sqlite', requestId: 'another-class',
+    requestFingerprint: 'another-class', ownerDeviceId: owner.device.id });
+  const existing = auth.redeemInvite(auth.createInvite('Existing').code);
+  const invite = auth.createInvite('Auditor', { classroomId: 'another-class', role: 'auditor' });
+  auth.redeemInvite(invite.code);
+  const before = auth.listInvites().invites.find(item => item.id === invite.id);
+  auth.db.exec(`CREATE TRIGGER fail_claim BEFORE UPDATE OF used_at ON invites
+    BEGIN SELECT RAISE(ABORT, 'simulated write failure'); END;`);
+  assert.throws(() => auth.addAccess(invite.code, existing.device.id), /simulated write failure/u);
+  assert.throws(() => auth.resolvePermission(existing.device.id, 'another-class'), { status: 403 });
+  assert.deepEqual(auth.listInvites().invites.find(item => item.id === invite.id), before);
+  auth.db.exec('DROP TRIGGER fail_claim');
+  assert.equal(auth.addAccess(invite.code, existing.device.id).role, 'auditor');
+  assert.equal(auth.listInvites().invites.find(item => item.id === invite.id).use_count, 2);
+});
+
+test('expired access blocks both activation routes without spending the remaining invitation slot', (t) => {
+  let time = Date.parse('2026-09-28T12:00:00Z');
+  const { auth } = authStore(t, { now: () => time });
+  const owner = auth.redeemInvite(auth.createInvite('Owner').code);
+  auth.createClassroom({ id: 'another-class', ledgerFile: 'another.sqlite', requestId: 'another-class',
+    requestFingerprint: 'another-class', ownerDeviceId: owner.device.id });
+  const existing = auth.redeemInvite(auth.createInvite('Existing').code);
+  const invite = auth.createInvite('Temporary auditor', { classroomId: 'another-class', role: 'auditor',
+    accessExpiresAt: '2026-09-29T12:00:00.000Z' });
+  const activated = auth.redeemInvite(invite.code);
+  const before = auth.listInvites().invites.find(item => item.id === invite.id);
+  const deviceCount = auth.listDevices().devices.length;
+  time = Date.parse('2026-09-29T12:00:00Z');
+  assert.ok(invite.expires_at > new Date(time).toISOString(), 'the invitation itself is still within its seven-day lifetime');
+  assert.throws(() => auth.redeemInvite(invite.code), { status: 410 });
+  assert.throws(() => auth.addAccess(invite.code, existing.device.id), { status: 410 });
+  assert.deepEqual(auth.listInvites().invites.find(item => item.id === invite.id), before);
+  assert.equal(auth.listDevices().devices.length, deviceCount);
+  assert.ok(!auth.listPermissions(existing.device.id, { includeExpired: true })
+    .some(permission => permission.classroom_id === 'another-class'));
+  assert.equal(auth.getDevice(activated.token), null);
+  assert.ok(auth.getDevice(existing.token));
 });
 
 test('parent state exposes class totals and only the associated child', () => {
@@ -235,14 +391,27 @@ test('public invitation redemption sets a host-only secure HttpOnly session and 
   assert.equal((await publicRequest('/api/auth/me')).status, 401);
 });
 
-test('concurrent redemption produces exactly one session', async (t) => {
+test('concurrent redemption produces exactly two independent sessions', async (t) => {
   const { app, publicRequest } = await fixture(t);
   const invite = app.auth.createInvite();
   const results = await Promise.all(Array.from({ length: 4 }, () => publicRequest('/api/auth/redeem', {
     method: 'POST', body: { code: invite.code },
   })));
-  assert.deepEqual(results.map((result) => result.status).sort(), [200, 404, 404, 404]);
-  assert.equal(app.auth.listDevices().devices.length, 1);
+  assert.deepEqual(results.map((result) => result.status).sort(), [200, 200, 404, 404]);
+  assert.equal(app.auth.listDevices().devices.length, 2);
+  assert.equal(app.auth.db.prepare('SELECT COUNT(*) AS count FROM device_permissions').get().count, 2);
+  const successful = results.filter(result => result.status === 200);
+  const cookies = successful.map(result => result.headers.get('set-cookie').split(';')[0]);
+  assert.notEqual(cookies[0], cookies[1]);
+  for (const cookie of cookies) {
+    assert.equal((await publicRequest('/api/auth/me', { headers: { Cookie: cookie } })).status, 200);
+  }
+  for (const response of results.filter(result => result.status !== 200)) {
+    assert.equal(response.headers.get('set-cookie'), null);
+  }
+  const exhausted = app.auth.listInvites().invites.find(item => item.id === invite.id);
+  assert.equal(exhausted.use_count, 2);
+  assert.equal(exhausted.code, null);
 });
 
 test('all seven console endpoints support private console Origin and no-body revoke/delete', async (t) => {
@@ -252,10 +421,17 @@ test('all seven console endpoints support private console Origin and no-body rev
   });
   assert.equal(response.status, 201);
   const invite = await response.json();
+  assert.equal(invite.max_uses, 2);
+  assert.equal(invite.use_count, 0);
   assert.equal((await (await adminRequest('/api/admin/invites')).json()).invites[0].code, invite.code);
   const redeemed = await publicRequest('/api/auth/redeem', { method: 'POST', body: { code: invite.code } });
   const cookie = redeemed.headers.get('set-cookie').split(';')[0];
   const device = (await redeemed.json()).device;
+  const partial = (await (await adminRequest('/api/admin/invites')).json()).invites[0];
+  assert.equal(partial.use_count, 1);
+  assert.equal(partial.max_uses, 2);
+  assert.equal(partial.code, invite.code);
+  assert.equal(partial.used_at, null);
   const devices = await (await adminRequest('/api/admin/devices')).json();
   assert.equal(devices.devices[0].id, device.id);
   assert.equal(devices.devices[0].has_push, false);

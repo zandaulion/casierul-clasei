@@ -35,10 +35,19 @@ Pentru accesuri pe clase și pentru rolurile părinte/auditor, folosește consol
 
 ```
 node scripts/admin.mjs invite "Telefonul meu"
+node scripts/admin.mjs invites
 node scripts/admin.mjs devices
 ```
 
-Codurile de invitație sunt de unică folosință și expiră în șapte zile. Deschiderea unui link nu consumă codul; apăsarea **Activează** sau confirmarea din **Adaugă acces din invitație** îl consumă. Sesiunea este păstrată într-un cookie Secure și HttpOnly. Pentru adăugarea unei a doua clase pe același dispozitiv se introduce codul în aplicația deja activată; deschiderea linkului de activare ar crea un dispozitiv nou. Revocarea din consolă oprește toate drepturile dispozitivului la următoarea cerere online.
+Codurile de invitație permit două activări și expiră la șapte zile de la emitere; prima folosire nu prelungește termenul. Deschiderea unui link nu consumă o activare. O activare reușită prin **Deschide registrul clasei** sau **Adaugă acces din invitație** folosește una dintre cele două activări. Cererile eșuate, inclusiv adăugarea unei clase deja accesibile, nu consumă activări.
+
+După prima activare, codul și linkul rămân disponibile în consola privată pentru al doilea dispozitiv. După a doua, invitația apare folosită și codul/linkul sunt șterse. Numărul exact de activări este disponibil prin `node scripts/admin.mjs invites` sau API, în câmpurile `use_count` și `max_uses`. Consola comună afișează invitația parțial folosită ca fiind în așteptare.
+
+Fiecare dispozitiv are o sesiune separată, păstrată într-un cookie Secure și HttpOnly. Un alt browser sau profil reprezintă un dispozitiv separat pentru această limită. Pentru adăugarea unei a doua clase pe un dispozitiv deja activat, codul se introduce din **Adaugă acces din invitație**; deschiderea linkului de activare ar crea o sesiune nouă. Deconectarea, revocarea sau ștergerea unui dispozitiv nu eliberează activarea folosită.
+
+Revocarea unei invitații blochează activările rămase și păstrează accesul dispozitivelor deja activate. Revocarea unui dispozitiv oprește toate drepturile lui la următoarea cerere online; celălalt dispozitiv rămâne activ. Rolul, clasa, copilul și expirarea accesului se aplică identic ambelor activări. Dreptul de proprietar rămâne separat: pe o instalare nouă îl primește numai primul casier activat.
+
+La actualizare, invitațiile vechi nefolosite permit două activări, cu același termen de expirare. Cele deja consumate rămân închise, cu o activare din una; pentru încă un dispozitiv se emite o invitație nouă. Invitațiile revocate sau expirate nu sunt reactivate.
 
 Fluxul complet pentru creare, invitații și comutare este documentat în [Mai multe școli, clase și drepturi de acces](multiple-classrooms.md).
 

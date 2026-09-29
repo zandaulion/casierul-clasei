@@ -180,7 +180,7 @@ function openModal(type, title, content, submit = 'Salvează', extra = {}) {
 function renderGate(message = '') {
   state = null; classrooms = []; classroomId = null; $('.app').classList.remove('collecting', 'child-detail'); $('.app').dataset.screen = 'welcome'; $('#tabs').hidden = true; $('#settings-button').hidden = true; $('#header-logos').hidden = true; $('#classroom-selector').hidden = true; $('#class-label').hidden = false; $('#class-label').textContent = 'Fondul clasei, la îndemână';
   if ($('.brand-mark')) $('.brand-mark').hidden = false;
-  $('#main').innerHTML = `${welcomeBanner()}<div class="empty"><h1>Bine ai venit în clasa ta!</h1><p>Introdu codul din invitația primită pentru a deschide registrul clasei pe acest dispozitiv.</p></div><form id="invite-form">${field('Cod de invitație', 'code', inviteCode, 'required autocomplete="off" autocapitalize="none" spellcheck="false"')}${field('Numele dispozitivului (opțional)', 'label', '', 'maxlength="120" placeholder="De exemplu: telefonul meu"')}<p id="invite-error" class="error" role="alert">${esc(message)}</p><button class="primary wide" type="submit">Deschide registrul clasei</button></form>`;
+  $('#main').innerHTML = `${welcomeBanner()}<div class="empty"><h1>Bine ai venit în clasa ta!</h1><p>Introdu codul din invitația primită pentru a deschide registrul clasei pe acest dispozitiv.</p></div><form id="invite-form">${field('Cod de invitație', 'code', inviteCode, 'required autocomplete="off" autocapitalize="none" spellcheck="false"')}${field('Numele dispozitivului (opțional)', 'label', '', 'maxlength="120" placeholder="De exemplu: telefonul meu sau laptopul meu"')}<p class="caption">Un cod poate activa două dispozitive, de exemplu telefonul și laptopul tău, în cele 7 zile de la emitere.</p><p id="invite-error" class="error" role="alert">${esc(message)}</p><button class="primary wide" type="submit">Deschide registrul clasei</button></form>`;
   observeCollectionDock();
   updateNotices();
 }
@@ -968,7 +968,7 @@ document.addEventListener('click', async event => {
     }
     case 'cancel-expense': openModal('cancel-expense', 'Anulează cheltuiala', '<p>Contribuțiile acestei cheltuieli nu vor mai fi datorate. Cheltuiala rămâne vizibilă în istoric.</p><label>Motiv (opțional)<textarea name="comment" maxlength="2000"></textarea></label>', 'Anulează cheltuiala', { expenseId: button.dataset.id }); break;
     case 'logout':
-      if (!confirm('Deconectezi acest dispozitiv? Pentru acces va fi necesară o invitație nouă.')) return;
+      if (!confirm('Deconectezi acest dispozitiv? Pentru a reveni, vei avea nevoie de un cod cu o activare disponibilă.')) return;
       try { await api('/api/auth/logout', { method: 'POST', body: '{}' }); closeModal(true); device = null; state = null; renderGate(); } catch (error) { toast(error.message); }
       break;
   }

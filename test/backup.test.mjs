@@ -56,7 +56,13 @@ test('live WAL-backed STRICT databases restore as standalone private files with 
     assert.equal(restoredLedger.getState().transactions.length, 1);
     assert.equal(restoredAuth.getDevice(device.token).id, device.device.id);
     assert.equal(restoredAuth.db.prepare('SELECT marker FROM strict_backup_probe').get().marker, 'captured in WAL');
-    assert.equal(restoredAuth.listInvites().invites[0].used_at !== null, true);
+    const restoredInvite = restoredAuth.listInvites().invites[0];
+    assert.equal(restoredInvite.use_count, 1);
+    assert.equal(restoredInvite.max_uses, 2);
+    assert.equal(restoredInvite.used_at, null);
+    assert.equal(restoredInvite.code, invite.code);
+    assert.ok(restoredAuth.redeemInvite(invite.code, 'Laptop').token);
+    assert.throws(() => restoredAuth.redeemInvite(invite.code), { status: 404 });
     const restoredSecondLedger = new Ledger(path.join(restored, secondLedgerName));
     try { assert.equal(restoredSecondLedger.getState().settings.className, 'II B'); }
     finally { restoredSecondLedger.close(); }

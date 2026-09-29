@@ -5,6 +5,7 @@ export const COOKIE_NAME = '__Host-casierul';
 export const DEVELOPMENT_COOKIE_NAME = 'casierul-dev';
 export const SESSION_SECONDS = 400 * 86400;
 export const INVITE_TTL_DAYS = 7;
+export const INVITE_MAX_USES = 2;
 export const DEFAULT_CLASSROOM_ID = 'default';
 const ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 export const DEVICE_ROLES = new Set(['treasurer', 'parent', 'auditor']);
@@ -95,6 +96,18 @@ export class AuthStore {
     this.#addColumn('invites', 'child_id', 'TEXT');
     this.#addColumn('invites', 'access_expires_at', 'TEXT');
     this.#addColumn('invites', 'classroom_id', `TEXT NOT NULL DEFAULT '${DEFAULT_CLASSROOM_ID}'`);
+    // Preserve consumed legacy codes as closed; unused codes gain the second slot.
+    // Keep the schema change and backfill atomic across restarts.
+    this.db.exec('BEGIN IMMEDIATE');
+    try {
+      this.#addColumn('invites', 'max_uses', `INTEGER NOT NULL DEFAULT ${INVITE_MAX_USES} CHECK(max_uses BETWEEN 1 AND ${INVITE_MAX_USES})`);
+      const countAdded = this.#addColumn('invites', 'use_count', 'INTEGER NOT NULL DEFAULT 0 CHECK(use_count BETWEEN 0 AND max_uses)');
+      if (countAdded) this.db.exec('UPDATE invites SET max_uses = 1, use_count = 1 WHERE used_at IS NOT NULL');
+      this.db.exec('COMMIT');
+    } catch (error) {
+      this.db.exec('ROLLBACK');
+      throw error;
+    }
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS device_permissions (
         device_id TEXT NOT NULL REFERENCES devices(id) ON DELETE CASCADE,
@@ -142,12 +155,13 @@ export class AuthStore {
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(hash(raw), code, url, label || null, createdAt, expiresAt,
       role, childId, accessExpiresAt, classroomId);
     return { id: Number(result.lastInsertRowid), code, url, expires_at: expiresAt, expires_in_days: INVITE_TTL_DAYS,
+      max_uses: INVITE_MAX_USES, use_count: 0,
       role, child_id: childId, access_expires_at: accessExpiresAt, classroom_id: classroomId };
   }
 
   listInvites() {
     const invites = this.db.prepare(`SELECT id, label, code, url, created_at, expires_at, used_at, revoked, device_id,
-      role, child_id, access_expires_at, classroom_id
+      role, child_id, access_expires_at, classroom_id, max_uses, use_count
       FROM invites ORDER BY id DESC`).all().map((row) => ({ ...row, revoked: Boolean(row.revoked) }));
     return { invites, ttl_days: INVITE_TTL_DAYS };
   }
@@ -155,6 +169,19 @@ export class AuthStore {
   revokeInvite(id) {
     const result = this.db.prepare('UPDATE invites SET revoked = 1, code = NULL, url = NULL WHERE id = ?').run(id);
     if (!result.changes) throw httpError(404, 'Invitația nu a fost găsită.');
+  }
+
+  // Called inside the activation transaction, so failed device/permission writes
+  // never spend a slot and concurrent requests cannot exceed the limit.
+  #claimInvite(inviteId, deviceId, nowIso) {
+    const claimed = this.db.prepare(`UPDATE invites SET
+      use_count = use_count + 1, device_id = ?,
+      used_at = CASE WHEN use_count + 1 = max_uses THEN ? ELSE NULL END,
+      code = CASE WHEN use_count + 1 = max_uses THEN NULL ELSE code END,
+      url = CASE WHEN use_count + 1 = max_uses THEN NULL ELSE url END
+      WHERE id = ? AND use_count < max_uses AND used_at IS NULL AND revoked = 0 AND expires_at > ?`)
+      .run(deviceId, nowIso, inviteId, nowIso);
+    if (claimed.changes !== 1) throw httpError(409, 'Invitația nu mai are activări disponibile. Cere un cod nou.');
   }
 
   redeemInvite(rawCode, initialLabel) {
@@ -177,8 +204,10 @@ export class AuthStore {
     this.db.exec('BEGIN IMMEDIATE');
     try {
       const invite = this.db.prepare('SELECT * FROM invites WHERE code_hash = ?').get(codeHash);
-      if (!invite || invite.revoked || invite.used_at) throw fail(404, 'Invitația nu există sau a fost deja folosită.');
+      if (!invite || invite.revoked) throw fail(404, 'Invitația nu este disponibilă. Cere un cod nou.');
+      if (invite.used_at || invite.use_count >= invite.max_uses) throw fail(404, 'Codul a atins limita de dispozitive. Cere o invitație nouă.');
       if (invite.expires_at <= nowIso) throw fail(410, 'Invitația a expirat.');
+      if (invite.access_expires_at && invite.access_expires_at <= nowIso) throw fail(410, 'Dreptul de acces din invitație a expirat.');
       const deviceLabel = label || invite.label || 'Telefon';
       const sessionExpiry = new Date(now + SESSION_SECONDS * 1000).toISOString();
       const expiresAt = invite.access_expires_at && invite.access_expires_at < sessionExpiry
@@ -192,9 +221,7 @@ export class AuthStore {
       this.db.prepare(`INSERT INTO device_permissions
         (device_id, classroom_id, role, child_id, access_expires_at) VALUES (?, ?, ?, ?, ?)`).run(
         deviceId, invite.classroom_id || DEFAULT_CLASSROOM_ID, invite.role || 'treasurer', invite.child_id, invite.access_expires_at);
-      const claimed = this.db.prepare(`UPDATE invites SET used_at = ?, device_id = ?, code = NULL, url = NULL
-        WHERE id = ? AND used_at IS NULL AND revoked = 0 AND expires_at > ?`).run(nowIso, deviceId, invite.id, nowIso);
-      if (claimed.changes !== 1) throw fail(409, 'Invitația a fost deja folosită.');
+      this.#claimInvite(invite.id, deviceId, nowIso);
       this.db.exec('COMMIT');
       return { token, device: { id: deviceId, label: deviceLabel, created_at: nowIso, last_seen: nowIso,
         role: invite.role || 'treasurer', child_id: invite.child_id, access_expires_at: invite.access_expires_at,
@@ -220,8 +247,10 @@ export class AuthStore {
     this.db.exec('BEGIN IMMEDIATE');
     try {
       const invite = this.db.prepare('SELECT * FROM invites WHERE code_hash = ?').get(hash(code));
-      if (!invite || invite.revoked || invite.used_at) throw fail(404, 'Invitația nu există sau a fost deja folosită.');
+      if (!invite || invite.revoked) throw fail(404, 'Invitația nu este disponibilă. Cere un cod nou.');
+      if (invite.used_at || invite.use_count >= invite.max_uses) throw fail(404, 'Codul a atins limita de dispozitive. Cere o invitație nouă.');
       if (invite.expires_at <= nowIso) throw fail(410, 'Invitația a expirat.');
+      if (invite.access_expires_at && invite.access_expires_at <= nowIso) throw fail(410, 'Dreptul de acces din invitație a expirat.');
       const classroomId = invite.classroom_id || DEFAULT_CLASSROOM_ID;
       if (this.db.prepare('SELECT 1 FROM device_permissions WHERE device_id = ? AND classroom_id = ?').get(deviceId, classroomId)) {
         throw httpError(409, 'Acest dispozitiv are deja acces la clasa aleasă.');
@@ -229,9 +258,7 @@ export class AuthStore {
       this.db.prepare(`INSERT INTO device_permissions
         (device_id, classroom_id, role, child_id, access_expires_at) VALUES (?, ?, ?, ?, ?)`).run(
         deviceId, classroomId, invite.role || 'treasurer', invite.child_id, invite.access_expires_at);
-      const claimed = this.db.prepare(`UPDATE invites SET used_at = ?, device_id = ?, code = NULL, url = NULL
-        WHERE id = ? AND used_at IS NULL AND revoked = 0 AND expires_at > ?`).run(nowIso, deviceId, invite.id, nowIso);
-      if (claimed.changes !== 1) throw fail(409, 'Invitația a fost deja folosită.');
+      this.#claimInvite(invite.id, deviceId, nowIso);
       this.db.exec('COMMIT');
       return this.resolvePermission(deviceId, classroomId);
     } catch (error) {
