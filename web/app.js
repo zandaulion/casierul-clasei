@@ -623,22 +623,26 @@ function parseBulk(text) {
   });
 }
 function expenseModal(expense = null) {
-  const locked = !!expense && (expense.collectedMinor > 0 || expense.paidOutMinor > 0);
+  const linked = !!expense && state.transactions.some(tx => !tx.reversed && tx.type !== 'reversal'
+    && (tx.expenseId === expense.id || tx.allocations.some(allocation => allocation.expenseId === expense.id)));
   const existing = new Map(expense?.contributions.map(item => [item.childId, item]) || []);
   const participants = sortChildren(state.children.filter(c => c.active || existing.has(c.id)));
-  const lockedAttribute = locked ? 'disabled data-locked' : '';
   const type = expense?.type || 'fixed';
+  const formulaLockedAttribute = linked ? 'disabled data-locked' : '';
+  const splitParticipantsEditable = type === 'split' && expense?.collectedMinor === 0;
+  const allParticipantsLocked = linked && !splitParticipantsEditable;
   const typeOptions = [['fixed', 'Sumă fixă pentru fiecare copil'], ['split', 'Total împărțit între participanți'], ['quantity', 'Cantitate pentru fiecare copil × preț']]
     .map(([value, label]) => `<option value="${value}" ${type === value ? 'selected' : ''}>${label}</option>`).join('');
   const participantFields = participants.map(c => {
     const contribution = existing.get(c.id), checked = expense ? !!contribution : c.active;
     const paidMinor = c.contributions.find(item => item.expenseId === expense?.id)?.paidMinor ?? 0;
-    const participantLocked = locked && (paidMinor > 0 || type === 'split');
-    const quantityLocked = locked && type !== 'quantity' ? lockedAttribute : '';
-    return `<div class="participant"><label class="check"><input type="checkbox" data-participant="${esc(c.id)}" ${checked ? 'checked' : ''} ${participantLocked ? lockedAttribute : ''}>${esc(name(c))}${c.active ? '' : ' · Arhivat'}</label><input type="number" data-quantity="${esc(c.id)}" min="1" max="10000" step="1" value="${contribution?.quantity || 1}" aria-label="Cantitate pentru ${esc(name(c))}" ${quantityLocked} hidden></div>`;
+    const participantLocked = linked && (paidMinor > 0 || (type === 'split' && !splitParticipantsEditable));
+    const participantLockedAttribute = participantLocked ? 'disabled data-locked' : '';
+    const quantityLocked = linked && type !== 'quantity' ? formulaLockedAttribute : '';
+    return `<div class="participant"><label class="check"><input type="checkbox" data-participant="${esc(c.id)}" ${checked ? 'checked' : ''} ${participantLockedAttribute}>${esc(name(c))}${c.active ? '' : ' · Arhivat'}</label><input type="number" data-quantity="${esc(c.id)}" min="1" max="10000" step="1" value="${contribution?.quantity || 1}" aria-label="Cantitate pentru ${esc(name(c))}" ${quantityLocked} hidden></div>`;
   }).join('');
   openModal(expense ? 'edit-expense' : 'expense', expense ? 'Editează cheltuiala' : 'Cheltuială nouă',
-    `${field('Denumire', 'title', expense?.title || '', 'required maxlength="200"')}<label>Calculul contribuției<select name="type" ${lockedAttribute}>${typeOptions}</select></label>${field('<span id="expense-amount-label">Suma (lei)</span>', 'amount', expense ? decimal(expense.amountMinor) : '', `inputmode="decimal" autocomplete="off" required ${lockedAttribute}`)}<label>Termen de plată (opțional)<input name="dueDate" type="date" value="${esc(expense?.dueDate || '')}"></label>${timestampField(expense ? localDateTime(expense.occurredAt) : localNow())}<div class="section-label">Cine participă?</div><label class="check"><input type="checkbox" id="all-participants" ${lockedAttribute}>Toți copiii</label><div class="participants">${participantFields}</div><p class="caption">${locked && type === 'quantity' ? 'Poți adăuga participanți, elimina participanții fără sume achitate și corecta cantitățile fără a coborî contribuția sub suma deja achitată.' : locked && type === 'fixed' ? 'Poți adăuga participanți și îi poți elimina pe cei fără sume achitate. Suma și participanții care au plătit rămân protejați.' : locked ? 'Suma, calculul și participanții sunt protejați deoarece există încasări sau plăți legate de cheltuială. Denumirea, datele și comentariile pot fi editate.' : 'Copiii nebifați nu au contribuție la această cheltuială. Modificările recalculează contribuțiile înainte de salvare.'}</p><div id="expense-preview" class="summary" aria-live="polite"></div>${comments(expense?.comment || '')}`,
+    `${field('Denumire', 'title', expense?.title || '', 'required maxlength="200"')}<label>Calculul contribuției<select name="type" ${formulaLockedAttribute}>${typeOptions}</select></label>${field('<span id="expense-amount-label">Suma (lei)</span>', 'amount', expense ? decimal(expense.amountMinor) : '', `inputmode="decimal" autocomplete="off" required ${formulaLockedAttribute}`)}<label>Termen de plată (opțional)<input name="dueDate" type="date" value="${esc(expense?.dueDate || '')}"></label>${timestampField(expense ? localDateTime(expense.occurredAt) : localNow())}<div class="section-label">Cine participă?</div><label class="check"><input type="checkbox" id="all-participants" ${allParticipantsLocked ? 'disabled data-locked' : ''}>Toți copiii</label><div class="participants">${participantFields}</div><p class="caption">${linked && type === 'split' && splitParticipantsEditable ? 'Poți adăuga sau exclude copii până la prima contribuție încasată. Totalul rămâne neschimbat, iar contribuțiile se recalculează automat.' : linked && type === 'quantity' ? 'Poți adăuga participanți, elimina participanții fără sume achitate și corecta cantitățile fără a coborî contribuția sub suma deja achitată.' : linked && type === 'fixed' ? 'Poți adăuga participanți și îi poți elimina pe cei fără sume achitate. Suma și participanții care au plătit rămân protejați.' : linked ? 'Participanții sunt protejați deoarece există contribuții încasate pentru această cheltuială. Denumirea, datele și comentariile pot fi editate.' : 'Copiii nebifați nu au contribuție la această cheltuială. Modificările recalculează contribuțiile înainte de salvare.'}</p><div id="expense-preview" class="summary" aria-live="polite"></div>${comments(expense?.comment || '')}`,
     expense ? 'Salvează modificările' : 'Creează cheltuiala', expense ? { expenseId: expense.id } : {});
   updateExpensePreview();
 }

@@ -778,20 +778,23 @@ export class Ledger {
         });
       const hasActiveLinks = state.transactions.some(tx => !tx.reversed && tx.type !== 'reversal'
         && (tx.expenseId === expense.id || tx.allocations.some(allocation => allocation.expenseId === expense.id)));
-      const existingChildren = new Set(expense.contributions.map(item => item.childId));
       const safeContributionCorrection = body.type === expense.type
-        && ['fixed', 'quantity'].includes(body.type) && expense.amountMinor === amount
-        && contributions.every(next => {
-          const child = state.children.find(item => item.id === next.childId);
-          const paid = child?.contributions.find(item => item.expenseId === expense.id)?.paidMinor ?? 0;
-          return next.amount >= paid;
-        })
-        && expense.contributions.filter(old => !contributions.some(next => next.childId === old.childId)).every(old => {
-          const child = state.children.find(item => item.id === old.childId);
-          return (child?.contributions.find(item => item.expenseId === expense.id)?.paidMinor ?? 0) === 0;
-        })
+        && expense.amountMinor === amount
+        && (body.type === 'split' ? expense.collectedMinor === 0 : ['fixed', 'quantity'].includes(body.type)
+          && contributions.every(next => {
+            const child = state.children.find(item => item.id === next.childId);
+            const paid = child?.contributions.find(item => item.expenseId === expense.id)?.paidMinor ?? 0;
+            return next.amount >= paid;
+          })
+          && expense.contributions.filter(old => !contributions.some(next => next.childId === old.childId)).every(old => {
+            const child = state.children.find(item => item.id === old.childId);
+            return (child?.contributions.find(item => item.expenseId === expense.id)?.paidMinor ?? 0) === 0;
+          }))
         && total >= expense.paidOutMinor;
       if (formulaChanged && hasActiveLinks && !safeContributionCorrection) {
+        if (body.type === 'split' && expense.type === 'split' && expense.collectedMinor > 0) {
+          fail('Participanții unei cheltuieli împărțite nu mai pot fi schimbați după prima contribuție încasată.', 409);
+        }
         fail('După încasări sau plăți, puteți adăuga participanți, elimina doar participanții fără sume achitate și corecta cantitățile fără a coborî contribuția sub suma deja achitată.', 409);
       }
       const dueDate = body.dueDate === undefined || body.dueDate === null || body.dueDate === '' ? null : dateOnly(body.dueDate, 'Termenul');

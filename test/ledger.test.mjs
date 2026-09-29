@@ -127,6 +127,33 @@ test('participants can be added and unpaid participants removed after others pai
     dueDate: changed.dueDate, comment: changed.comment }), status(409));
 });
 
+test('split opt-outs recalculate after supplier payment until the first contribution', t => {
+  const { ledger, post, child, expense } = fixture(t);
+  const children = [child('Ana', 'Avram'), child('Bogdan', 'Bălan'), child('Carmen', 'Cernat'), child('Dan', 'Dobre')];
+  const id = expense(children, 10001, 'split', { title: 'Echipament sportiv' });
+  post('fund_advance.create', { amountMinor: 10001, person: 'Părinte', expenseId: id });
+  post('payment.create', { amountMinor: 10001, destination: 'Magazin', expenseId: id });
+
+  let current = ledger.getState().expenses.find(item => item.id === id);
+  post('expense.update', { expenseId: id, title: current.title, type: current.type,
+    amountMinor: current.amountMinor, participants: children.slice(0, 3).map(childId => ({ childId })),
+    occurredAt: current.occurredAt, dueDate: current.dueDate, comment: current.comment });
+  current = ledger.getState().expenses.find(item => item.id === id);
+  assert.equal(current.totalMinor, 10001);
+  assert.deepEqual(current.contributions.map(item => item.amountMinor), [3334, 3334, 3333]);
+  assert.equal(current.paidOutMinor, 10001);
+  assert.equal(ledger.getState().summary.balanceMinor, 0);
+  assert.equal(ledger.getState().summary.totalAdvanceOutstandingMinor, 10001);
+  assert.equal(ledger.getState().children.find(item => item.id === children[3]).dueMinor, 0);
+
+  post('collection.create', { childId: children[0], receivedMinor: 100, changeMinor: 0,
+    allocations: [{ expenseId: id, amountMinor: 100 }] });
+  assert.throws(() => post('expense.update', { expenseId: id, title: current.title, type: current.type,
+    amountMinor: current.amountMinor, participants: children.slice(0, 2).map(childId => ({ childId })),
+    occurredAt: current.occurredAt, dueDate: current.dueDate, comment: current.comment }), status(409));
+  assert.deepEqual(ledger.getState().expenses.find(item => item.id === id).contributions, current.contributions);
+});
+
 test('PDF reports are immutable, idempotent and keep correction history', async t => {
   const { ledger, post, child, expense } = fixture(t);
   post('settings.update', { schoolName: 'Școala 1', className: 'IX A', schoolYear: '2026–2027', openingBalanceMinor: 1000,
