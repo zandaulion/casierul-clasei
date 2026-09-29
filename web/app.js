@@ -11,10 +11,11 @@ const localDateTime = (value = new Date()) => { const date = new Date(value); re
 const localNow = () => localDateTime();
 const timestampField = (value = localNow()) => field('Data și ora', 'occurredAt', value, 'type="datetime-local" required');
 const dateText = value => value ? new Intl.DateTimeFormat('ro-RO', { dateStyle: 'medium', ...(value.includes('T') ? { timeStyle: 'short' } : {}) }).format(new Date(value.includes('T') ? value : `${value}T12:00:00`)) : 'Fără termen';
-const labels = { collection: 'Încasare', payment: 'Bani dați', credit_apply: 'Avans repartizat', refund: 'Avans restituit', reversal: 'Corecție' };
+const labels = { collection: 'Încasare', payment: 'Bani dați', credit_apply: 'Avans repartizat', refund: 'Avans restituit',
+  fund_advance: 'Sumă avansată fondului', advance_repayment: 'Restituire sumă avansată', reversal: 'Corecție' };
 const typeLabels = { fixed: 'Sumă fixă / copil', split: 'Total împărțit', quantity: 'Cantitate × preț' };
 const reportTypeLabels = { class: 'Situația clasei', matrix: 'Raport exhaustiv', expense: 'Situația unei cheltuieli', child: 'Fișa individuală' };
-const writeActions = new Set(['add-child', 'edit-child', 'bulk-children', 'add-expense', 'edit-expense', 'payment',
+const writeActions = new Set(['add-child', 'edit-child', 'bulk-children', 'add-expense', 'edit-expense', 'payment', 'fund-advance', 'repay-advance',
   'expense-payment', 'apply-credit', 'refund', 'report-class', 'report-matrix', 'report-expense', 'report-child',
   'replace-report', 'reverse', 'cancel-expense', 'remove-logo', 'add-classroom']);
 const pendingKey = 'casierul.pending.v1';
@@ -275,7 +276,13 @@ function transactionRows(transactions) {
 }
 function renderLedger() {
   const s = state.summary;
-  $('#main').innerHTML = `<h1>Registru</h1><div class="balance"><span class="caption">Soldul fondului clasei</span><strong class="amount">${money(s.balanceMinor)}</strong><div class="balance-grid"><div><span class="caption">Încasări după rest</span><span>${money(s.totalReceivedMinor)}</span></div><div><span class="caption">Bani dați și restituiți</span><span>${money(s.totalPaidMinor)}</span></div><div><span class="caption">Avansuri incluse în sold</span><span>${money(s.totalCreditMinor)}</span></div><div><span class="caption">De încasat</span><span>${money(s.totalDueMinor)}</span></div></div><p class="caption" style="margin-bottom:0">Sold inițial ${money(state.settings.openingBalanceMinor)}</p></div>${canWrite() ? '<button class="primary wide" data-action="payment">+ Bani dați mai departe</button>' : ''}<div class="toolbar"><button data-action="refresh">Actualizează</button>${canWrite() ? `<a href="${esc(scopedUrl('/api/export'))}" download="casierul-clasei.json">Export JSON</a>` : ''}</div><h2>Istoric</h2><div class="stack">${transactionRows(state.transactions)}</div>`;
+  const openAdvances = (state.advances || []).filter(item => !item.reversed && item.outstandingMinor > 0)
+    .sort((a, b) => b.occurredAt.localeCompare(a.occurredAt));
+  const advances = openAdvances.length ? `<h2>Sume de restituit</h2><div class="stack">${openAdvances.map(item => {
+    const expense = state.expenses.find(entry => entry.id === item.expenseId);
+    return `<article class="card"><div class="row"><strong>${esc(item.person)}</strong><span class="amount">${money(item.outstandingMinor)}</span></div><div class="caption">Avansat ${money(item.amountMinor)} · restituit ${money(item.repaidMinor)}${expense ? ` · ${esc(expense.title)}` : ''}</div>${canWrite() ? `<button type="button" class="primary wide" style="margin-top:14px" data-action="repay-advance" data-id="${esc(item.id)}">Restituie</button>` : ''}</article>`;
+  }).join('')}</div>` : '';
+  $('#main').innerHTML = `<h1>Registru</h1><div class="balance"><span class="caption">Numerar disponibil în fond</span><strong class="amount">${money(s.balanceMinor)}</strong><div class="balance-grid"><div><span class="caption">De restituit pentru sume avansate</span><span>${money(s.totalAdvanceOutstandingMinor || 0)}</span></div><div><span class="caption">Sold după restituirea avansurilor</span><span>${money(s.netBalanceMinor ?? s.balanceMinor)}</span></div><div><span class="caption">Avansuri ale copiilor incluse în sold</span><span>${money(s.totalCreditMinor)}</span></div><div><span class="caption">De încasat de la copii</span><span>${money(s.totalDueMinor)}</span></div></div><p class="caption" style="margin-bottom:0">Încasări de la copii ${money(s.totalReceivedMinor)} · Bani ieșiți ${money(s.totalPaidMinor)} · Sold inițial ${money(state.settings.openingBalanceMinor)}</p></div>${canWrite() ? '<div class="toolbar"><button class="primary" data-action="payment">+ Bani dați mai departe</button><button data-action="fund-advance">+ Sumă avansată fondului</button></div>' : ''}${advances}<div class="toolbar"><button data-action="refresh">Actualizează</button>${canWrite() ? `<a href="${esc(scopedUrl('/api/export'))}" download="casierul-clasei.json">Export JSON</a>` : ''}</div><h2>Istoric</h2><div class="stack">${transactionRows(state.transactions)}</div>`;
 }
 function renderReports() {
   const reports = state.reports || [];
@@ -519,10 +526,21 @@ function updateExpensePreview() {
 }
 function expenseDetails(id) {
   const e = state.expenses.find(e => e.id === id);
-  openModal('expense-detail', e.title, `<p class="caption">${typeLabels[e.type]} · ${e.cancelled ? 'Anulată' : `${e.participantCount ?? e.contributions.length} participanți`}</p><div class="summary"><dl><div><dt>Total contribuții</dt><dd>${money(e.totalMinor)}</dd></div><div><dt>Încasat</dt><dd>${money(e.collectedMinor)}</dd></div><div><dt>Bani dați mai departe</dt><dd>${money(e.paidOutMinor)}</dd></div></dl></div><p>${e.dueDate ? `Termen: ${dateText(e.dueDate)}` : 'Fără termen de plată'}</p><p class="caption">Data cheltuielii: ${dateText(e.occurredAt)}</p>${e.comment ? `<p>${esc(e.comment)}</p>` : ''}<div class="preview-list">${sortChildren(state.children.filter(c => e.contributions.some(p => p.childId === c.id))).map(c => { const p = e.contributions.find(p => p.childId === c.id); const contribution = c.contributions.find(p => p.expenseId === e.id); return `<div class="row"><span>${esc(name(c))}${e.type === 'quantity' ? ` × ${p.quantity}` : ''}<small style="display:block">Restant ${money(contribution?.remainingMinor || 0)}</small></span><span class="amount">${money(p.amountMinor)}</span></div>`; }).join('')}</div>${e.cancelled || !canWrite() ? '' : `<div class="toolbar"><button type="button" data-action="edit-expense" data-id="${esc(e.id)}">Editează</button><button type="button" data-action="expense-payment" data-id="${esc(e.id)}">Înregistrează bani dați</button></div>${!e.collectedMinor && !e.paidOutMinor ? `<button type="button" class="danger" data-action="cancel-expense" data-id="${esc(e.id)}">Anulează cheltuiala</button><p class="caption">Anularea este posibilă doar dacă nu mai există încasări sau plăți legate de cheltuială.</p>` : ''}`}`, null);
+  const financing = (state.advances || []).filter(item => !item.reversed && item.expenseId === e.id);
+  const financedMinor = financing.reduce((total, item) => total + item.amountMinor, 0);
+  const outstandingMinor = financing.reduce((total, item) => total + item.outstandingMinor, 0);
+  openModal('expense-detail', e.title, `<p class="caption">${typeLabels[e.type]} · ${e.cancelled ? 'Anulată' : `${e.participantCount ?? e.contributions.length} participanți`}</p><div class="summary"><dl><div><dt>Total contribuții</dt><dd>${money(e.totalMinor)}</dd></div><div><dt>Încasat</dt><dd>${money(e.collectedMinor)}</dd></div><div><dt>Bani dați mai departe</dt><dd>${money(e.paidOutMinor)}</dd></div>${financing.length ? `<div><dt>Avansat temporar fondului</dt><dd>${money(financedMinor)}</dd></div><div><dt>De restituit</dt><dd>${money(outstandingMinor)}</dd></div>` : ''}</dl></div><p>${e.dueDate ? `Termen: ${dateText(e.dueDate)}` : 'Fără termen de plată'}</p><p class="caption">Data cheltuielii: ${dateText(e.occurredAt)}</p>${e.comment ? `<p>${esc(e.comment)}</p>` : ''}<div class="preview-list">${sortChildren(state.children.filter(c => e.contributions.some(p => p.childId === c.id))).map(c => { const p = e.contributions.find(p => p.childId === c.id); const contribution = c.contributions.find(p => p.expenseId === e.id); return `<div class="row"><span>${esc(name(c))}${e.type === 'quantity' ? ` × ${p.quantity}` : ''}<small style="display:block">Restant ${money(contribution?.remainingMinor || 0)}</small></span><span class="amount">${money(p.amountMinor)}</span></div>`; }).join('')}</div>${e.cancelled || !canWrite() ? '' : `<div class="toolbar"><button type="button" data-action="edit-expense" data-id="${esc(e.id)}">Editează</button><button type="button" data-action="expense-payment" data-id="${esc(e.id)}">Înregistrează bani dați</button></div>${!e.collectedMinor && !e.paidOutMinor && !financing.length ? `<button type="button" class="danger" data-action="cancel-expense" data-id="${esc(e.id)}">Anulează cheltuiala</button><p class="caption">Anularea este posibilă doar dacă nu mai există încasări sau plăți legate de cheltuială.</p>` : ''}`}`, null);
 }
 function paymentModal(expenseId = '') {
   openModal('payment', 'Bani dați mai departe', `${moneyField('Suma dată (lei)', 'amount')}${field('Cui ai dat banii', 'destination', '', 'required maxlength="200" placeholder="De exemplu: dirigintă, profesoară, fotograf"')}<label>Cheltuială asociată (opțional)<select name="expenseId"><option value="">Fără asociere</option>${state.expenses.filter(e => !e.cancelled).map(e => `<option value="${esc(e.id)}" ${e.id === expenseId ? 'selected' : ''}>${esc(e.title)}</option>`).join('')}</select></label>${timestampField()}${comments()}<p class="caption">Suma scade din soldul fondului. Contribuțiile copiilor rămân neschimbate.</p>`, 'Înregistrează');
+}
+function fundAdvanceModal() {
+  openModal('fund-advance', 'Sumă avansată fondului', `${moneyField('Suma avansată (lei)', 'amount')}${field('Cine a avansat banii', 'person', '', 'required maxlength="200" placeholder="De exemplu: numele casierului"')}<label>Cheltuială asociată (opțional)<select name="expenseId"><option value="">Fără asociere</option>${state.expenses.filter(e => !e.cancelled).map(e => `<option value="${esc(e.id)}">${esc(e.title)}</option>`).join('')}</select></label>${timestampField()}${comments()}<p class="caption">Suma intră temporar în numerarul clasei și apare separat ca datorie față de persoana care a avansat-o.</p>`, 'Înregistrează suma avansată');
+}
+function repayAdvanceModal(id) {
+  const advance = (state.advances || []).find(item => item.id === id && !item.reversed);
+  if (!advance || advance.outstandingMinor <= 0) return;
+  openModal('repay-advance', 'Restituie suma avansată', `<p><strong>${esc(advance.person)}</strong></p><div class="summary"><dl><div><dt>Sumă avansată</dt><dd>${money(advance.amountMinor)}</dd></div><div><dt>De restituit acum</dt><dd>${money(advance.outstandingMinor)}</dd></div></dl></div>${moneyField('Suma restituită (lei)', 'amount', decimal(advance.outstandingMinor))}${timestampField()}${comments()}<p class="caption">Poți face și o restituire parțială. Numerarul și datoria clasei scad cu aceeași sumă.</p>`, 'Înregistrează restituirea', { advanceId: advance.id, outstandingMinor: advance.outstandingMinor });
 }
 function creditModal() {
   const c = child(), defaults = automaticAllocations(unpaid(c), c.creditMinor);
@@ -543,7 +561,8 @@ function refundModal() {
 }
 function transactionDetails(id) {
   const t = state.transactions.find(t => t.id === id), c = state.children.find(c => c.id === t.childId);
-  openModal('transaction-detail', labels[t.type], `<div class="summary"><strong class="total-number">${money(t.amountMinor)}</strong>${t.changeMinor ? `<p>Rest restituit: ${money(t.changeMinor)}</p>` : ''}</div>${c ? `<p>${esc(name(c))}</p>` : ''}${t.destination ? `<p>Destinație: ${esc(t.destination)}</p>` : ''}${t.expenseId ? `<p>Cheltuială: ${esc(state.expenses.find(e => e.id === t.expenseId)?.title || '')}</p>` : ''}<p>Data și ora: ${dateText(t.occurredAt)}</p><p class="caption">Înregistrat: ${dateText(t.createdAt)}${t.actorLabel ? ` · ${esc(t.actorLabel)}` : ''}</p>${t.comment ? `<p>${esc(t.comment)}</p>` : ''}${t.allocations?.length ? `<h3>Repartizare</h3><div class="preview-list">${t.allocations.map(a => `<div class="row"><span>${esc(state.expenses.find(e => e.id === a.expenseId)?.title || 'Cheltuială')}</span><span>${money(a.amountMinor)}</span></div>`).join('')}</div>` : ''}${t.reversed ? '<p class="caption">Operațiune corectată. Înregistrarea originală rămâne în istoric.</p>' : t.type === 'reversal' ? '<p class="caption">Această înregistrare inversează efectele operațiunii corectate.</p>' : canWrite() ? `<button type="button" class="danger wide" style="margin-top:18px" data-action="reverse" data-id="${esc(t.id)}">Corectează prin anularea operațiunii</button>` : ''}`, null);
+  const partyLabel = ['fund_advance', 'advance_repayment'].includes(t.type) ? 'Persoană' : 'Destinație';
+  openModal('transaction-detail', labels[t.type], `<div class="summary"><strong class="total-number">${money(t.amountMinor)}</strong>${t.changeMinor ? `<p>Rest restituit: ${money(t.changeMinor)}</p>` : ''}</div>${c ? `<p>${esc(name(c))}</p>` : ''}${t.destination ? `<p>${partyLabel}: ${esc(t.destination)}</p>` : ''}${t.expenseId ? `<p>Cheltuială: ${esc(state.expenses.find(e => e.id === t.expenseId)?.title || '')}</p>` : ''}<p>Data și ora: ${dateText(t.occurredAt)}</p><p class="caption">Înregistrat: ${dateText(t.createdAt)}${t.actorLabel ? ` · ${esc(t.actorLabel)}` : ''}</p>${t.comment ? `<p>${esc(t.comment)}</p>` : ''}${t.allocations?.length ? `<h3>Repartizare</h3><div class="preview-list">${t.allocations.map(a => `<div class="row"><span>${esc(state.expenses.find(e => e.id === a.expenseId)?.title || 'Cheltuială')}</span><span>${money(a.amountMinor)}</span></div>`).join('')}</div>` : ''}${t.reversed ? '<p class="caption">Operațiune corectată. Înregistrarea originală rămâne în istoric.</p>' : t.type === 'reversal' ? '<p class="caption">Această înregistrare inversează efectele operațiunii corectate.</p>' : canWrite() ? `<button type="button" class="danger wide" style="margin-top:18px" data-action="reverse" data-id="${esc(t.id)}">Corectează prin anularea operațiunii</button>` : ''}`, null);
 }
 function positiveMoney(value) { const amount = parseMoney(value); if (amount === null || amount <= 0) throw new Error('Introdu o sumă mai mare decât zero, cu cel mult două zecimale.'); return amount; }
 function metadata(form) {
@@ -602,6 +621,13 @@ async function submitModal() {
       body = { ...readExpense(), title: form.elements.title.value.trim(), dueDate: form.elements.dueDate.value || null, ...metadata(form) };
     }
     else if (modal.type === 'payment') { path = '/api/payments'; body = { amountMinor: positiveMoney(form.elements.amount.value), destination: form.elements.destination.value.trim(), ...(form.elements.expenseId.value ? { expenseId: form.elements.expenseId.value } : {}), ...metadata(form) }; }
+    else if (modal.type === 'fund-advance') { path = '/api/fund-advances'; body = { amountMinor: positiveMoney(form.elements.amount.value), person: form.elements.person.value.trim(), ...(form.elements.expenseId.value ? { expenseId: form.elements.expenseId.value } : {}), ...metadata(form) }; }
+    else if (modal.type === 'repay-advance') {
+      path = `/api/fund-advances/${encodeURIComponent(modal.advanceId)}/repayments`;
+      const amountMinor = positiveMoney(form.elements.amount.value);
+      if (amountMinor > modal.outstandingMinor) throw new Error('Suma depășește valoarea rămasă de restituit.');
+      body = { amountMinor, ...metadata(form) };
+    }
     else if (modal.type === 'credit') { path = '/api/credit/apply'; const data = readCredit(); body = { childId: data.childId, allocations: data.allocations, ...metadata(form) }; }
     else if (modal.type === 'refund') {
       path = '/api/refunds'; const amountMinor = positiveMoney(form.elements.amount.value);
@@ -723,6 +749,8 @@ document.addEventListener('click', async event => {
     case 'edit-expense': expenseModal(state.expenses.find(expense => expense.id === button.dataset.id)); break;
     case 'payment': paymentModal(); break;
     case 'expense-payment': paymentModal(button.dataset.id); break;
+    case 'fund-advance': fundAdvanceModal(); break;
+    case 'repay-advance': repayAdvanceModal(button.dataset.id); break;
     case 'apply-credit': creditModal(); break;
     case 'refund': refundModal(); break;
     case 'report-class': reportModal('class'); break;

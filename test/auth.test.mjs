@@ -111,10 +111,12 @@ test('parent state exposes class totals and only the associated child', () => {
   const state = { revision: 2, settings: {}, summary: { totalDueMinor: 2000 }, children: [child('ana', 'Ana'), child('ion', 'Ion')],
     expenses: [{ id: 'expense-1', title: 'Poze', comment: 'notă internă', contributions: [
       { childId: 'ana', amountMinor: 1000 }, { childId: 'ion', amountMinor: 1000 }], totalMinor: 2000 }],
-    transactions: [
+    advances: [{ id: 'advance', person: 'Casier', comment: 'notă internă' }], transactions: [
       { id: 'own', type: 'collection', childId: 'ana', comment: 'propriu' },
       { id: 'other', type: 'collection', childId: 'ion', comment: 'privat' },
       { id: 'payment', type: 'payment', childId: null, comment: 'intern' },
+      { id: 'advance', type: 'fund_advance', childId: null, comment: 'intern' },
+      { id: 'repayment', type: 'advance_repayment', childId: null, comment: 'intern' },
     ], reports: [
       { id: 'class', type: 'class', subjectId: null }, { id: 'matrix', type: 'matrix', subjectId: null },
       { id: 'own-report', type: 'child', subjectId: 'ana' }, { id: 'other-report', type: 'child', subjectId: 'ion' },
@@ -123,8 +125,9 @@ test('parent state exposes class totals and only the associated child', () => {
   assert.deepEqual(view.children.map((item) => item.id), ['ana']);
   assert.equal(view.expenses[0].participantCount, 2);
   assert.deepEqual(view.expenses[0].contributions.map((item) => item.childId), ['ana']);
-  assert.deepEqual(view.transactions.map((item) => item.id), ['own', 'payment']);
+  assert.deepEqual(view.transactions.map((item) => item.id), ['own', 'payment', 'advance', 'repayment']);
   assert.equal(view.transactions[1].comment, '');
+  assert.equal(view.advances[0].comment, '');
   assert.deepEqual(view.reports.map((item) => item.id), ['class', 'own-report']);
   assert.equal(view.summary.totalDueMinor, 2000);
 });

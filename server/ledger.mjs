@@ -119,13 +119,15 @@ CREATE TABLE IF NOT EXISTS contribution_edit_guard (
 ) STRICT;
 CREATE TABLE IF NOT EXISTS transactions (
   id TEXT PRIMARY KEY,
-  type TEXT NOT NULL CHECK(type IN ('collection', 'payment', 'credit_apply', 'refund', 'reversal')),
+  type TEXT NOT NULL CHECK(type IN ('collection', 'payment', 'credit_apply', 'refund', 'fund_advance', 'advance_repayment', 'reversal')),
   occurred_at TEXT NOT NULL, created_at TEXT NOT NULL,
   child_id TEXT REFERENCES children(id), expense_id TEXT REFERENCES expenses(id),
   destination TEXT NOT NULL, comment TEXT NOT NULL,
   amount INTEGER NOT NULL CHECK(amount > 0), change INTEGER NOT NULL CHECK(change >= 0 AND change <= amount),
-  reverses_id TEXT UNIQUE REFERENCES transactions(id), actor_id TEXT NOT NULL, actor_label TEXT NOT NULL,
-  CHECK((type = 'reversal') = (reverses_id IS NOT NULL))
+  reverses_id TEXT UNIQUE REFERENCES transactions(id), advance_id TEXT REFERENCES transactions(id),
+  actor_id TEXT NOT NULL, actor_label TEXT NOT NULL,
+  CHECK((type = 'reversal') = (reverses_id IS NOT NULL)),
+  CHECK((type = 'advance_repayment') = (advance_id IS NOT NULL))
 ) STRICT;
 CREATE TABLE IF NOT EXISTS allocations (
   transaction_id TEXT NOT NULL REFERENCES transactions(id),
@@ -187,6 +189,51 @@ WHEN NOT EXISTS (SELECT 1 FROM contribution_edit_guard WHERE singleton = 1) BEGI
 END;
 `;
 
+function migrateTransactions(db) {
+  const table = db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'transactions'").get();
+  if (!table?.sql || (table.sql.includes("'fund_advance'") && table.sql.includes('advance_id'))) return;
+  db.exec('PRAGMA foreign_keys = OFF; BEGIN IMMEDIATE');
+  try {
+    db.exec(`DROP TRIGGER IF EXISTS transactions_no_update;
+      DROP TRIGGER IF EXISTS transactions_no_delete;
+      CREATE TABLE transactions_new (
+        id TEXT PRIMARY KEY,
+        type TEXT NOT NULL CHECK(type IN ('collection', 'payment', 'credit_apply', 'refund', 'fund_advance', 'advance_repayment', 'reversal')),
+        occurred_at TEXT NOT NULL, created_at TEXT NOT NULL,
+        child_id TEXT REFERENCES children(id), expense_id TEXT REFERENCES expenses(id),
+        destination TEXT NOT NULL, comment TEXT NOT NULL,
+        amount INTEGER NOT NULL CHECK(amount > 0), change INTEGER NOT NULL CHECK(change >= 0 AND change <= amount),
+        reverses_id TEXT UNIQUE REFERENCES transactions_new(id), advance_id TEXT REFERENCES transactions_new(id),
+        actor_id TEXT NOT NULL, actor_label TEXT NOT NULL,
+        CHECK((type = 'reversal') = (reverses_id IS NOT NULL)),
+        CHECK((type = 'advance_repayment') = (advance_id IS NOT NULL))
+      ) STRICT;
+      INSERT INTO transactions_new (id, type, occurred_at, created_at, child_id, expense_id, destination,
+        comment, amount, change, reverses_id, advance_id, actor_id, actor_label)
+        SELECT id, type, occurred_at, created_at, child_id, expense_id, destination,
+          comment, amount, change, reverses_id, NULL, actor_id, actor_label FROM transactions;
+      DROP TABLE transactions;
+      ALTER TABLE transactions_new RENAME TO transactions;
+      CREATE INDEX transactions_child ON transactions(child_id);
+      CREATE INDEX transactions_expense ON transactions(expense_id);
+      CREATE INDEX transactions_advance ON transactions(advance_id);
+      CREATE TRIGGER transactions_no_update BEFORE UPDATE ON transactions BEGIN
+        SELECT RAISE(ABORT, 'Financial history is immutable');
+      END;
+      CREATE TRIGGER transactions_no_delete BEFORE DELETE ON transactions BEGIN
+        SELECT RAISE(ABORT, 'Financial history is immutable');
+      END;`);
+    const violations = db.prepare('PRAGMA foreign_key_check').all();
+    if (violations.length) throw new Error('Migrarea operațiunilor a produs referințe invalide.');
+    db.exec('COMMIT');
+  } catch (error) {
+    try { db.exec('ROLLBACK'); } catch { /* Transaction may already be closed. */ }
+    throw error;
+  } finally {
+    db.exec('PRAGMA foreign_keys = ON');
+  }
+}
+
 function migrateReports(db) {
   const table = db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'reports'").get();
   if (!table?.sql || table.sql.includes("'matrix'")) return;
@@ -233,6 +280,8 @@ export class Ledger {
     this.#db = new DatabaseSync(dbPath);
     this.#db.exec('PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000; PRAGMA journal_mode = WAL; PRAGMA synchronous = FULL;');
     this.#db.exec(SCHEMA);
+    migrateTransactions(this.#db);
+    this.#db.exec('CREATE INDEX IF NOT EXISTS transactions_advance ON transactions(advance_id)');
     migrateReports(this.#db);
   }
 
@@ -357,13 +406,17 @@ export class Ledger {
     const contributionPaid = new Map();
     const expenseCollected = new Map();
     const expensePaid = new Map();
+    const advanceRepaid = new Map();
     let totalReceivedMinor = 0;
     let totalPaidMinor = 0;
+    let totalAdvancedMinor = 0;
+    let totalAdvanceRepaidMinor = 0;
     const bump = (map, key, amount) => map.set(key, add(map.get(key) ?? 0, amount));
     const transactions = transactionRows.map(row => ({
       id: row.id, type: row.type, occurredAt: row.occurred_at, createdAt: row.created_at,
       childId: row.child_id, expenseId: row.expense_id, destination: row.destination,
       comment: row.comment, amountMinor: row.amount, changeMinor: row.change,
+      advanceId: row.advance_id,
       allocations: allocationsByTransaction.get(row.id) ?? [],
       reversed: reversed.has(row.id), reversesId: row.reverses_id, actorLabel: row.actor_label,
     }));
@@ -381,6 +434,12 @@ export class Ledger {
       } else if (tx.type === 'payment') {
         totalPaidMinor = add(totalPaidMinor, tx.amountMinor);
         if (tx.expenseId) bump(expensePaid, tx.expenseId, tx.amountMinor);
+      } else if (tx.type === 'fund_advance') {
+        totalAdvancedMinor = add(totalAdvancedMinor, tx.amountMinor);
+      } else if (tx.type === 'advance_repayment') {
+        totalAdvanceRepaidMinor = add(totalAdvanceRepaidMinor, tx.amountMinor);
+        totalPaidMinor = add(totalPaidMinor, tx.amountMinor);
+        bump(advanceRepaid, tx.advanceId, tx.amountMinor);
       }
       if (tx.type === 'collection' || tx.type === 'credit_apply') {
         for (const allocation of tx.allocations) {
@@ -409,16 +468,25 @@ export class Ledger {
       return { id: row.id, firstName: row.first_name, lastName: row.last_name, active: Boolean(row.active),
         creditMinor: childCredit.get(row.id), dueMinor: sum(contributions.map(c => c.remainingMinor)), contributions };
     }).sort((a, b) => names.compare(a.lastName, b.lastName) || names.compare(a.firstName, b.firstName) || a.id.localeCompare(b.id));
+    const advances = transactions.filter(tx => tx.type === 'fund_advance').map(tx => {
+      const repaidMinor = advanceRepaid.get(tx.id) ?? 0;
+      return { id: tx.id, person: tx.destination, expenseId: tx.expenseId, occurredAt: tx.occurredAt,
+        createdAt: tx.createdAt, comment: tx.comment, amountMinor: tx.amountMinor, repaidMinor,
+        outstandingMinor: tx.reversed ? 0 : tx.amountMinor - repaidMinor, reversed: tx.reversed };
+    });
+    const totalAdvanceOutstandingMinor = sum(advances.map(item => item.outstandingMinor));
+    const balanceMinor = add(meta.opening_balance, totalReceivedMinor + totalAdvancedMinor - totalPaidMinor);
     const branding = new Map(this.#all('SELECT kind, updated_at FROM branding').map(row => [row.kind, row.updated_at]));
     return {
       revision: meta.revision,
       settings: { schoolName: meta.school_name, className: meta.class_name, schoolYear: meta.school_year,
         openingBalanceMinor: meta.opening_balance, hasSchoolLogo: branding.has('school'), hasClassLogo: branding.has('class'),
         schoolLogoVersion: branding.get('school') ?? null, classLogoVersion: branding.get('class') ?? null },
-      children, expenses, transactions: transactions.reverse(),
-      summary: { balanceMinor: add(meta.opening_balance, totalReceivedMinor - totalPaidMinor),
+      children, expenses, advances, transactions: transactions.reverse(),
+      summary: { balanceMinor, netBalanceMinor: balanceMinor - totalAdvanceOutstandingMinor,
         totalReceivedMinor, totalPaidMinor, totalCreditMinor: sum(children.map(child => child.creditMinor)),
-        totalDueMinor: sum(children.map(child => child.dueMinor)) },
+        totalDueMinor: sum(children.map(child => child.dueMinor)), totalAdvancedMinor,
+        totalAdvanceRepaidMinor, totalAdvanceOutstandingMinor },
       reports: this.#reports(),
     };
   }
@@ -451,6 +519,7 @@ export class Ledger {
       const next = this.#state();
       if (next.children.some(child => child.creditMinor < 0)) fail('Corecția ar consuma un avans deja folosit. Corectați mai întâi utilizările sau restituirile acelui avans.', 409);
       if (next.children.some(child => child.contributions.some(c => c.remainingMinor < 0))) fail('Operațiunea ar depăși contribuția stabilită.', 409);
+      if (next.advances.some(item => item.outstandingMinor < 0)) fail('Restituirea depășește suma avansată rămasă.', 409);
       const response = transactionId ? { state: next, transactionId } : { state: next };
       // Keep the result identity, not a snapshot of the ever-growing history.
       // A network retry receives current state while preserving the original transaction.
@@ -497,11 +566,11 @@ export class Ledger {
   #transaction(type, body, actor, values = {}) {
     const id = randomUUID();
     const record = { childId: null, expenseId: null, destination: '', comment: text(body.comment, 'Comentariul', 2000, false),
-      amountMinor: 0, changeMinor: 0, reversesId: null, allocations: [], ...values };
+      amountMinor: 0, changeMinor: 0, reversesId: null, advanceId: null, allocations: [], ...values };
     this.#run(`INSERT INTO transactions (id, type, occurred_at, created_at, child_id, expense_id,
-      destination, comment, amount, change, reverses_id, actor_id, actor_label) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      destination, comment, amount, change, reverses_id, advance_id, actor_id, actor_label) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     id, type, timestamp(body.occurredAt), new Date().toISOString(), record.childId, record.expenseId,
-    record.destination, record.comment, record.amountMinor, record.changeMinor, record.reversesId, actor.id, actor.label);
+    record.destination, record.comment, record.amountMinor, record.changeMinor, record.reversesId, record.advanceId, actor.id, actor.label);
     for (const allocation of record.allocations) {
       this.#run('INSERT INTO allocations (transaction_id, expense_id, amount) VALUES (?, ?, ?)', id, allocation.expenseId, allocation.amountMinor);
     }
@@ -665,12 +734,30 @@ export class Ledger {
       const expenseId = body.expenseId === undefined || body.expenseId === null || body.expenseId === '' ? null : this.#expense(state, body.expenseId).id;
       return this.#transaction('payment', body, actor, { amountMinor, destination, expenseId });
     }
+    if (operation === 'fund_advance.create') {
+      const amountMinor = integer(body.amountMinor, 'Suma avansată', 1);
+      const destination = text(body.person, 'Persoana care a avansat banii');
+      const expenseId = body.expenseId === undefined || body.expenseId === null || body.expenseId === '' ? null : this.#expense(state, body.expenseId).id;
+      return this.#transaction('fund_advance', body, actor, { amountMinor, destination, expenseId });
+    }
+    if (operation === 'fund_advance.repay') {
+      const advanceId = text(body.advanceId, 'Suma avansată', 128);
+      const advance = state.advances.find(item => item.id === advanceId && !item.reversed);
+      if (!advance) fail('Suma avansată nu există sau a fost corectată.', 404);
+      const amountMinor = integer(body.amountMinor, 'Suma restituită', 1);
+      if (amountMinor > advance.outstandingMinor) fail('Suma restituită depășește suma rămasă de restituit.');
+      return this.#transaction('advance_repayment', body, actor, { amountMinor, destination: advance.person,
+        advanceId: advance.id, expenseId: advance.expenseId });
+    }
     if (operation === 'transaction.reverse') {
       const transactionId = text(body.transactionId, 'Operațiunea', 128);
       const original = state.transactions.find(tx => tx.id === transactionId);
       if (!original) fail('Operațiunea nu există.', 404);
       if (original.type === 'reversal') fail('O corecție nu poate fi anulată. Înregistrați o operațiune nouă.', 409);
       if (original.reversed) fail('Operațiunea a fost deja corectată.', 409);
+      if (original.type === 'fund_advance' && state.advances.find(item => item.id === original.id)?.repaidMinor) {
+        fail('Corectați mai întâi restituirile legate de această sumă avansată.', 409);
+      }
       const comment = text(body.comment, 'Motivul corecției', 2000);
       return this.#transaction('reversal', { comment }, actor, { childId: original.childId, expenseId: original.expenseId,
         destination: original.destination, amountMinor: original.amountMinor, changeMinor: original.changeMinor,
