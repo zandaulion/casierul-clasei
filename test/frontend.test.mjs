@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { parseMoney, roundUp, collectionResult, expensePreview, sortChildren, unpaid } from '../web/helpers.mjs';
+import { money, parseMoney, roundUp, collectionResult, expensePreview, sortChildren, unpaid } from '../web/helpers.mjs';
 const child = { dueMinor: 8500, contributions: [
   { expenseId: 'books', title: 'Culegeri', dueDate: '2026-10-02', remainingMinor: 6000 },
   { expenseId: 'trip', title: 'Excursie', dueDate: '2026-10-01', remainingMinor: 2500 },
@@ -8,6 +8,10 @@ const child = { dueMinor: 8500, contributions: [
 const draft = extras => ({ amount: '100', target: 'all', excess: 'change', manual: false, allocations: {}, ...extras });
 
 test('Romanian money converts exactly to bani and rejects ambiguous or imprecise inputs', () => {
+  assert.equal(money(114750), '1.147,50 lei');
+  assert.equal(money(3000), '30 lei');
+  assert.equal(money(1), '0,01 lei');
+  assert.equal(money(-50), '-0,50 lei');
   assert.equal(parseMoney('75,55'), 7555);
   assert.equal(parseMoney(' 0,01 '), 1);
   assert.equal(parseMoney('75.5'), 7550);

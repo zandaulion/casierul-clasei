@@ -1,5 +1,6 @@
 import { installUpdates } from '/pwa-update.js';
 import { name, money, decimal, parseMoney, sortChildren, unpaid, roundUp, automaticAllocations, collectionResult, expensePreview } from './helpers.mjs';
+import { icon } from './icons.mjs';
 
 const $ = selector => document.querySelector(selector);
 const $$ = selector => [...document.querySelectorAll(selector)];
@@ -14,7 +15,7 @@ const dateText = value => value ? new Intl.DateTimeFormat('ro-RO', { dateStyle: 
 const labels = { collection: 'Încasare', payment: 'Bani dați', credit_apply: 'Avans repartizat', refund: 'Avans restituit',
   fund_advance: 'Sumă avansată fondului', advance_repayment: 'Restituire sumă avansată', reversal: 'Corecție' };
 const typeLabels = { fixed: 'Sumă fixă / copil', split: 'Total împărțit', quantity: 'Cantitate × preț' };
-const reportTypeLabels = { class: 'Situația clasei', matrix: 'Raport exhaustiv', expense: 'Situația unei cheltuieli', child: 'Fișa individuală' };
+const reportTypeLabels = { class: 'Situația clasei', matrix: 'Tabelul contribuțiilor', expense: 'Situația unei cheltuieli', child: 'Fișa copilului' };
 const writeActions = new Set(['add-child', 'edit-child', 'bulk-children', 'add-expense', 'edit-expense', 'payment', 'fund-advance', 'repay-advance', 'attach-document',
   'expense-payment', 'apply-credit', 'refund', 'report-class', 'report-matrix', 'report-expense', 'report-child',
   'replace-report', 'reverse', 'cancel-expense', 'remove-logo', 'add-classroom']);
@@ -42,7 +43,25 @@ const canWrite = () => classroomAccess()?.role === 'treasurer';
 const accessLabel = () => ({ parent: 'Părinte · doar citire', auditor: 'Auditor · doar citire' }[classroomAccess()?.role] || 'Casier');
 const fileSize = bytes => bytes < 1024 ? `${bytes} B` : bytes < 1024 * 1024 ? `${new Intl.NumberFormat('ro-RO', { maximumFractionDigits: 0 }).format(bytes / 1024)} KB`
   : `${new Intl.NumberFormat('ro-RO', { maximumFractionDigits: 1 }).format(bytes / 1024 / 1024)} MB`;
-const accessBanner = () => canWrite() ? '' : `<div class="notice access-notice"><strong>${accessLabel()}</strong><span>Poți consulta situația și rapoartele, fără să modifici registrul.</span></div>`;
+const accessBanner = () => canWrite() ? '' : `<div class="access-indicator"><span>${icon('eye')}${classroomAccess()?.role === 'parent' ? 'Acces de părinte' : 'Acces de auditor'}</span><button type="button" data-action="settings">Detalii acces</button></div>`;
+const welcomeBanner = (title = 'Lucruri frumoase, împreună.', subtitle = 'Fondul clasei, cu grijă pentru fiecare.') => `<section class="welcome-banner" aria-label="Clasa noastră"><div class="welcome-copy"><h2>${esc(title)}</h2><p>${esc(subtitle)}</p></div><img src="/illustrations/school-community.webp" width="384" height="256" alt="" decoding="async"></section>`;
+const pageHeading = (title, subtitle, type) => `<div class="page-heading"><span class="section-icon tone-${type}">${icon(type)}</span><div><h1>${esc(title)}</h1><p class="caption">${esc(subtitle)}</p></div></div>`;
+
+// Reserve the actual dock height, including large text and connection errors.
+// The toast is outside .app, so it shares this value through the root element.
+function updateDockHeight() {
+  const dock = $('.collection-dock');
+  const height = dock && getComputedStyle(dock).position === 'fixed' ? Math.ceil(dock.getBoundingClientRect().height) : 0;
+  document.documentElement.style.setProperty('--collection-dock-height', `${height}px`);
+}
+const dockObserver = typeof ResizeObserver === 'function' ? new ResizeObserver(updateDockHeight) : null;
+function observeCollectionDock() {
+  dockObserver?.disconnect();
+  const dock = $('.collection-dock');
+  if (dock) dockObserver?.observe(dock);
+  updateDockHeight();
+}
+window.addEventListener('resize', updateDockHeight);
 
 function navigationState(overlay = navigationOverlay) {
   return { index: navigationIndex, classroomId, tab, childId, overlay };
@@ -67,7 +86,8 @@ function showScreen(nextTab, nextChildId = null, { push = true } = {}) {
   rememberRosterScroll();
   closeModal(true, true);
   tab = ['children', 'expenses', 'ledger', 'reports'].includes(nextTab) ? nextTab : 'children';
-  childId = tab === 'children' && state?.children.some(c => c.id === nextChildId) ? nextChildId : null;
+  const parentChildId = classroomAccess()?.role === 'parent' && state?.children.length === 1 ? state.children[0].id : null;
+  childId = tab === 'children' ? (state?.children.some(c => c.id === nextChildId) ? nextChildId : parentChildId) : null;
   draft = null;
   if (childId) resetDraft(child());
   if (push) pushNavigation(false); else replaceNavigation(false);
@@ -151,14 +171,16 @@ function openModal(type, title, content, submit = 'Salvează', extra = {}) {
   $('#dialog').classList.toggle('pdf-dialog', type === 'report-preview');
   $('#dialog-title').textContent = title; $('#modal-content').innerHTML = content;
   $('#modal-error').hidden = true; $('#modal-submit').textContent = submit; $('#modal-submit').hidden = !submit;
-  $('.dialog-actions [data-action="close-modal"]').textContent = extra.closeLabel || 'Renunță';
+  $('.dialog-actions [data-action="close-modal"]').textContent = extra.closeLabel || (submit ? 'Renunță' : 'Închide');
   if (!alreadyOpen) { pushNavigation(true); $('#dialog').showModal(); }
   else replaceNavigation(true);
   updateNotices();
 }
 function renderGate(message = '') {
-  state = null; classrooms = []; classroomId = null; $('.app').classList.remove('collecting'); $('#tabs').hidden = true; $('#settings-button').hidden = true; $('#header-logos').hidden = true; $('#classroom-selector').hidden = true; $('#class-label').hidden = false; $('#class-label').textContent = 'Fondul clasei, la îndemână';
-  $('#main').innerHTML = `<div class="empty"><h1>Registrul tău de clasă</h1><p>Activează acest dispozitiv folosind o invitație din consola ta PWA.</p></div><form id="invite-form">${field('Cod de invitație', 'code', inviteCode, 'required autocomplete="off" autocapitalize="none" spellcheck="false"')}${field('Numele dispozitivului (opțional)', 'label', '', 'maxlength="120" placeholder="De exemplu: telefonul meu"')}<p id="invite-error" class="error" role="alert">${esc(message)}</p><button class="primary wide" type="submit">Activează dispozitivul</button></form>`;
+  state = null; classrooms = []; classroomId = null; $('.app').classList.remove('collecting', 'child-detail'); $('.app').dataset.screen = 'welcome'; $('#tabs').hidden = true; $('#settings-button').hidden = true; $('#header-logos').hidden = true; $('#classroom-selector').hidden = true; $('#class-label').hidden = false; $('#class-label').textContent = 'Fondul clasei, la îndemână';
+  if ($('.brand-mark')) $('.brand-mark').hidden = false;
+  $('#main').innerHTML = `${welcomeBanner()}<div class="empty"><h1>Bine ai venit în clasa ta!</h1><p>Introdu codul din invitația primită pentru a deschide registrul clasei pe acest dispozitiv.</p></div><form id="invite-form">${field('Cod de invitație', 'code', inviteCode, 'required autocomplete="off" autocapitalize="none" spellcheck="false"')}${field('Numele dispozitivului (opțional)', 'label', '', 'maxlength="120" placeholder="De exemplu: telefonul meu"')}<p id="invite-error" class="error" role="alert">${esc(message)}</p><button class="primary wide" type="submit">Deschide registrul clasei</button></form>`;
+  observeCollectionDock();
   updateNotices();
 }
 function renderHeaderBranding() {
@@ -166,16 +188,18 @@ function renderHeaderBranding() {
   const entries = [['school', state.settings.hasSchoolLogo, state.settings.schoolLogoVersion],
     ['class', state.settings.hasClassLogo, state.settings.classLogoVersion]];
   container.hidden = !entries.some(([, present]) => present);
+  if ($('.brand-mark')) $('.brand-mark').hidden = !container.hidden;
   for (const [kind, present, version] of entries) {
     const image = $(`#header-${kind}-logo`);
     const cacheKey = `${classroomId}:${version || ''}`;
     if (!present) { image.hidden = true; image.removeAttribute('src'); delete image.dataset.version; continue; }
     if (image.dataset.version === cacheKey && image.complete && image.naturalWidth) { image.hidden = false; continue; }
     image.hidden = true;
-    image.onload = () => { image.hidden = false; container.hidden = false; };
+    image.onload = () => { image.hidden = false; container.hidden = false; if ($('.brand-mark')) $('.brand-mark').hidden = true; };
     image.onerror = () => {
       image.hidden = true;
       container.hidden = entries.every(([entryKind]) => $(`#header-${entryKind}-logo`).hidden);
+      if ($('.brand-mark')) $('.brand-mark').hidden = !container.hidden;
     };
     image.dataset.version = cacheKey;
     image.src = scopedUrl(`/api/branding/${kind}?v=${encodeURIComponent(version || '')}`);
@@ -193,31 +217,40 @@ function renderClassroomSelector() {
 }
 function render() {
   if (!state) return;
-  const collecting = tab === 'children' && !!childId && !!child();
+  if (tab === 'children' && classroomAccess()?.role === 'parent' && state.children.length === 1 && !child()) {
+    childId = state.children[0].id;
+    replaceNavigation();
+  }
+  const showingChild = tab === 'children' && !!childId && !!child();
+  const collecting = showingChild && canWrite();
   $('.app').classList.toggle('collecting', collecting);
+  $('.app').classList.toggle('child-detail', showingChild);
+  $('.app').dataset.screen = tab;
   renderClassroomSelector();
   renderHeaderBranding();
   $('#settings-button').hidden = false; $('#tabs').hidden = collecting;
   $$('[data-tab]').forEach(button => { if (button.dataset.tab === tab) button.setAttribute('aria-current', 'page'); else button.removeAttribute('aria-current'); });
   if (!state.settings.className) {
-    $('#main').innerHTML = '<div class="empty"><h1>Bine ai venit!</h1><p>Începe cu școala și clasa, apoi adaugă copiii și prima cheltuială.</p><button class="primary wide" data-action="settings">Configurează clasa</button></div>';
+    $('#main').innerHTML = `${welcomeBanner()}<div class="empty"><h1>Pregătim clasa împreună</h1><p>Începe cu școala și clasa, apoi adaugă copiii și prima cheltuială.</p><button class="primary wide" data-action="settings">Configurează clasa</button></div>`;
   } else if (tab === 'children') childId && child() ? renderChild() : renderRoster();
   else if (tab === 'expenses') renderExpenses();
   else if (tab === 'ledger') renderLedger();
   else renderReports();
   if (!canWrite()) $('#main').insertAdjacentHTML('afterbegin', accessBanner());
+  observeCollectionDock();
   updateNotices();
 }
 function renderRoster() {
-  const parent = classroomAccess()?.role === 'parent';
-  $('#main').innerHTML = `<h1>${parent ? 'Situația copilului' : 'Alege copilul'}</h1><div class="caption">${parent ? 'Contribuții, restanțe și avans' : 'În ordine alfabetică, după numele de familie'}</div>${canWrite() ? '<div class="toolbar"><button data-action="add-child">+ Copil</button><button data-action="bulk-children">Adaugă lista</button></div>' : ''}${state.children.length ? `<label class="caption" for="child-search">Caută un copil</label><input id="child-search" type="search" placeholder="Nume sau prenume" value="${esc(search)}" autocomplete="off"><div id="roster-list" class="children"></div>${canWrite() ? `<label class="check caption"><input id="show-archived" type="checkbox" ${showArchived ? 'checked' : ''}>Arată și copiii arhivați</label>` : ''}` : '<div class="empty"><p>Nu există copii disponibili pentru acest acces.</p></div>'}`;
+  const parent = classroomAccess()?.role === 'parent', hasChildren = state.children.length > 0;
+  $('#main').innerHTML = `${welcomeBanner()}<div class="roster-heading"><div><h1>${parent ? 'Situația copilului' : 'Copiii clasei'}</h1><p class="caption">${canWrite() ? 'Alege un copil pentru a înregistra o contribuție.' : 'Contribuții, sume de achitat și avansuri.'}</p></div>${canWrite() ? `<details class="roster-tools" ${hasChildren ? '' : 'open'}><summary>${icon('plus')}<span>Gestionează copiii</span></summary><div class="toolbar"><button data-action="add-child">+ Adaugă un copil</button><button data-action="bulk-children">Adaugă lista</button></div></details>` : ''}</div>
+  ${hasChildren ? `<label class="caption" for="child-search">Caută un copil</label><div class="roster-search">${icon('search')}<input id="child-search" type="search" placeholder="Nume sau prenume" value="${esc(search)}" autocomplete="off"></div><div id="roster-list" class="children"></div>${canWrite() ? `<label class="check caption"><input id="show-archived" type="checkbox" ${showArchived ? 'checked' : ''}>Arată și copiii arhivați</label>` : ''}` : `<div class="empty"><h2>${canWrite() ? 'Începem cu copiii clasei' : 'Situația copilului va apărea aici'}</h2><p>${canWrite() ? 'Adaugă primul copil sau lipește lista clasei folosind butoanele de mai sus.' : 'Nu există încă un copil disponibil pentru acest acces. Casierul clasei te poate ajuta.'}</p></div>`}`;
   renderRosterList();
 }
 function renderRosterList() {
   if (!$('#roster-list')) return;
   const normalize = value => value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('ro');
   const children = sortChildren(state.children).filter(c => (showArchived || c.active) && normalize(name(c)).includes(normalize(search)));
-  $('#roster-list').innerHTML = children.length ? children.map(c => `<button class="child" data-child="${esc(c.id)}"><span><span class="child-name">${esc(c.lastName)}</span><span class="caption">${esc(c.firstName)}${c.active ? '' : ' · Arhivat'}</span></span><span class="child-side"><span class="amount">${c.dueMinor ? money(c.dueMinor) : 'Achitat'}</span>${c.creditMinor ? `<span class="caption">Avans ${money(c.creditMinor)}</span>` : ''}</span></button>`).join('') : '<p class="caption">Niciun copil pentru această căutare.</p>';
+  $('#roster-list').innerHTML = children.length ? children.map(c => `<button class="child" data-child="${esc(c.id)}"><span><span class="child-name">${esc(c.lastName)}</span><span class="child-first-name">${esc(c.firstName)}</span>${c.active ? '' : '<span class="caption">Arhivat</span>'}</span><span class="child-side">${c.dueMinor ? `<span class="amount due-status">${money(c.dueMinor)}</span><span class="caption">De achitat</span>` : `<span class="amount paid-status">${icon('check')}Achitat</span>`}${c.creditMinor ? `<span class="caption">Avans ${money(c.creditMinor)}</span>` : ''}</span></button>`).join('') : '<div class="empty"><p>Nu am găsit acest nume. Încearcă numele de familie sau prenumele.</p></div>';
 }
 function resetDraft(c) {
   draft = { target: 'all', amount: c.dueMinor ? decimal(c.dueMinor) : '', round: null, excess: 'change', manual: false, allocations: {}, occurredAt: localNow(), comment: '' };
@@ -226,19 +259,21 @@ function resetDraft(c) {
 function renderChild() {
   const c = child(); if (!draft) resetDraft(c);
   if (!canWrite()) {
-    const contributionRows = c.contributions.map(item => `<div class="card"><div class="row"><strong>${esc(item.title)}</strong><span class="amount">${money(item.paidMinor)} din ${money(item.amountMinor)}</span></div><div class="caption">${item.remainingMinor ? `Restant ${money(item.remainingMinor)}` : 'Achitat'}${item.dueDate ? ` · termen ${dateText(item.dueDate)}` : ''}</div></div>`).join('');
-    $('#main').innerHTML = `<button class="back" data-action="back">‹ Copii</button><h1>${esc(name(c))}</h1><div class="summary"><dl><div><dt>De achitat</dt><dd><strong>${money(c.dueMinor)}</strong></dd></div><div><dt>Avans disponibil</dt><dd>${money(c.creditMinor)}</dd></div></dl></div><h2>Contribuții</h2><div class="stack">${contributionRows || '<p class="caption">Nu există contribuții active.</p>'}</div><details class="history"><summary>Istoricul copilului</summary><div class="stack">${transactionRows(state.transactions.filter(t => t.childId === c.id))}</div></details>`;
+    const parent = classroomAccess()?.role === 'parent';
+    const nextContribution = unpaid(c).find(item => item.dueDate);
+    const contributionRows = c.contributions.map(item => `<div class="card"><div class="row"><h3>${esc(item.title)}</h3><span class="amount">${money(item.paidMinor)} din ${money(item.amountMinor)}</span></div><div class="caption">${item.remainingMinor ? `De achitat ${money(item.remainingMinor)}` : `<span class="paid-status">${icon('check')}Achitat</span>`}${item.dueDate ? ` · termen ${dateText(item.dueDate)}` : ''}</div></div>`).join('');
+    $('#main').innerHTML = `${parent ? welcomeBanner('Aproape de clasa ta', 'Contribuțiile și noutățile din registru, la îndemână.') : '<button class="back" data-action="back">‹ Copii</button>'}<h1>${esc(name(c))}</h1><p class="caption">Situația contribuțiilor</p><div class="summary parent-summary"><dl><div><dt>De achitat</dt><dd><strong>${money(c.dueMinor)}</strong></dd></div><div><dt>Avans disponibil</dt><dd>${money(c.creditMinor)}</dd></div></dl>${nextContribution ? `<p class="caption">Primul termen de achitat: ${dateText(nextContribution.dueDate)} · ${esc(nextContribution.title)}</p>` : c.dueMinor ? '' : '<p class="caption">Toate contribuțiile înregistrate sunt achitate.</p>'}</div><h2>Contribuții</h2><div class="stack">${contributionRows || '<p class="caption">Contribuțiile vor apărea aici după ce sunt adăugate de casier.</p>'}</div><details class="history"><summary>Istoricul copilului</summary><div class="stack">${transactionRows(state.transactions.filter(t => t.childId === c.id))}</div></details>`;
     return;
   }
   const contributions = unpaid(c);
   $('#main').innerHTML = `<button class="back" data-action="back">‹ Copii</button><div class="row"><h1>${esc(name(c))}</h1><button data-action="edit-child" aria-label="Editează copilul">Editează</button></div><div class="caption">Încasare rapidă${c.active ? '' : ' · Copil arhivat'}</div>${c.creditMinor ? `<div class="summary"><div class="row"><span>Avans disponibil</span><strong>${money(c.creditMinor)}</strong></div><div class="toolbar"><button data-action="apply-credit" ${c.dueMinor ? '' : 'disabled'}>Folosește avansul</button><button data-action="refund">Restituie</button></div></div>` : ''}
   <form id="collection-form">
-  ${c.dueMinor ? `<button type="button" class="choice total-choice" data-target="all" aria-pressed="true"><span>Total de achitat</span><span class="total-number">${money(c.dueMinor)}</span></button><div class="section-label">Sau doar o cheltuială</div><div class="stack">${contributions.map(e => `<button type="button" class="choice" data-target="${esc(e.expenseId)}" aria-pressed="false"><span>${esc(e.title)}<span class="caption" style="display:block">${e.dueDate ? `Termen ${dateText(e.dueDate)}` : 'Fără termen'}</span></span><span class="choice-money">${money(e.remainingMinor)}</span></button>`).join('')}</div><div class="section-label" id="round-label">Rotunjește totalul în sus</div><div class="rounds" id="rounds">${[10, 50, 100].map(unit => `<button type="button" class="round" data-round="${unit}" aria-pressed="false"><span class="round-value"></span><span class="caption">multiplu de ${unit}</span></button>`).join('')}</div>` : '<div class="empty"><h2>Totul este achitat.</h2><p>Poți primi bani în avans. Introdu suma și alege „Păstrez în avans”.</p></div>'}
+  ${c.dueMinor ? `<button type="button" class="choice total-choice" data-target="all" aria-pressed="true"><span>Total de achitat</span><span class="total-number">${money(c.dueMinor)}</span></button><div class="section-label">Sau alege o singură contribuție</div><div class="stack">${contributions.map(e => `<button type="button" class="choice" data-target="${esc(e.expenseId)}" aria-pressed="false"><span>${esc(e.title)}<span class="caption" style="display:block">${e.dueDate ? `Termen ${dateText(e.dueDate)}` : 'Fără termen'}</span></span><span class="choice-money">${money(e.remainingMinor)}</span></button>`).join('')}</div><div class="section-label" id="round-label">Alege rapid suma primită</div><div class="rounds" id="rounds">${[10, 50, 100].map(unit => `<button type="button" class="round" data-round="${unit}" aria-pressed="false"><span class="round-value"></span><span class="caption">multiplu de ${unit}</span></button>`).join('')}</div>` : '<div class="empty"><h2>Contribuțiile sunt achitate.</h2><p>Poți primi bani în avans. Introdu suma și alege „Păstrez în avans”.</p></div>'}
   <section class="collection-dock" aria-label="Confirmarea încasării"><div class="collection-dock-amount"><label for="received">Primesc</label><div class="money-input"><input id="received" inputmode="decimal" autocomplete="off" spellcheck="false" value="${esc(draft.amount)}" aria-label="Suma primită în lei" data-write-control><span>lei</span></div></div>
   <fieldset class="excess" id="excess" hidden><legend id="excess-label"></legend><div class="switch"><button type="button" data-excess="change" aria-pressed="true">Dau rest</button><button type="button" data-excess="credit" aria-pressed="false">Păstrez în avans</button></div></fieldset>
-  <p class="error" id="collection-error" role="alert" hidden></p><button type="submit" class="primary wide" id="collection-save">Înregistrează încasarea</button></section>
-  <div class="summary" id="collection-summary" aria-live="polite"></div>
-  <details id="allocation-details" ${draft.manual ? 'open' : ''}><summary>Ajustează repartizarea</summary><label class="check"><input type="checkbox" id="manual" ${draft.manual ? 'checked' : ''} data-write-control>Aleg manual sumele pentru cheltuieli</label>${contributions.map(e => `<label class="allocation"><span>${esc(e.title)}<small style="display:block">Restant ${money(e.remainingMinor)}</small></span><input inputmode="decimal" aria-label="${esc(e.title)}: repartizare în lei" data-allocation="${esc(e.expenseId)}" value="0" data-write-control></label>`).join('')}<p class="caption">Repartizarea automată acoperă mai întâi termenele cele mai apropiate. O cheltuială selectată primește doar suma datorată; diferența rămâne rest sau avans.</p></details>
+  <div id="collection-dock-summary" class="collection-dock-summary"></div><p class="error" id="collection-error" role="alert" hidden></p><button type="submit" class="primary wide" id="collection-save">Înregistrează încasarea</button></section>
+  <div class="summary" id="collection-summary" aria-live="polite" aria-atomic="true"></div>
+  <details id="allocation-details" ${draft.manual ? 'open' : ''}><summary>Ajustează repartizarea</summary><label class="check"><input type="checkbox" id="manual" ${draft.manual ? 'checked' : ''} data-write-control>Aleg manual sumele pentru cheltuieli</label>${contributions.map(e => `<label class="allocation"><span>${esc(e.title)}<small style="display:block">De achitat ${money(e.remainingMinor)}</small></span><input inputmode="decimal" aria-label="${esc(e.title)}: repartizare în lei" data-allocation="${esc(e.expenseId)}" value="0" data-write-control></label>`).join('')}<p class="caption">Repartizarea automată acoperă mai întâi termenele cele mai apropiate. O cheltuială selectată primește doar suma datorată; diferența rămâne rest sau avans.</p></details>
   <details><summary>Data, ora și comentarii</summary><label>Data și ora<input id="collection-date" type="datetime-local" value="${esc(draft.occurredAt)}" required data-write-control></label><label>Comentarii<textarea id="collection-comment" maxlength="2000" data-write-control>${esc(draft.comment)}</textarea></label></details></form>
   <details class="history"><summary>Istoricul copilului</summary><div class="stack">${transactionRows(state.transactions.filter(t => t.childId === c.id))}</div></details>`;
   updateCollection();
@@ -249,7 +284,7 @@ function updateCollection() {
   const base = draft.target === 'all' ? c.dueMinor : c.contributions.find(e => e.expenseId === draft.target)?.remainingMinor || 0;
   $$('[data-target]').forEach(b => b.setAttribute('aria-pressed', String(!draft.manual && b.dataset.target === draft.target)));
   $$('[data-round]').forEach(b => { b.querySelector('.round-value').textContent = money(roundUp(base, Number(b.dataset.round))); b.setAttribute('aria-pressed', String(draft.round === Number(b.dataset.round))); });
-  if ($('#rounds')) { $('#rounds').hidden = draft.manual; $('#round-label').hidden = draft.manual; $('#round-label').textContent = draft.target === 'all' ? 'Rotunjește totalul în sus' : 'Rotunjește cheltuiala în sus'; }
+  if ($('#rounds')) { $('#rounds').hidden = draft.manual; $('#round-label').hidden = draft.manual; }
   $$('[data-excess]').forEach(b => {
     b.setAttribute('aria-pressed', String(draft.excess === b.dataset.excess));
     b.textContent = b.dataset.excess === 'change' ? `Dau rest · ${money(result.excessMinor || 0)}` : `Păstrez avans · ${money(result.excessMinor || 0)}`;
@@ -262,13 +297,29 @@ function updateCollection() {
   $('#excess').hidden = !!result.error || !result.excessMinor;
   $('#excess-label').textContent = `Diferență: ${money(result.excessMinor || 0)}`;
   $('#collection-summary').hidden = !!result.error;
+  $('#collection-dock-summary').hidden = !!result.error;
+  if (!result.error) $('#collection-dock-summary').innerHTML = `<dl><div><dt>Acoperă contribuții</dt><dd>${money(result.coveredMinor)}</dd></div><div><dt>Rămâne de achitat</dt><dd>${money(result.dueMinor)}</dd></div></dl>`;
   if (!result.error) $('#collection-summary').innerHTML = `<dl><div><dt>Acoperă contribuții</dt><dd>${money(result.coveredMinor)}</dd></div>${result.changeMinor ? `<div><dt>Rest de dat</dt><dd>${money(result.changeMinor)}</dd></div>` : ''}${result.creditMinor ? `<div><dt>Avans nou</dt><dd>${money(result.creditMinor)}</dd></div>` : ''}<div><dt>Rămâne de achitat</dt><dd>${money(result.dueMinor)}</dd></div><div><dt>Intră în fondul clasei</dt><dd><strong>${money(result.netMinor)}</strong></dd></div></dl>`;
   $('#collection-save').textContent = result.netMinor > 0 ? `Înregistrează · ${money(result.netMinor)}` : 'Înregistrează încasarea';
   updateNotices();
+  updateDockHeight();
 }
 function renderExpenses() {
   const expenses = [...state.expenses].reverse();
-  $('#main').innerHTML = `<h1>Cheltuieli</h1><p class="caption">Contribuțiile copiilor și banii dați mai departe</p>${canWrite() ? `<button class="primary wide" data-action="add-expense" ${activeChildren().length ? '' : 'disabled'}>+ Cheltuială nouă</button>` : ''}<div class="stack" style="margin-top:20px">${expenses.length ? expenses.map(e => `<button class="card card-button ${e.cancelled ? 'transaction-muted' : ''}" data-expense="${esc(e.id)}"><div class="row"><h3>${esc(e.title)}</h3><span class="amount">${money(e.totalMinor)}</span></div><div class="caption">${typeLabels[e.type]} · ${e.cancelled ? 'Anulată' : `${e.participantCount ?? e.contributions.length} participanți`}</div><div class="caption">Încasat ${money(e.collectedMinor)} · Dat mai departe ${money(e.paidOutMinor)}</div>${e.dueDate ? `<div class="caption">Termen ${dateText(e.dueDate)}</div>` : ''}</button>`).join('') : `<div class="empty"><h2>Nicio cheltuială încă</h2></div>`}</div>`;
+  const expenseCards = expenses.map(e => {
+    const progress = e.totalMinor > 0 ? Math.min(100, Math.max(0, e.collectedMinor / e.totalMinor * 100)) : 0;
+    return `<button class="card card-button expense-card ${e.cancelled ? 'transaction-muted' : ''}" data-expense="${esc(e.id)}">
+      <div class="row"><h3>${esc(e.title)}</h3>${e.cancelled ? '<span class="badge">Anulată</span>' : ''}</div>
+      <div class="caption">${e.dueDate ? `Termen ${dateText(e.dueDate)}` : 'Fără termen de plată'}</div>
+      <div class="expense-totals">Încasat <strong class="amount">${money(e.collectedMinor)}</strong> din <span class="amount">${money(e.totalMinor)}</span></div>
+      ${e.cancelled ? '' : `<div class="expense-progress" aria-hidden="true"><span class="expense-progress-fill" style="width:${progress}%"></span></div>`}
+      <div class="caption">Plătit mai departe: <span class="amount">${money(e.paidOutMinor)}</span></div>
+      <div class="caption">${typeLabels[e.type]} · ${e.participantCount ?? e.contributions.length} participanți</div>
+    </button>`;
+  }).join('');
+  $('#main').innerHTML = `${pageHeading('Cheltuieli pentru clasa noastră', 'Contribuții, termene și plăți, într-un singur loc.', 'expenses')}
+    ${canWrite() ? `<button class="primary wide" data-action="add-expense" ${activeChildren().length ? '' : 'disabled'}>+ Cheltuială nouă</button>${activeChildren().length ? '' : '<p class="caption">Adaugă întâi copiii clasei, apoi poți crea prima cheltuială.</p>'}` : ''}
+    <div class="expense-grid">${expenseCards || `<div class="empty"><h2>Ce pregătim pentru clasă?</h2><p>${canWrite() ? 'Adaugă prima cheltuială și alege copiii care participă.' : 'Cheltuielile vor apărea aici după ce sunt adăugate de casier.'}</p></div>`}</div>`;
 }
 function transactionRows(transactions) {
   return [...transactions].sort((a, b) => b.occurredAt.localeCompare(a.occurredAt) || b.createdAt.localeCompare(a.createdAt)).map(t => {
@@ -284,20 +335,38 @@ function renderLedger() {
     const expense = state.expenses.find(entry => entry.id === item.expenseId);
     return `<article class="card"><div class="row"><strong>${esc(item.person)}</strong><span class="amount">${money(item.outstandingMinor)}</span></div><div class="caption">Avansat ${money(item.amountMinor)} · restituit ${money(item.repaidMinor)}${expense ? ` · ${esc(expense.title)}` : ''}</div>${canWrite() ? `<button type="button" class="primary wide" style="margin-top:14px" data-action="repay-advance" data-id="${esc(item.id)}">Restituie</button>` : ''}</article>`;
   }).join('')}</div>` : '';
-  $('#main').innerHTML = `<h1>Registru</h1><div class="balance"><span class="caption">Numerar disponibil în fond</span><strong class="amount">${money(s.balanceMinor)}</strong><div class="balance-grid"><div><span class="caption">De restituit pentru sume avansate</span><span>${money(s.totalAdvanceOutstandingMinor || 0)}</span></div><div><span class="caption">Sold după restituirea avansurilor</span><span>${money(s.netBalanceMinor ?? s.balanceMinor)}</span></div><div><span class="caption">Avansuri ale copiilor incluse în sold</span><span>${money(s.totalCreditMinor)}</span></div><div><span class="caption">De încasat de la copii</span><span>${money(s.totalDueMinor)}</span></div></div><p class="caption" style="margin-bottom:0">Încasări de la copii ${money(s.totalReceivedMinor)} · Bani ieșiți ${money(s.totalPaidMinor)} · Sold inițial ${money(state.settings.openingBalanceMinor)}</p></div>${canWrite() ? '<div class="toolbar"><button class="primary" data-action="payment">+ Bani dați mai departe</button><button data-action="fund-advance">+ Sumă avansată fondului</button></div>' : ''}${advances}<div class="toolbar"><button data-action="refresh">Actualizează</button>${canWrite() ? `<a href="${esc(scopedUrl('/api/export'))}" download="casierul-clasei.json">Export JSON</a>` : ''}</div><h2>Istoric</h2><div class="stack">${transactionRows(state.transactions)}</div>`;
+  $('#main').innerHTML = `${pageHeading('Registrul clasei', 'O imagine clară a banilor din fond.', 'ledger')}
+    <div class="ledger-layout"><section class="ledger-overview" aria-label="Situația fondului">
+      <div class="balance"><span>Numerar disponibil în fond</span><strong class="amount">${money(s.balanceMinor)}</strong>
+        <div class="balance-grid"><div><span class="caption">De restituit pentru sume avansate</span><span class="amount">${money(s.totalAdvanceOutstandingMinor || 0)}</span></div><div><span class="caption">Sold după restituirea sumelor avansate</span><span class="amount">${money(s.netBalanceMinor ?? s.balanceMinor)}</span></div></div>
+        <p class="caption">Soldul include ${money(s.totalCreditMinor)} primiți în avans de la copii.</p>
+      </div>
+      <div class="summary"><dl><div><dt>De încasat de la copii</dt><dd>${money(s.totalDueMinor)}</dd></div><div><dt>Încasări de la copii</dt><dd>${money(s.totalReceivedMinor)}</dd></div><div><dt>Bani ieșiți</dt><dd>${money(s.totalPaidMinor)}</dd></div><div><dt>Sold inițial</dt><dd>${money(state.settings.openingBalanceMinor)}</dd></div></dl></div>
+      ${canWrite() ? '<div class="toolbar"><button class="primary" data-action="payment">+ Bani dați mai departe</button><button data-action="fund-advance">+ Sumă avansată fondului</button></div>' : ''}
+      ${advances}
+      <div class="toolbar"><button data-action="refresh">Actualizează</button>${canWrite() ? `<a href="${esc(scopedUrl('/api/export'))}" download="casierul-clasei.json">Export JSON</a>` : ''}</div>
+    </section><section class="ledger-history" aria-labelledby="ledger-history-title"><h2 id="ledger-history-title">Istoricul operațiunilor</h2><div class="stack">${transactionRows(state.transactions)}</div></section></div>`;
 }
 function renderReports() {
   const reports = state.reports || [];
   const debtors = state.children.filter(item => item.dueMinor > 0);
-  $('#main').innerHTML = `<h1>Rapoarte</h1><p class="caption">PDF-uri pentru transparență, pregătite pentru WhatsApp</p>
-  ${canWrite() ? `<div class="stack" style="margin-top:18px">
-    <button class="card card-button" data-action="report-class"><h3>Situația clasei</h3><div class="caption">Sold, cheltuieli, restanțe agregate și bani dați mai departe</div></button>
-    <button class="card card-button" data-action="report-matrix" ${state.expenses.some(expense => !expense.cancelled) && state.children.length ? '' : 'disabled'}><h3>Raport exhaustiv</h3><div class="caption">Copiii pe rânduri, cheltuielile pe coloane și situația fiecărei contribuții</div></button>
-    <button class="card card-button" data-action="report-expense" ${state.expenses.some(expense => !expense.cancelled) ? '' : 'disabled'}><h3>Situația unei cheltuieli</h3><div class="caption">Necesar, încasat, plătit și restanțe fără numele copiilor</div></button>
-    <button class="card card-button" data-action="report-child" ${state.children.length ? '' : 'disabled'}><h3>Fișa individuală</h3><div class="caption">${debtors.length} copii au de achitat ${money(debtors.reduce((total, item) => total + item.dueMinor, 0))}</div></button>
-  </div>` : '<p>Poți descărca sau partaja rapoartele emise de casier la care ai acces.</p>'}
-  <h2 style="margin-top:28px">Arhivă</h2>
-  <div class="stack">${reports.length ? reports.map(report => `<article class="card report-card ${report.replacedById ? 'replaced' : ''}"><div class="row"><h3>${esc(report.code)}</h3>${report.replacedById ? '<span class="badge">Înlocuit</span>' : '<span class="badge">Emis</span>'}</div><div>${esc(reportTypeLabels[report.type])} · ${esc(report.subjectLabel)}</div><div class="caption">${dateText(report.createdAt)} · revizia ${report.stateRevision}</div>${report.replacesId ? '<div class="caption">Raport corectiv</div>' : ''}<div class="report-actions"><button class="primary" data-action="view-report" data-id="${esc(report.id)}">Vizualizează</button><button data-action="share-report" data-id="${esc(report.id)}">Partajează PDF</button><a href="${esc(scopedUrl(`/api/reports/${encodeURIComponent(report.id)}/pdf`))}" download="${esc(report.filename)}">Descarcă</a>${canWrite() && !report.replacedById ? `<button data-action="replace-report" data-id="${esc(report.id)}">Emite corecție</button>` : ''}</div></article>`).join('') : '<div class="empty"><p>Nu există rapoarte disponibile.</p></div>'}</div>`;
+  const hasExpenses = state.expenses.some(expense => !expense.cancelled);
+  const reportTypes = [
+    { type: 'class', icon: 'reports', title: 'Situația clasei', description: 'Sold, cheltuieli și contribuții de primit, fără numele copiilor.', available: true },
+    { type: 'matrix', icon: 'table', title: 'Tabelul contribuțiilor', description: 'Fiecare copil și fiecare cheltuială. Pentru verificare internă.', available: hasExpenses && state.children.length },
+    { type: 'expense', icon: 'receipt', title: 'Situația unei cheltuieli', description: 'Necesar, încasat și plătit, fără numele copiilor.', available: hasExpenses },
+    { type: 'child', icon: 'child', title: 'Fișa copilului', description: `${debtors.length} copii au de achitat ${money(debtors.reduce((total, item) => total + item.dueMinor, 0))}. Pentru trimitere privată.`, available: state.children.length },
+  ];
+  $('#main').innerHTML = `${pageHeading('Rapoarte de împărtășit', 'Situații clare, pregătite pentru consultare și partajare.', 'reports')}
+    ${canWrite() ? `<div class="report-types">${reportTypes.map(item => `<button class="card card-button report-type" data-action="report-${item.type}" ${item.available ? '' : 'disabled'}><span class="report-icon">${icon(item.icon)}</span><span><h3>${item.title}</h3><span class="caption">${item.description}</span></span></button>`).join('')}</div>` : '<p>Consultă, descarcă sau partajează rapoartele emise de casier la care ai acces.</p>'}
+    <section class="report-archive" aria-labelledby="report-archive-title"><h2 id="report-archive-title">Rapoarte emise</h2>
+      <div class="stack">${reports.length ? reports.map(report => `<article class="card report-card ${report.replacedById ? 'replaced' : ''}">
+        <div class="row"><h3>${esc(reportTypeLabels[report.type])}</h3><span class="badge">${report.replacedById ? 'Înlocuit' : 'Emis'}</span></div>
+        <div>${esc(report.subjectLabel)}</div><div class="caption">${dateText(report.createdAt)}</div>
+        <div class="caption">${esc(report.code)} · revizia ${report.stateRevision}${report.replacesId ? ' · Raport corectiv' : ''}</div>
+        <div class="report-actions"><button class="primary" data-action="view-report" data-id="${esc(report.id)}">Vizualizează</button><button data-action="share-report" data-id="${esc(report.id)}">Partajează PDF</button><a href="${esc(scopedUrl(`/api/reports/${encodeURIComponent(report.id)}/pdf`))}" download="${esc(report.filename)}">Descarcă</a>${canWrite() && !report.replacedById ? `<button data-action="replace-report" data-id="${esc(report.id)}">Emite corecție</button>` : ''}</div>
+      </article>`).join('') : `<div class="empty"><p>${canWrite() ? 'Alege un tip de raport de mai sus. PDF-urile emise se păstrează aici, împreună cu istoricul lor.' : 'Rapoartele vor apărea aici după ce sunt emise de casier.'}</p></div>`}</div>
+    </section>`;
 }
 function reportModal(type, replacesId = null) {
   const replaced = replacesId ? (state.reports || []).find(report => report.id === replacesId) : null;
@@ -307,7 +376,7 @@ function reportModal(type, replacesId = null) {
     const expenses = [...state.expenses].filter(expense => !expense.cancelled).reverse();
     selector = replaced ? `<p><strong>${esc(replaced.subjectLabel)}</strong></p>` : `<label>Cheltuiala<select name="subjectId" required>${expenses.map(expense => `<option value="${esc(expense.id)}">${esc(expense.title)}</option>`).join('')}</select></label>`;
   } else if (type === 'child') {
-    selector = replaced ? `<p><strong>${esc(replaced.subjectLabel)}</strong></p>` : `<label>Filtrează lista<select name="debtFilter"><option value="due">Doar copiii cu restanțe</option><option value="all">Toți copiii</option><option value="paid">Doar copiii fără restanțe</option></select></label><label>Copilul<select name="subjectId" required></select></label><p id="report-child-count" class="caption"></p>`;
+    selector = replaced ? `<p><strong>${esc(replaced.subjectLabel)}</strong></p>` : `<label>Filtrează lista<select name="debtFilter"><option value="due">Doar copiii cu sume de achitat</option><option value="all">Toți copiii</option><option value="paid">Doar copiii cu totul achitat</option></select></label><label>Copilul<select name="subjectId" required></select></label><p id="report-child-count" class="caption"></p>`;
   }
   const privacy = type === 'child' ? 'Fișa conține numele copilului și este destinată trimiterii private.' : type === 'matrix' ? 'Raportul conține numele tuturor copiilor și este destinat verificării interne de către tine și dirigintă.' : 'Restanțele apar doar ca număr de copii și sumă totală, fără nume sau inițiale.';
   openModal('report', replaced ? 'Emite raport corectiv' : reportTypeLabels[type], `${selector}<div class="summary"><strong>Situație la momentul emiterii</strong><p class="caption">PDF-ul va păstra exact datele și revizia actuală a registrului.</p></div><p class="caption">${privacy}</p>${replaced ? `<p class="caption">Noul raport va marca faptul că înlocuiește ${esc(replaced.code)}. Raportul vechi rămâne în arhivă.</p>` : ''}`, 'Generează PDF', {
@@ -322,11 +391,11 @@ function updateChildReportOptions() {
   const alphabetical = (a, b) => a.id === b.id ? 0 : sortChildren([a, b])[0] === a ? -1 : 1;
   const children = [...state.children].filter(item => filter === 'all' || (filter === 'due' ? item.dueMinor > 0 : item.dueMinor === 0))
     .sort((a, b) => (filter === 'due' ? b.dueMinor - a.dueMinor : 0) || alphabetical(a, b));
-  select.innerHTML = children.map(item => `<option value="${esc(item.id)}">${esc(name(item))} · ${item.dueMinor ? `Restant ${money(item.dueMinor)}` : `Achitat${item.creditMinor ? ` · Avans ${money(item.creditMinor)}` : ''}`}</option>`).join('');
+  select.innerHTML = children.map(item => `<option value="${esc(item.id)}">${esc(name(item))} · ${item.dueMinor ? `De achitat ${money(item.dueMinor)}` : `Achitat${item.creditMinor ? ` · Avans ${money(item.creditMinor)}` : ''}`}</option>`).join('');
   if (children.some(item => item.id === previous)) select.value = previous;
   select.disabled = !children.length;
   $('#modal-submit').disabled = saving || !children.length;
-  $('#report-child-count').textContent = children.length ? `${children.length} ${children.length === 1 ? 'copil afișat' : 'copii afișați'}. Restanțele cele mai mari apar primele.` : 'Niciun copil pentru acest filtru.';
+  $('#report-child-count').textContent = children.length ? `${children.length} ${children.length === 1 ? 'copil afișat' : 'copii afișați'}. Sumele cele mai mari de achitat apar primele.` : 'Niciun copil pentru acest filtru.';
 }
 async function createReport(form) {
   if (saving) return;
@@ -420,7 +489,7 @@ function settingsModal() {
     return;
   }
   const year = new Date().getFullYear() - (new Date().getMonth() < 8 ? 1 : 0);
-  const logoPicker = (kind, label, exists) => `<div class="logo-picker"><div class="logo-preview"><img id="${kind}-logo-preview" ${exists ? `src="${esc(scopedUrl(`/api/branding/${kind}?v=${encodeURIComponent(s[`${kind}LogoVersion`] || '')}`))}"` : 'hidden'} alt="${esc(label)}"><span id="${kind}-logo-empty" ${exists ? 'hidden' : ''}>Fără siglă</span></div><strong>${esc(label)}</strong><label class="file-button">Alege imaginea<input type="file" accept="image/png,image/jpeg,image/webp" data-logo-input="${kind}" hidden></label><button type="button" data-action="remove-logo" data-logo-kind="${kind}" ${exists ? '' : 'hidden'}>Elimină</button></div>`;
+  const logoPicker = (kind, label, exists) => `<div class="logo-picker"><div class="logo-preview"><img id="${kind}-logo-preview" ${exists ? `src="${esc(scopedUrl(`/api/branding/${kind}?v=${encodeURIComponent(s[`${kind}LogoVersion`] || '')}`))}"` : 'hidden'} alt="${esc(label)}"><span id="${kind}-logo-empty" ${exists ? 'hidden' : ''}>Fără siglă</span></div><strong>${esc(label)}</strong><label class="file-button">Alege imaginea<input type="file" accept="image/png,image/jpeg,image/webp" data-logo-input="${kind}" class="visually-hidden"></label><button type="button" data-action="remove-logo" data-logo-kind="${kind}" ${exists ? '' : 'hidden'}>Elimină</button></div>`;
   openModal('settings', s.className ? 'Setările clasei' : 'Configurează clasa', `${field('Școala', 'schoolName', s.schoolName, 'required maxlength="160"')}${field('Clasa', 'className', s.className, 'required maxlength="80"')}${field('An școlar', 'schoolYear', s.schoolYear || `${year}–${year + 1}`, 'required maxlength="40"')}<div class="section-label">Sigle pentru rapoarte</div><div class="logo-grid">${logoPicker('school', 'Sigla școlii', s.hasSchoolLogo)}${logoPicker('class', 'Sigla clasei', s.hasClassLogo)}</div><p class="caption">Poți alege PNG, JPG sau WebP. Imaginea este redimensionată pe dispozitiv și apare în antetul PDF-urilor emise de acum înainte.</p>${field('Sold inițial (lei)', 'openingBalance', decimal(s.openingBalanceMinor), `inputmode="decimal" required ${state.transactions.length ? 'readonly' : ''}`)}<p class="caption">Banii deja existenți în fond înainte să începi evidența. ${state.transactions.length ? 'Soldul inițial nu mai poate fi schimbat după înregistrarea operațiunilor.' : 'Avansurile individuale se înregistrează separat, prin încasări.'}</p>${state.settings.className ? `<div class="toolbar"><a href="${esc(scopedUrl('/api/export'))}" download="casierul-clasei.json">Exportă datele JSON</a><button type="button" data-action="logout">Deconectează dispozitivul</button></div>` : ''}<div class="section-label">Drepturi pe alte clase</div><button type="button" class="wide" data-action="add-access">+ Adaugă acces din invitație</button>${device?.is_owner ? '<div class="section-label">Mai multe clase</div><button type="button" class="wide" data-action="add-classroom">+ Adaugă altă clasă</button><p class="caption">Fiecare clasă are registru, rapoarte și drepturi de acces separate.</p>' : ''}`, 'Salvează', { logoChanges: {} });
 }
 function accessModal() {
@@ -547,7 +616,7 @@ function expenseDetails(id) {
   const financing = (state.advances || []).filter(item => !item.reversed && item.expenseId === e.id);
   const financedMinor = financing.reduce((total, item) => total + item.amountMinor, 0);
   const outstandingMinor = financing.reduce((total, item) => total + item.outstandingMinor, 0);
-  openModal('expense-detail', e.title, `<p class="caption">${typeLabels[e.type]} · ${e.cancelled ? 'Anulată' : `${e.participantCount ?? e.contributions.length} participanți`}</p><div class="summary"><dl><div><dt>Total contribuții</dt><dd>${money(e.totalMinor)}</dd></div><div><dt>Încasat</dt><dd>${money(e.collectedMinor)}</dd></div><div><dt>Bani dați mai departe</dt><dd>${money(e.paidOutMinor)}</dd></div>${financing.length ? `<div><dt>Avansat temporar fondului</dt><dd>${money(financedMinor)}</dd></div><div><dt>De restituit</dt><dd>${money(outstandingMinor)}</dd></div>` : ''}</dl></div><p>${e.dueDate ? `Termen: ${dateText(e.dueDate)}` : 'Fără termen de plată'}</p><p class="caption">Data cheltuielii: ${dateText(e.occurredAt)}</p>${e.comment ? `<p>${esc(e.comment)}</p>` : ''}<div class="preview-list">${sortChildren(state.children.filter(c => e.contributions.some(p => p.childId === c.id))).map(c => { const p = e.contributions.find(p => p.childId === c.id); const contribution = c.contributions.find(p => p.expenseId === e.id); return `<div class="row"><span>${esc(name(c))}${e.type === 'quantity' ? ` × ${p.quantity}` : ''}<small style="display:block">Restant ${money(contribution?.remainingMinor || 0)}</small></span><span class="amount">${money(p.amountMinor)}</span></div>`; }).join('')}</div>${attachmentSection('expense', e.id)}${e.cancelled || !canWrite() ? '' : `<div class="toolbar"><button type="button" data-action="edit-expense" data-id="${esc(e.id)}">Editează</button><button type="button" data-action="expense-payment" data-id="${esc(e.id)}">Înregistrează bani dați</button></div>${!e.collectedMinor && !e.paidOutMinor && !financing.length ? `<button type="button" class="danger" data-action="cancel-expense" data-id="${esc(e.id)}">Anulează cheltuiala</button><p class="caption">Anularea este posibilă doar dacă nu mai există încasări sau plăți legate de cheltuială.</p>` : ''}`}`, null);
+  openModal('expense-detail', e.title, `<p class="caption">${typeLabels[e.type]} · ${e.cancelled ? 'Anulată' : `${e.participantCount ?? e.contributions.length} participanți`}</p><div class="summary"><dl><div><dt>Total contribuții</dt><dd>${money(e.totalMinor)}</dd></div><div><dt>Încasat</dt><dd>${money(e.collectedMinor)}</dd></div><div><dt>Bani dați mai departe</dt><dd>${money(e.paidOutMinor)}</dd></div>${financing.length ? `<div><dt>Avansat temporar fondului</dt><dd>${money(financedMinor)}</dd></div><div><dt>De restituit</dt><dd>${money(outstandingMinor)}</dd></div>` : ''}</dl></div><p>${e.dueDate ? `Termen: ${dateText(e.dueDate)}` : 'Fără termen de plată'}</p><p class="caption">Data cheltuielii: ${dateText(e.occurredAt)}</p>${e.comment ? `<p>${esc(e.comment)}</p>` : ''}<div class="preview-list">${sortChildren(state.children.filter(c => e.contributions.some(p => p.childId === c.id))).map(c => { const p = e.contributions.find(p => p.childId === c.id); const contribution = c.contributions.find(p => p.expenseId === e.id); return `<div class="row"><span>${esc(name(c))}${e.type === 'quantity' ? ` × ${p.quantity}` : ''}<small style="display:block">De achitat ${money(contribution?.remainingMinor || 0)}</small></span><span class="amount">${money(p.amountMinor)}</span></div>`; }).join('')}</div>${attachmentSection('expense', e.id)}${e.cancelled || !canWrite() ? '' : `<div class="toolbar"><button type="button" data-action="edit-expense" data-id="${esc(e.id)}">Editează</button><button type="button" data-action="expense-payment" data-id="${esc(e.id)}">Înregistrează bani dați</button></div>${!e.collectedMinor && !e.paidOutMinor && !financing.length ? `<button type="button" class="danger" data-action="cancel-expense" data-id="${esc(e.id)}">Anulează cheltuiala</button><p class="caption">Anularea este posibilă doar dacă nu mai există încasări sau plăți legate de cheltuială.</p>` : ''}`}`, null);
 }
 function paymentModal(expenseId = '') {
   openModal('payment', 'Bani dați mai departe', `${moneyField('Suma dată (lei)', 'amount')}${field('Cui ai dat banii', 'destination', '', 'required maxlength="200" placeholder="De exemplu: dirigintă, profesoară, fotograf"')}<label>Cheltuială asociată (opțional)<select name="expenseId"><option value="">Fără asociere</option>${state.expenses.filter(e => !e.cancelled).map(e => `<option value="${esc(e.id)}" ${e.id === expenseId ? 'selected' : ''}>${esc(e.title)}</option>`).join('')}</select></label>${timestampField()}${comments()}<p class="caption">Suma scade din soldul fondului. Contribuțiile copiilor rămân neschimbate.</p>`, 'Înregistrează');
@@ -562,7 +631,7 @@ function repayAdvanceModal(id) {
 }
 function creditModal() {
   const c = child(), defaults = automaticAllocations(unpaid(c), c.creditMinor);
-  openModal('credit', 'Folosește avansul', `<p>${esc(name(c))} · Avans disponibil <strong>${money(c.creditMinor)}</strong></p>${unpaid(c).map(e => `<label class="allocation"><span>${esc(e.title)}<small style="display:block">Restant ${money(e.remainingMinor)}</small></span><input name="credit-${esc(e.expenseId)}" data-credit-expense="${esc(e.expenseId)}" inputmode="decimal" value="${decimal(defaults.find(a => a.expenseId === e.expenseId)?.amountMinor || 0)}" aria-label="${esc(e.title)}: avans repartizat în lei"></label>`).join('')}<div id="credit-preview" class="summary" aria-live="polite"></div>${timestampField()}${comments()}<p class="caption">Se folosesc banii deja primiți. Soldul fondului nu se schimbă.</p>`, 'Repartizează avansul', { childId: c.id }); updateCreditPreview();
+  openModal('credit', 'Folosește avansul', `<p>${esc(name(c))} · Avans disponibil <strong>${money(c.creditMinor)}</strong></p>${unpaid(c).map(e => `<label class="allocation"><span>${esc(e.title)}<small style="display:block">De achitat ${money(e.remainingMinor)}</small></span><input name="credit-${esc(e.expenseId)}" data-credit-expense="${esc(e.expenseId)}" inputmode="decimal" value="${decimal(defaults.find(a => a.expenseId === e.expenseId)?.amountMinor || 0)}" aria-label="${esc(e.title)}: avans repartizat în lei"></label>`).join('')}<div id="credit-preview" class="summary" aria-live="polite"></div>${timestampField()}${comments()}<p class="caption">Se folosesc banii deja primiți. Soldul fondului nu se schimbă.</p>`, 'Repartizează avansul', { childId: c.id }); updateCreditPreview();
 }
 function readCredit() {
   const c = state.children.find(c => c.id === modal.childId);
@@ -703,7 +772,7 @@ async function submitCollection() {
   if (result.error || result.netMinor <= 0) return;
   const occurredAt = new Date(draft.occurredAt);
   if (Number.isNaN(occurredAt.getTime())) { $('#collection-error').textContent = 'Completează data și ora încasării.'; $('#collection-error').hidden = false; return; }
-  await mutate('/api/collections', { childId, receivedMinor: result.receivedMinor, changeMinor: result.changeMinor, allocations: result.allocations, occurredAt: occurredAt.toISOString(), comment: draft.comment.trim() }, `Încasare salvată: ${money(result.netMinor)} în fond.${result.changeMinor ? ` Dă rest ${money(result.changeMinor)}.` : result.creditMinor ? ` Avans nou: ${money(result.creditMinor)}.` : ''}`);
+  await mutate('/api/collections', { childId, receivedMinor: result.receivedMinor, changeMinor: result.changeMinor, allocations: result.allocations, occurredAt: occurredAt.toISOString(), comment: draft.comment.trim() }, `Încasare salvată pentru ${name(child())}: ${money(result.netMinor)} în fond.${result.changeMinor ? ` Dă rest ${money(result.changeMinor)}.` : result.creditMinor ? ` Avans nou: ${money(result.creditMinor)}.` : ''}`);
 }
 async function mutate(path, body, successMessage) {
   if (!canWrite()) { toast('Acest dispozitiv are acces doar pentru citire.'); return; }

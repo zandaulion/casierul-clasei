@@ -2,7 +2,8 @@ export const collator = new Intl.Collator('ro', { sensitivity: 'base', numeric: 
 export const name = child => `${child.lastName} ${child.firstName}`;
 export const sortChildren = children => [...children].sort((a, b) => collator.compare(a.lastName, b.lastName) || collator.compare(a.firstName, b.firstName) || a.id.localeCompare(b.id));
 const formatter = new Intl.NumberFormat('ro-RO', { maximumFractionDigits: 2 });
-export const money = minor => `${formatter.format(minor / 100)} lei`;
+const fractionalFormatter = new Intl.NumberFormat('ro-RO', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+export const money = minor => `${(minor % 100 ? fractionalFormatter : formatter).format(minor / 100)} lei`;
 export const decimal = minor => (minor / 100).toFixed(2).replace('.', ',');
 export function parseMoney(value) {
   const normalized = String(value).trim().replace(',', '.');
