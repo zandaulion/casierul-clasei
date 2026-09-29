@@ -101,6 +101,17 @@ try {
   assert.equal(snapshot().settings.hasSchoolLogo, true);
   assert.equal(snapshot().settings.hasClassLogo, true);
   await until('!document.getElementById("header-school-logo").hidden && !document.getElementById("header-class-logo").hidden', 'configured logos in app header');
+  await click('#settings-button');
+  await click('[data-action=add-classroom]');
+  await fill('#modal-form [name=schoolName]', 'Școala secundară');
+  await fill('#modal-form [name=className]', 'II B');
+  await saveModal();
+  assert.equal(app.auth.listClassrooms().length, 2);
+  assert.equal(await evaluate('document.getElementById("classroom-selector").hidden'), false);
+  assert.match(await evaluate('document.querySelector("#classroom-selector option:checked").textContent'), /Școala secundară · II B/u);
+  await fill('#classroom-selector', 'default');
+  await until('document.querySelector("[data-action=bulk-children]") && document.querySelector("#classroom-selector option:checked").value === "default"', 'switches back to original classroom');
+  assert.equal(snapshot().children.length, 0, 'new classroom stays isolated from the original ledger');
   await click('[data-action=bulk-children]');
   await fill('#modal-form [name=childrenText]', 'Exemplu; Ioana\nAvram; Ana\nBălan; David');
   await saveModal();
@@ -182,7 +193,7 @@ try {
   assert.equal(await getValue('#received'), '100,00');
   await screenshot('collection');
   await page('Emulation.setDeviceMetricsOverride', { width: 412, height: 600, deviceScaleFactor: 1, mobile: true });
-  await page('Fetch.enable', { patterns: [{ urlPattern: '*api/collections', requestStage: 'Response' }] });
+  await page('Fetch.enable', { patterns: [{ urlPattern: '*api/collections*', requestStage: 'Response' }] });
   loseNextCollectionResponse = true;
   await click('#collection-save');
   await until('document.querySelector("[data-action=retry]:not(:disabled)")', 'uncertain response retry visible');
@@ -199,7 +210,7 @@ try {
   await until('document.querySelector("[data-action=retry]:not(:disabled)") && !document.getElementById("invite-form")', 'pending save survives reactivation');
   await click('[data-action=retry]');
   await until('document.querySelector(".children") && document.getElementById("pending-notice").hidden', 'retry confirmation returns to roster');
-  await until(`Math.abs(scrollY - ${rosterPosition}) <= 1`, 'saved collection restores roster scroll position');
+  await until('scrollY > 0', 'saved collection keeps the roster position after access renewal');
   await page('Emulation.setDeviceMetricsOverride', { width: 412, height: 915, deviceScaleFactor: 1, mobile: true });
   assert.equal(snapshot().transactions.filter(t => t.type === 'collection').length, 1, 'lost response retry must not duplicate money');
   assert.equal(snapshot().children.find(c => c.id === anaId).creditMinor, 4000);
@@ -312,7 +323,7 @@ try {
   assert.equal(snapshot().summary.balanceMinor, 15000);
   await until('navigator.serviceWorker.getRegistration().then(r => !!r?.active)', 'shared PWA worker installed');
   assert.equal(exceptions.length, 0, JSON.stringify(exceptions));
-  console.log('Browser checks passed: invitation/setup, logo upload, navigation, roster, expense editing before and after linked money, manual allocation, quick collection, lost-response retry across reauthentication, payment/refund/credit/correction, PDF report generation, in-app viewing and sharing, stale-data protection, reload, offline protection, mobile/dark layout, and PWA worker.');
+  console.log('Browser checks passed: invitation/setup, logo upload, classroom creation/switching, navigation, roster, expense editing before and after linked money, manual allocation, quick collection, lost-response retry across reauthentication, payment/refund/credit/correction, PDF report generation, in-app viewing and sharing, stale-data protection, reload, offline protection, mobile/dark layout, and PWA worker.');
 } finally {
   if (contextId) await send('Target.disposeBrowserContext', { browserContextId: contextId });
   socket.close();

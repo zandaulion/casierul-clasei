@@ -20,6 +20,14 @@ test('live WAL-backed STRICT databases restore as standalone private files with 
   const invite = auth.createInvite('Telefon');
   const device = auth.redeemInvite(invite.code, 'Telefon');
   const actor = { id: device.device.id, label: device.device.label };
+  const secondClassId = randomUUID();
+  const secondLedgerName = `classroom-${secondClassId}.sqlite`;
+  const secondLedger = new Ledger(path.join(directory, secondLedgerName));
+  t.after(() => secondLedger.close());
+  auth.createClassroom({ id: secondClassId, ledgerFile: secondLedgerName, requestId: randomUUID(),
+    requestFingerprint: 'backup-test', ownerDeviceId: device.device.id });
+  secondLedger.dispatch('settings.update', { schoolName: 'Școala B', className: 'II B', schoolYear: '2026–2027',
+    openingBalanceMinor: 0, requestId: randomUUID(), expectedRevision: 0 }, actor);
   const child = ledger.dispatch('child.create', { firstName: 'Ana', lastName: 'Avram', requestId: randomUUID(), expectedRevision: 0 }, actor).state.children[0];
   const request = { childId: child.id, receivedMinor: 12500, changeMinor: 500, allocations: [], requestId: randomUUID(), expectedRevision: 1 };
   const receipt = ledger.dispatch('collection.create', request, actor);
@@ -29,15 +37,15 @@ test('live WAL-backed STRICT databases restore as standalone private files with 
   assert.ok((await stat(path.join(directory, 'auth.sqlite-wal'))).size > 0);
 
   const folder = await backupDatabases(directory);
-  assert.deepEqual((await readdir(folder)).sort(), ['auth.sqlite', 'ledger.sqlite']);
+  assert.deepEqual((await readdir(folder)).sort(), ['auth.sqlite', secondLedgerName, 'ledger.sqlite'].sort());
   assert.equal((await stat(folder)).mode & 0o777, 0o700);
-  for (const name of ['ledger.sqlite', 'auth.sqlite']) assert.equal((await stat(path.join(folder, name))).mode & 0o777, 0o600);
+  for (const name of ['ledger.sqlite', secondLedgerName, 'auth.sqlite']) assert.equal((await stat(path.join(folder, name))).mode & 0o777, 0o600);
 
   // Later live writes must not change the completed snapshot.
   ledger.dispatch('payment.create', { amountMinor: 1000, destination: 'Magazin', requestId: randomUUID(), expectedRevision: 3 }, actor);
   const restored = path.join(directory, 'restored');
   await mkdir(restored);
-  for (const name of ['ledger.sqlite', 'auth.sqlite']) await copyFile(path.join(folder, name), path.join(restored, name));
+  for (const name of ['ledger.sqlite', secondLedgerName, 'auth.sqlite']) await copyFile(path.join(folder, name), path.join(restored, name));
   const restoredLedger = new Ledger(path.join(restored, 'ledger.sqlite'));
   const restoredAuth = new AuthStore(path.join(restored, 'auth.sqlite'));
   try {
@@ -49,6 +57,9 @@ test('live WAL-backed STRICT databases restore as standalone private files with 
     assert.equal(restoredAuth.getDevice(device.token).id, device.device.id);
     assert.equal(restoredAuth.db.prepare('SELECT marker FROM strict_backup_probe').get().marker, 'captured in WAL');
     assert.equal(restoredAuth.listInvites().invites[0].used_at !== null, true);
+    const restoredSecondLedger = new Ledger(path.join(restored, secondLedgerName));
+    try { assert.equal(restoredSecondLedger.getState().settings.className, 'II B'); }
+    finally { restoredSecondLedger.close(); }
   } finally {
     restoredLedger.close(); restoredAuth.close();
   }

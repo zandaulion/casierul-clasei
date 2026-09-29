@@ -16,11 +16,12 @@ const typeLabels = { fixed: 'Sumă fixă / copil', split: 'Total împărțit', q
 const reportTypeLabels = { class: 'Situația clasei', matrix: 'Raport exhaustiv', expense: 'Situația unei cheltuieli', child: 'Fișa individuală' };
 const writeActions = new Set(['add-child', 'edit-child', 'bulk-children', 'add-expense', 'edit-expense', 'payment',
   'expense-payment', 'apply-credit', 'refund', 'report-class', 'report-matrix', 'report-expense', 'report-child',
-  'replace-report', 'reverse', 'cancel-expense', 'remove-logo']);
+  'replace-report', 'reverse', 'cancel-expense', 'remove-logo', 'add-classroom']);
 const pendingKey = 'casierul.pending.v1';
 const navigationKey = 'casierulNavigation';
+const classroomKey = 'casierul.classroom.v1';
 const storedNavigation = history.state?.[navigationKey];
-let state = null, device = null, tab = 'children', childId = null, draft = null, dirty = false;
+let state = null, device = null, classrooms = [], classroomId = null, tab = 'children', childId = null, draft = null, dirty = false;
 let modal = null, modalDirty = false, saving = false, conflict = false, disconnected = false, pending = null;
 let navigationIndex = Number.isSafeInteger(storedNavigation?.index) ? storedNavigation.index : 0;
 let navigationOverlay = false, restoringNavigation = false;
@@ -35,12 +36,13 @@ history.replaceState({ ...(history.state || {}), [navigationKey]: { index: navig
 const busy = () => dirty || modalDirty || saving || !!pending;
 const child = () => state?.children.find(c => c.id === childId);
 const activeChildren = () => sortChildren(state.children.filter(c => c.active));
-const canWrite = () => device?.role === 'treasurer';
-const accessLabel = () => ({ parent: 'Părinte · doar citire', auditor: 'Auditor · doar citire' }[device?.role] || 'Casier');
+const classroomAccess = () => classrooms.find(item => item.id === classroomId);
+const canWrite = () => classroomAccess()?.role === 'treasurer';
+const accessLabel = () => ({ parent: 'Părinte · doar citire', auditor: 'Auditor · doar citire' }[classroomAccess()?.role] || 'Casier');
 const accessBanner = () => canWrite() ? '' : `<div class="notice access-notice"><strong>${accessLabel()}</strong><span>Poți consulta situația și rapoartele, fără să modifici registrul.</span></div>`;
 
 function navigationState(overlay = navigationOverlay) {
-  return { index: navigationIndex, tab, childId, overlay };
+  return { index: navigationIndex, classroomId, tab, childId, overlay };
 }
 function replaceNavigation(overlay = navigationOverlay) {
   navigationOverlay = overlay;
@@ -79,13 +81,27 @@ function setPending(value) {
 }
 async function api(path, options = {}) {
   let response;
-  try { response = await fetch(path, { credentials: 'same-origin', cache: 'no-store', ...options, headers: { ...(options.body ? { 'Content-Type': 'application/json' } : {}), ...options.headers }, signal: AbortSignal.timeout(20000) }); }
+  try { response = await fetch(scopedUrl(path), { credentials: 'same-origin', cache: 'no-store', ...options, headers: { ...(options.body ? { 'Content-Type': 'application/json' } : {}), ...options.headers }, signal: AbortSignal.timeout(20000) }); }
   catch { disconnected = true; updateNotices(); const error = new Error('Conexiunea nu a putut fi confirmată.'); error.network = true; throw error; }
   let data;
   try { data = await response.json(); } catch { const error = new Error('Răspunsul serverului nu a putut fi citit.'); error.network = true; throw error; }
   disconnected = false;
   if (!response.ok) { const error = new Error(data.error || 'Operațiunea nu a putut fi efectuată.'); error.status = response.status; throw error; }
   return data;
+}
+function scopedUrl(path) {
+  if (!classroomId || !path.startsWith('/api/') || path.startsWith('/api/auth/') || ['/api/health', '/api/classrooms'].includes(path.split('?')[0])) return path;
+  const url = new URL(path, location.origin); url.searchParams.set('classroom', classroomId);
+  return `${url.pathname}${url.search}`;
+}
+function applySession(session) {
+  device = session.device; classrooms = session.classrooms || [];
+  let stored = null;
+  try { stored = localStorage.getItem(classroomKey); } catch { /* Selection remains in memory. */ }
+  const pendingClassroom = pending?.classroomId;
+  classroomId = classrooms.some(item => item.id === pendingClassroom) ? pendingClassroom
+    : classrooms.some(item => item.id === classroomId) ? classroomId
+    : classrooms.some(item => item.id === stored) ? stored : classrooms[0]?.id || null;
 }
 function updateNotices() {
   const connection = $('#connection');
@@ -138,7 +154,7 @@ function openModal(type, title, content, submit = 'Salvează', extra = {}) {
   updateNotices();
 }
 function renderGate(message = '') {
-  state = null; $('.app').classList.remove('collecting'); $('#tabs').hidden = true; $('#settings-button').hidden = true; $('#header-logos').hidden = true; $('#class-label').textContent = 'Fondul clasei, la îndemână';
+  state = null; classrooms = []; classroomId = null; $('.app').classList.remove('collecting'); $('#tabs').hidden = true; $('#settings-button').hidden = true; $('#header-logos').hidden = true; $('#classroom-selector').hidden = true; $('#class-label').hidden = false; $('#class-label').textContent = 'Fondul clasei, la îndemână';
   $('#main').innerHTML = `<div class="empty"><h1>Registrul tău de clasă</h1><p>Activează acest dispozitiv folosind o invitație din consola ta PWA.</p></div><form id="invite-form">${field('Cod de invitație', 'code', inviteCode, 'required autocomplete="off" autocapitalize="none" spellcheck="false"')}${field('Numele dispozitivului (opțional)', 'label', '', 'maxlength="120" placeholder="De exemplu: telefonul meu"')}<p id="invite-error" class="error" role="alert">${esc(message)}</p><button class="primary wide" type="submit">Activează dispozitivul</button></form>`;
   updateNotices();
 }
@@ -149,23 +165,34 @@ function renderHeaderBranding() {
   container.hidden = !entries.some(([, present]) => present);
   for (const [kind, present, version] of entries) {
     const image = $(`#header-${kind}-logo`);
+    const cacheKey = `${classroomId}:${version || ''}`;
     if (!present) { image.hidden = true; image.removeAttribute('src'); delete image.dataset.version; continue; }
-    if (image.dataset.version === version && image.complete && image.naturalWidth) { image.hidden = false; continue; }
+    if (image.dataset.version === cacheKey && image.complete && image.naturalWidth) { image.hidden = false; continue; }
     image.hidden = true;
     image.onload = () => { image.hidden = false; container.hidden = false; };
     image.onerror = () => {
       image.hidden = true;
       container.hidden = entries.every(([entryKind]) => $(`#header-${entryKind}-logo`).hidden);
     };
-    image.dataset.version = version || '';
-    image.src = `/api/branding/${kind}?v=${encodeURIComponent(version || '')}`;
+    image.dataset.version = cacheKey;
+    image.src = scopedUrl(`/api/branding/${kind}?v=${encodeURIComponent(version || '')}`);
   }
+}
+function renderClassroomSelector() {
+  const selector = $('#classroom-selector'), label = $('#class-label');
+  if (classrooms.length <= 1) {
+    selector.hidden = true; label.hidden = false;
+    label.textContent = [state.settings.schoolName, state.settings.className, state.settings.schoolYear].filter(Boolean).join(' · ') || 'Configurează clasa pentru a începe';
+    return;
+  }
+  selector.innerHTML = classrooms.map(item => `<option value="${esc(item.id)}" ${item.id === classroomId ? 'selected' : ''}>${esc([item.schoolName, item.className, item.schoolYear].filter(Boolean).join(' · ') || 'Clasă neconfigurată')}</option>`).join('');
+  selector.hidden = false; label.hidden = true;
 }
 function render() {
   if (!state) return;
   const collecting = tab === 'children' && !!childId && !!child();
   $('.app').classList.toggle('collecting', collecting);
-  $('#class-label').textContent = [state.settings.schoolName, state.settings.className, state.settings.schoolYear].filter(Boolean).join(' · ') || 'Configurează clasa pentru a începe';
+  renderClassroomSelector();
   renderHeaderBranding();
   $('#settings-button').hidden = false; $('#tabs').hidden = collecting;
   $$('[data-tab]').forEach(button => { if (button.dataset.tab === tab) button.setAttribute('aria-current', 'page'); else button.removeAttribute('aria-current'); });
@@ -179,7 +206,8 @@ function render() {
   updateNotices();
 }
 function renderRoster() {
-  $('#main').innerHTML = `<h1>${device?.role === 'parent' ? 'Situația copilului' : 'Alege copilul'}</h1><div class="caption">${device?.role === 'parent' ? 'Contribuții, restanțe și avans' : 'În ordine alfabetică, după numele de familie'}</div>${canWrite() ? '<div class="toolbar"><button data-action="add-child">+ Copil</button><button data-action="bulk-children">Adaugă lista</button></div>' : ''}${state.children.length ? `<label class="caption" for="child-search">Caută un copil</label><input id="child-search" type="search" placeholder="Nume sau prenume" value="${esc(search)}" autocomplete="off"><div id="roster-list" class="children"></div>${canWrite() ? `<label class="check caption"><input id="show-archived" type="checkbox" ${showArchived ? 'checked' : ''}>Arată și copiii arhivați</label>` : ''}` : '<div class="empty"><p>Nu există copii disponibili pentru acest acces.</p></div>'}`;
+  const parent = classroomAccess()?.role === 'parent';
+  $('#main').innerHTML = `<h1>${parent ? 'Situația copilului' : 'Alege copilul'}</h1><div class="caption">${parent ? 'Contribuții, restanțe și avans' : 'În ordine alfabetică, după numele de familie'}</div>${canWrite() ? '<div class="toolbar"><button data-action="add-child">+ Copil</button><button data-action="bulk-children">Adaugă lista</button></div>' : ''}${state.children.length ? `<label class="caption" for="child-search">Caută un copil</label><input id="child-search" type="search" placeholder="Nume sau prenume" value="${esc(search)}" autocomplete="off"><div id="roster-list" class="children"></div>${canWrite() ? `<label class="check caption"><input id="show-archived" type="checkbox" ${showArchived ? 'checked' : ''}>Arată și copiii arhivați</label>` : ''}` : '<div class="empty"><p>Nu există copii disponibili pentru acest acces.</p></div>'}`;
   renderRosterList();
 }
 function renderRosterList() {
@@ -247,7 +275,7 @@ function transactionRows(transactions) {
 }
 function renderLedger() {
   const s = state.summary;
-  $('#main').innerHTML = `<h1>Registru</h1><div class="balance"><span class="caption">Soldul fondului clasei</span><strong class="amount">${money(s.balanceMinor)}</strong><div class="balance-grid"><div><span class="caption">Încasări după rest</span><span>${money(s.totalReceivedMinor)}</span></div><div><span class="caption">Bani dați și restituiți</span><span>${money(s.totalPaidMinor)}</span></div><div><span class="caption">Avansuri incluse în sold</span><span>${money(s.totalCreditMinor)}</span></div><div><span class="caption">De încasat</span><span>${money(s.totalDueMinor)}</span></div></div><p class="caption" style="margin-bottom:0">Sold inițial ${money(state.settings.openingBalanceMinor)}</p></div>${canWrite() ? '<button class="primary wide" data-action="payment">+ Bani dați mai departe</button>' : ''}<div class="toolbar"><button data-action="refresh">Actualizează</button>${canWrite() ? '<a href="/api/export" download="casierul-clasei.json">Export JSON</a>' : ''}</div><h2>Istoric</h2><div class="stack">${transactionRows(state.transactions)}</div>`;
+  $('#main').innerHTML = `<h1>Registru</h1><div class="balance"><span class="caption">Soldul fondului clasei</span><strong class="amount">${money(s.balanceMinor)}</strong><div class="balance-grid"><div><span class="caption">Încasări după rest</span><span>${money(s.totalReceivedMinor)}</span></div><div><span class="caption">Bani dați și restituiți</span><span>${money(s.totalPaidMinor)}</span></div><div><span class="caption">Avansuri incluse în sold</span><span>${money(s.totalCreditMinor)}</span></div><div><span class="caption">De încasat</span><span>${money(s.totalDueMinor)}</span></div></div><p class="caption" style="margin-bottom:0">Sold inițial ${money(state.settings.openingBalanceMinor)}</p></div>${canWrite() ? '<button class="primary wide" data-action="payment">+ Bani dați mai departe</button>' : ''}<div class="toolbar"><button data-action="refresh">Actualizează</button>${canWrite() ? `<a href="${esc(scopedUrl('/api/export'))}" download="casierul-clasei.json">Export JSON</a>` : ''}</div><h2>Istoric</h2><div class="stack">${transactionRows(state.transactions)}</div>`;
 }
 function renderReports() {
   const reports = state.reports || [];
@@ -260,7 +288,7 @@ function renderReports() {
     <button class="card card-button" data-action="report-child" ${state.children.length ? '' : 'disabled'}><h3>Fișa individuală</h3><div class="caption">${debtors.length} copii au de achitat ${money(debtors.reduce((total, item) => total + item.dueMinor, 0))}</div></button>
   </div>` : '<p>Poți descărca sau partaja rapoartele emise de casier la care ai acces.</p>'}
   <h2 style="margin-top:28px">Arhivă</h2>
-  <div class="stack">${reports.length ? reports.map(report => `<article class="card report-card ${report.replacedById ? 'replaced' : ''}"><div class="row"><h3>${esc(report.code)}</h3>${report.replacedById ? '<span class="badge">Înlocuit</span>' : '<span class="badge">Emis</span>'}</div><div>${esc(reportTypeLabels[report.type])} · ${esc(report.subjectLabel)}</div><div class="caption">${dateText(report.createdAt)} · revizia ${report.stateRevision}</div>${report.replacesId ? '<div class="caption">Raport corectiv</div>' : ''}<div class="report-actions"><button class="primary" data-action="view-report" data-id="${esc(report.id)}">Vizualizează</button><button data-action="share-report" data-id="${esc(report.id)}">Partajează PDF</button><a href="/api/reports/${encodeURIComponent(report.id)}/pdf" download="${esc(report.filename)}">Descarcă</a>${canWrite() && !report.replacedById ? `<button data-action="replace-report" data-id="${esc(report.id)}">Emite corecție</button>` : ''}</div></article>`).join('') : '<div class="empty"><p>Nu există rapoarte disponibile.</p></div>'}</div>`;
+  <div class="stack">${reports.length ? reports.map(report => `<article class="card report-card ${report.replacedById ? 'replaced' : ''}"><div class="row"><h3>${esc(report.code)}</h3>${report.replacedById ? '<span class="badge">Înlocuit</span>' : '<span class="badge">Emis</span>'}</div><div>${esc(reportTypeLabels[report.type])} · ${esc(report.subjectLabel)}</div><div class="caption">${dateText(report.createdAt)} · revizia ${report.stateRevision}</div>${report.replacesId ? '<div class="caption">Raport corectiv</div>' : ''}<div class="report-actions"><button class="primary" data-action="view-report" data-id="${esc(report.id)}">Vizualizează</button><button data-action="share-report" data-id="${esc(report.id)}">Partajează PDF</button><a href="${esc(scopedUrl(`/api/reports/${encodeURIComponent(report.id)}/pdf`))}" download="${esc(report.filename)}">Descarcă</a>${canWrite() && !report.replacedById ? `<button data-action="replace-report" data-id="${esc(report.id)}">Emite corecție</button>` : ''}</div></article>`).join('') : '<div class="empty"><p>Nu există rapoarte disponibile.</p></div>'}</div>`;
 }
 function reportModal(type, replacesId = null) {
   const replaced = replacesId ? (state.reports || []).find(report => report.id === replacesId) : null;
@@ -309,7 +337,7 @@ async function shareReport(reportId) {
   if (!report) return;
   saving = true; updateNotices();
   try {
-    const response = await fetch(`/api/reports/${encodeURIComponent(report.id)}/pdf`, { credentials: 'same-origin', cache: 'no-store', signal: AbortSignal.timeout(20000) });
+    const response = await fetch(scopedUrl(`/api/reports/${encodeURIComponent(report.id)}/pdf`), { credentials: 'same-origin', cache: 'no-store', signal: AbortSignal.timeout(20000) });
     if (!response.ok) throw new Error('PDF-ul nu a putut fi descărcat.');
     const file = new File([await response.blob()], report.filename, { type: 'application/pdf' });
     if (navigator.share && (!navigator.canShare || navigator.canShare({ files: [file] }))) {
@@ -329,7 +357,7 @@ async function loadReportPreview(currentModal, report) {
   try {
     const library = pdfModulePromise ||= import('/vendor/pdfjs/pdf.min.mjs');
     status.textContent = 'Se încarcă fișierul PDF…';
-    const response = await fetch(`/api/reports/${encodeURIComponent(report.id)}/pdf`, { credentials: 'same-origin', cache: 'no-store', signal: abort.signal });
+    const response = await fetch(scopedUrl(`/api/reports/${encodeURIComponent(report.id)}/pdf`), { credentials: 'same-origin', cache: 'no-store', signal: abort.signal });
     clearTimeout(timeout);
     if (!response.ok) throw new Error('PDF-ul nu a putut fi încărcat.');
     status.textContent = 'Se pregătește afișarea…';
@@ -378,12 +406,17 @@ function viewReport(reportId) {
 function settingsModal() {
   const s = state.settings;
   if (!canWrite()) {
-    openModal('access', 'Accesul acestui dispozitiv', `<div class="summary"><strong>${accessLabel()}</strong><p class="caption">${device?.role === 'parent' ? 'Vezi datele generale ale clasei și situația copilului asociat.' : 'Vezi registrul complet și rapoartele, fără drept de modificare.'}</p>${device?.access_expires_at ? `<p class="caption">Acces până la ${dateText(device.access_expires_at)}</p>` : ''}</div><button type="button" class="wide" data-action="logout">Deconectează dispozitivul</button>`, null);
+    const access = classroomAccess();
+    openModal('access', 'Accesul acestui dispozitiv', `<div class="summary"><strong>${accessLabel()}</strong><p class="caption">${access?.role === 'parent' ? 'Vezi datele generale ale clasei și situația copilului asociat.' : 'Vezi registrul complet și rapoartele, fără drept de modificare.'}</p>${access?.access_expires_at ? `<p class="caption">Acces până la ${dateText(access.access_expires_at)}</p>` : ''}</div><button type="button" class="wide" data-action="logout">Deconectează dispozitivul</button>`, null);
     return;
   }
   const year = new Date().getFullYear() - (new Date().getMonth() < 8 ? 1 : 0);
-  const logoPicker = (kind, label, exists) => `<div class="logo-picker"><div class="logo-preview"><img id="${kind}-logo-preview" ${exists ? `src="/api/branding/${kind}?v=${encodeURIComponent(s[`${kind}LogoVersion`] || '')}"` : 'hidden'} alt="${esc(label)}"><span id="${kind}-logo-empty" ${exists ? 'hidden' : ''}>Fără siglă</span></div><strong>${esc(label)}</strong><label class="file-button">Alege imaginea<input type="file" accept="image/png,image/jpeg,image/webp" data-logo-input="${kind}" hidden></label><button type="button" data-action="remove-logo" data-logo-kind="${kind}" ${exists ? '' : 'hidden'}>Elimină</button></div>`;
-  openModal('settings', s.className ? 'Setările clasei' : 'Configurează clasa', `${field('Școala', 'schoolName', s.schoolName, 'required maxlength="160"')}${field('Clasa', 'className', s.className, 'required maxlength="80"')}${field('An școlar', 'schoolYear', s.schoolYear || `${year}–${year + 1}`, 'required maxlength="40"')}<div class="section-label">Sigle pentru rapoarte</div><div class="logo-grid">${logoPicker('school', 'Sigla școlii', s.hasSchoolLogo)}${logoPicker('class', 'Sigla clasei', s.hasClassLogo)}</div><p class="caption">Poți alege PNG, JPG sau WebP. Imaginea este redimensionată pe dispozitiv și apare în antetul PDF-urilor emise de acum înainte.</p>${field('Sold inițial (lei)', 'openingBalance', decimal(s.openingBalanceMinor), `inputmode="decimal" required ${state.transactions.length ? 'readonly' : ''}`)}<p class="caption">Banii deja existenți în fond înainte să începi evidența. ${state.transactions.length ? 'Soldul inițial nu mai poate fi schimbat după înregistrarea operațiunilor.' : 'Avansurile individuale se înregistrează separat, prin încasări.'}</p>${state.settings.className ? '<div class="toolbar"><a href="/api/export" download="casierul-clasei.json">Exportă datele JSON</a><button type="button" data-action="logout">Deconectează dispozitivul</button></div>' : ''}`, 'Salvează', { logoChanges: {} });
+  const logoPicker = (kind, label, exists) => `<div class="logo-picker"><div class="logo-preview"><img id="${kind}-logo-preview" ${exists ? `src="${esc(scopedUrl(`/api/branding/${kind}?v=${encodeURIComponent(s[`${kind}LogoVersion`] || '')}`))}"` : 'hidden'} alt="${esc(label)}"><span id="${kind}-logo-empty" ${exists ? 'hidden' : ''}>Fără siglă</span></div><strong>${esc(label)}</strong><label class="file-button">Alege imaginea<input type="file" accept="image/png,image/jpeg,image/webp" data-logo-input="${kind}" hidden></label><button type="button" data-action="remove-logo" data-logo-kind="${kind}" ${exists ? '' : 'hidden'}>Elimină</button></div>`;
+  openModal('settings', s.className ? 'Setările clasei' : 'Configurează clasa', `${field('Școala', 'schoolName', s.schoolName, 'required maxlength="160"')}${field('Clasa', 'className', s.className, 'required maxlength="80"')}${field('An școlar', 'schoolYear', s.schoolYear || `${year}–${year + 1}`, 'required maxlength="40"')}<div class="section-label">Sigle pentru rapoarte</div><div class="logo-grid">${logoPicker('school', 'Sigla școlii', s.hasSchoolLogo)}${logoPicker('class', 'Sigla clasei', s.hasClassLogo)}</div><p class="caption">Poți alege PNG, JPG sau WebP. Imaginea este redimensionată pe dispozitiv și apare în antetul PDF-urilor emise de acum înainte.</p>${field('Sold inițial (lei)', 'openingBalance', decimal(s.openingBalanceMinor), `inputmode="decimal" required ${state.transactions.length ? 'readonly' : ''}`)}<p class="caption">Banii deja existenți în fond înainte să începi evidența. ${state.transactions.length ? 'Soldul inițial nu mai poate fi schimbat după înregistrarea operațiunilor.' : 'Avansurile individuale se înregistrează separat, prin încasări.'}</p>${state.settings.className ? `<div class="toolbar"><a href="${esc(scopedUrl('/api/export'))}" download="casierul-clasei.json">Exportă datele JSON</a><button type="button" data-action="logout">Deconectează dispozitivul</button></div>` : ''}${device?.is_owner ? '<div class="section-label">Mai multe clase</div><button type="button" class="wide" data-action="add-classroom">+ Adaugă altă clasă</button><p class="caption">Fiecare clasă are registru, rapoarte și drepturi de acces separate.</p>' : ''}`, 'Salvează', { logoChanges: {} });
+}
+function classroomModal() {
+  const year = new Date().getFullYear() - (new Date().getMonth() < 8 ? 1 : 0);
+  openModal('add-classroom', 'Adaugă o clasă', `${field('Școala', 'schoolName', state.settings.schoolName, 'required maxlength="160"')}${field('Clasa', 'className', '', 'required maxlength="80"')}${field('An școlar', 'schoolYear', `${year}–${year + 1}`, 'required maxlength="40"')}<p class="caption">Clasa nouă pornește cu un registru gol și drepturi de acces independente. Vei avea automat acces de casier.</p>`, 'Creează clasa', { requestId: crypto.randomUUID() });
 }
 
 function updateLogoPreview(kind, data) {
@@ -523,6 +556,19 @@ async function submitModal() {
   const form = $('#modal-form');
   if (!form.reportValidity()) return;
   if (modal.type === 'report') { await createReport(form); return; }
+  if (modal.type === 'add-classroom') {
+    const currentModal = modal;
+    saving = true; updateNotices();
+    try {
+      const result = await api('/api/classrooms', { method: 'POST', body: JSON.stringify({ requestId: currentModal.requestId,
+        schoolName: form.elements.schoolName.value.trim(), className: form.elements.className.value.trim(), schoolYear: form.elements.schoolYear.value.trim() }) });
+      classrooms = result.classrooms; classroomId = result.classroom.id; state = result.state;
+      try { localStorage.setItem(classroomKey, classroomId); } catch { /* Selection remains in memory. */ }
+      tab = 'children'; childId = null; draft = null; closeModal(true, true); replaceNavigation(false); render(); toast('Clasa a fost creată.');
+    } catch (error) { $('#modal-error').textContent = error.message; $('#modal-error').hidden = false; }
+    finally { saving = false; updateNotices(); }
+    return;
+  }
   let path, body;
   try {
     if (modal.type === 'settings') {
@@ -566,7 +612,7 @@ async function mutate(path, body, successMessage) {
   if (!navigator.onLine || disconnected) { toast('Este nevoie de conexiune pentru a salva.'); return; }
   if (saving || pending || conflict) return;
   const requestId = crypto.randomUUID();
-  setPending({ path, body: { ...body, requestId, expectedRevision: state.revision }, successMessage });
+  setPending({ classroomId, path, body: { ...body, requestId, expectedRevision: state.revision }, successMessage });
   await sendPending();
 }
 async function sendPending() {
@@ -574,10 +620,15 @@ async function sendPending() {
   saving = true; updateNotices();
   try {
     const request = pending;
+    if (request.classroomId && request.classroomId !== classroomId) {
+      throw new Error('Operațiunea în așteptare aparține altei clase. Reîncarcă aplicația pentru a o verifica.');
+    }
     const result = await api(request.path, { method: 'POST', body: JSON.stringify(request.body) });
     setPending(null); conflict = false; dirty = false; modalDirty = false;
     rememberRosterScroll();
-    state = result.state; closeModal(true);
+    state = result.state;
+    if (request.path === '/api/settings') applySession(await api('/api/auth/me'));
+    closeModal(true);
     if (request.path === '/api/collections') { childId = null; draft = null; tab = 'children'; replaceNavigation(false); }
     else if (childId && child()) resetDraft(child());
     render(); restoreScreenScroll(); toast(request.successMessage || 'Salvare confirmată.');
@@ -648,6 +699,7 @@ document.addEventListener('click', async event => {
       else showScreen('children', null, { push: false });
       break;
     case 'settings': settingsModal(); break;
+    case 'add-classroom': classroomModal(); break;
     case 'add-child': childModal(); break;
     case 'edit-child': childModal(true); break;
     case 'bulk-children': bulkModal(); break;
@@ -704,6 +756,21 @@ document.addEventListener('input', event => {
 });
 document.addEventListener('change', async event => {
   const input = event.target;
+  if (input.id === 'classroom-selector') {
+    const previous = classroomId;
+    if (!canLeave()) { input.value = previous; return; }
+    classroomId = input.value;
+    try {
+      state = await api('/api/state');
+      try { localStorage.setItem(classroomKey, classroomId); } catch { /* Selection remains in memory. */ }
+      tab = 'children'; childId = null; draft = null; search = ''; rosterScrollY = 0;
+      replaceNavigation(false); render(); restoreScreenScroll();
+    } catch (error) {
+      classroomId = previous; input.value = previous;
+      toast(error.message || 'Clasa nu a putut fi încărcată.');
+    }
+    return;
+  }
   if (input.dataset.logoInput && modal?.type === 'settings') {
     const kind = input.dataset.logoInput, currentModal = modal;
     currentModal.logoProcessing = (currentModal.logoProcessing || 0) + 1; updateNotices();
@@ -735,13 +802,15 @@ document.addEventListener('submit', async event => {
     const form = event.target, button = form.querySelector('button'); if (button.disabled) return; button.disabled = true;
     try {
       const result = await api('/api/auth/redeem', { method: 'POST', body: JSON.stringify({ code: form.elements.code.value.trim(), ...(form.elements.label.value.trim() ? { label: form.elements.label.value.trim() } : {}) }) });
-      device = result.device; inviteCode = ''; state = await api('/api/state'); render();
+      inviteCode = '';
+      applySession(await api('/api/auth/me'));
+      state = await api('/api/state'); render();
     } catch (error) { $('#invite-error').textContent = error.message; }
     finally { button.disabled = false; }
   }
 });
 $('#dialog').addEventListener('cancel', event => { event.preventDefault(); closeModal(); });
-window.addEventListener('popstate', event => {
+window.addEventListener('popstate', async event => {
   const destination = event.state?.[navigationKey];
   if (restoringNavigation) { restoringNavigation = false; return; }
   if (!destination) return;
@@ -758,6 +827,18 @@ window.addEventListener('popstate', event => {
   }
   navigationIndex = destination.index;
   closeModal(true, true);
+  if (destination.classroomId && destination.classroomId !== classroomId
+    && classrooms.some(item => item.id === destination.classroomId)) {
+    classroomId = destination.classroomId;
+    try {
+      state = await api('/api/state');
+      try { localStorage.setItem(classroomKey, classroomId); } catch { /* Selection remains in memory. */ }
+      search = ''; rosterScrollY = 0;
+    } catch (error) {
+      toast(error.message || 'Clasa nu a putut fi încărcată.');
+      return;
+    }
+  }
   // A modal entry cannot be recreated after it has been dismissed. Forward
   // navigation therefore restores its underlying screen instead.
   showScreen(destination.tab, destination.childId, { push: false });
@@ -771,7 +852,7 @@ async function boot() {
   updateNotices();
   if (inviteCode) { renderGate(); return; }
   try {
-    device = (await api('/api/auth/me')).device; state = await api('/api/state');
+    applySession(await api('/api/auth/me')); state = await api('/api/state');
     showScreen(tab, childId, { push: false });
   }
   catch (error) {
