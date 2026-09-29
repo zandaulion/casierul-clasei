@@ -1,14 +1,14 @@
 # Mai multe școli, clase și drepturi de acces
 
-Fiecare clasă este un registru independent. Are propria listă de copii, propriile cheltuieli și încasări, propriul sold, propriile sigle și propriile rapoarte. Numele școlii este parte din identitatea clasei; două clase cu același nume de școală nu împart automat date sau drepturi.
+Fiecare clasă este un registru independent. Are propria listă de copii, propriile cheltuieli și încasări, propriul sold, propriile sume avansate temporar, propriile documente justificative, sigle și rapoarte. Numele școlii este parte din identitatea clasei; două clase cu același nume de școală nu împart automat date sau drepturi.
 
 ## Roluri
 
 | Rol | Ce poate vedea | Ce poate modifica |
 | --- | --- | --- |
-| Casier | Tot registrul clasei, rapoartele și exportul JSON | Copii, cheltuieli, încasări, bani dați mai departe, corecții, setări și rapoarte |
-| Auditor | Tot registrul clasei și rapoartele | Nimic; nu poate descărca exportul JSON brut |
-| Părinte | Totalurile generale, cheltuielile agregate, banii dați mai departe și situația copilului asociat | Nimic |
+| Casier | Tot registrul clasei, toate documentele, rapoartele și exportul JSON | Copii, cheltuieli, încasări, bani dați mai departe, sume avansate, documente, corecții, setări și rapoarte |
+| Auditor | Tot registrul clasei, toate documentele și rapoartele | Nimic; nu poate descărca exportul JSON brut |
+| Părinte | Totalurile generale, cheltuielile agregate, banii dați mai departe, documentele marcate pentru clasă și situația copilului asociat | Nimic |
 
 Dreptul se acordă pentru o singură clasă. Același dispozitiv poate fi, de exemplu, casier într-o clasă și auditor în alta. Un drept de părinte este legat și de copilul ales; numele și tranzacțiile celorlalți copii nu sunt trimise acelui dispozitiv.
 
