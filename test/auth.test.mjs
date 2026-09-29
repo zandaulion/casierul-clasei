@@ -6,6 +6,7 @@ import os from 'node:os';
 import http from 'node:http';
 import { DatabaseSync } from 'node:sqlite';
 import { AuthStore, COOKIE_NAME, adminTokenMatches, readSessionCookie } from '../server/auth.mjs';
+import { projectState } from '../server/index.mjs';
 
 function temporary(t) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'casierul-auth-'));
@@ -72,6 +73,59 @@ test('revocation and logout invalidate the server session, and sessions expire',
   auth.setDeviceRevoked(result.device.id, false);
   time += 401 * 86400000;
   assert.equal(auth.getDevice(result.token), null);
+});
+
+test('role, child scope and access expiry pass from invite to the device', (t) => {
+  let time = Date.parse('2026-09-28T12:00:00Z');
+  const { auth } = authStore(t, { now: () => time });
+  const accessExpiresAt = '2027-06-30T23:59:59.999Z';
+  const invite = auth.createInvite('Părinte Ana', { role: 'parent', childId: 'child-ana', accessExpiresAt });
+  const redeemed = auth.redeemInvite(invite.code);
+  assert.deepEqual({ role: redeemed.device.role, child: redeemed.device.child_id, expiry: redeemed.device.access_expires_at },
+    { role: 'parent', child: 'child-ana', expiry: accessExpiresAt });
+  assert.equal(auth.listDevices().devices[0].role, 'parent');
+  assert.equal(auth.listInvites().invites[0].child_id, 'child-ana');
+  time = Date.parse('2027-07-01T00:00:00Z');
+  assert.equal(auth.getDevice(redeemed.token), null);
+});
+
+test('existing auth databases migrate legacy devices to treasurer access', (t) => {
+  const dir = temporary(t), file = path.join(dir, 'auth.sqlite');
+  const db = new DatabaseSync(file);
+  db.exec(`CREATE TABLE devices (id TEXT PRIMARY KEY, token_hash TEXT NOT NULL UNIQUE, label TEXT NOT NULL,
+    created_at TEXT NOT NULL, last_seen TEXT NOT NULL, expires_at TEXT NOT NULL, revoked INTEGER NOT NULL DEFAULT 0);
+    CREATE TABLE invites (id INTEGER PRIMARY KEY AUTOINCREMENT, code_hash TEXT NOT NULL UNIQUE, code TEXT, url TEXT,
+    label TEXT, created_at TEXT NOT NULL, expires_at TEXT NOT NULL, used_at TEXT, revoked INTEGER NOT NULL DEFAULT 0,
+    device_id TEXT REFERENCES devices(id) ON DELETE SET NULL);`);
+  db.close();
+  const auth = new AuthStore(file);
+  t.after(() => auth.close());
+  const redeemed = auth.redeemInvite(auth.createInvite('Legacy').code);
+  assert.equal(redeemed.device.role, 'treasurer');
+});
+
+test('parent state exposes class totals and only the associated child', () => {
+  const child = (id, firstName) => ({ id, firstName, lastName: 'Pop', active: true, creditMinor: 0, dueMinor: 1000,
+    contributions: [{ expenseId: 'expense-1', title: 'Poze', amountMinor: 1000, paidMinor: 0, remainingMinor: 1000 }] });
+  const state = { revision: 2, settings: {}, summary: { totalDueMinor: 2000 }, children: [child('ana', 'Ana'), child('ion', 'Ion')],
+    expenses: [{ id: 'expense-1', title: 'Poze', comment: 'notă internă', contributions: [
+      { childId: 'ana', amountMinor: 1000 }, { childId: 'ion', amountMinor: 1000 }], totalMinor: 2000 }],
+    transactions: [
+      { id: 'own', type: 'collection', childId: 'ana', comment: 'propriu' },
+      { id: 'other', type: 'collection', childId: 'ion', comment: 'privat' },
+      { id: 'payment', type: 'payment', childId: null, comment: 'intern' },
+    ], reports: [
+      { id: 'class', type: 'class', subjectId: null }, { id: 'matrix', type: 'matrix', subjectId: null },
+      { id: 'own-report', type: 'child', subjectId: 'ana' }, { id: 'other-report', type: 'child', subjectId: 'ion' },
+    ] };
+  const view = projectState(state, { role: 'parent', child_id: 'ana' });
+  assert.deepEqual(view.children.map((item) => item.id), ['ana']);
+  assert.equal(view.expenses[0].participantCount, 2);
+  assert.deepEqual(view.expenses[0].contributions.map((item) => item.childId), ['ana']);
+  assert.deepEqual(view.transactions.map((item) => item.id), ['own', 'payment']);
+  assert.equal(view.transactions[1].comment, '');
+  assert.deepEqual(view.reports.map((item) => item.id), ['class', 'own-report']);
+  assert.equal(view.summary.totalDueMinor, 2000);
 });
 
 test('redeem attempts are rate limited and recover after the window', (t) => {
@@ -223,6 +277,29 @@ test('mutations reject cross-origin and same-site requests; CLI with session and
   assert.equal(response.status, 200);
   assert.equal(ledger.calls[0].operation, 'child.create');
   assert.equal(ledger.calls[0].actor.label, 'Casier');
+});
+
+test('read-only devices can read state but cannot mutate, export or issue reports', async (t) => {
+  const { adminRequest, publicRequest, ledger } = await fixture(t);
+  assert.deepEqual(await (await adminRequest('/api/admin/invite-options')).json(), { children: [] });
+  const inviteResponse = await adminRequest('/api/admin/invites', { method: 'POST', body: {
+    label: 'Auditor', role: 'auditor', accessExpiresAt: '2099-06-30',
+  } });
+  assert.equal(inviteResponse.status, 201);
+  const invite = await inviteResponse.json();
+  assert.equal(invite.role, 'auditor');
+  const redeemed = await publicRequest('/api/auth/redeem', { method: 'POST', body: { code: invite.code } });
+  const cookie = redeemed.headers.get('set-cookie').split(';')[0];
+  const headers = { Cookie: cookie };
+  assert.equal((await publicRequest('/api/state', { headers })).status, 200);
+  assert.equal((await publicRequest('/api/export', { headers })).status, 403);
+  assert.equal((await publicRequest('/api/children', { method: 'POST', headers, body: {
+    requestId: 'read-only-write', expectedRevision: 0, firstName: 'Ana', lastName: 'Pop',
+  } })).status, 403);
+  assert.equal((await publicRequest('/api/reports', { method: 'POST', headers, body: {
+    requestId: 'read-only-report', type: 'class',
+  } })).status, 403);
+  assert.equal(ledger.calls.length, 0);
 });
 
 test('business routes enforce body types, size, ids, and method before dispatch', async (t) => {

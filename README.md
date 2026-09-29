@@ -34,7 +34,7 @@ Datele afișate în capturi sunt integral sintetice.
 3. Adaugă copiii individual sau lipește lista, câte un `Nume de familie; Prenume` pe linie.
 4. Creează cheltuielile și selectează participanții: sumă fixă/copil, total împărțit sau cantitate/copil × preț unitar.
 
-Toate dispozitivele activate accesează același registru. Invitațiile sunt pentru dispozitivele casierului; aplicația nu include conturi pentru părinți.
+Invitațiile pot acorda trei tipuri de acces. **Casierul** vede și modifică întregul registru. **Părintele** are acces doar pentru citire la situația generală și la datele copilului asociat, fără numele sau tranzacțiile celorlalți copii. **Auditorul** vede registrul complet și rapoartele, dar nu poate modifica sau exporta datele brute. Accesul doar pentru citire poate expira automat la data aleasă în consola PWA.
 
 ## Încasare rapidă
 

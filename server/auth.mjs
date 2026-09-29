@@ -6,6 +6,7 @@ export const DEVELOPMENT_COOKIE_NAME = 'casierul-dev';
 export const SESSION_SECONDS = 400 * 86400;
 export const INVITE_TTL_DAYS = 7;
 const ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+export const DEVICE_ROLES = new Set(['treasurer', 'parent', 'auditor']);
 const hash = (value) => createHash('sha256').update(value).digest('hex');
 
 export function httpError(status, message) {
@@ -75,22 +76,44 @@ export class AuthStore {
         device_id TEXT REFERENCES devices(id) ON DELETE SET NULL
       );
     `);
+    this.#addColumn('devices', 'role', "TEXT NOT NULL DEFAULT 'treasurer'");
+    this.#addColumn('devices', 'child_id', 'TEXT');
+    this.#addColumn('devices', 'access_expires_at', 'TEXT');
+    this.#addColumn('invites', 'role', "TEXT NOT NULL DEFAULT 'treasurer'");
+    this.#addColumn('invites', 'child_id', 'TEXT');
+    this.#addColumn('invites', 'access_expires_at', 'TEXT');
   }
 
-  createInvite(label) {
+  #addColumn(table, column, definition) {
+    if (!this.db.prepare(`PRAGMA table_info(${table})`).all().some((entry) => entry.name === column)) {
+      this.db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+    }
+  }
+
+  createInvite(label, { role = 'treasurer', childId = null, accessExpiresAt = null } = {}) {
     label = validLabel(label, '');
+    if (!DEVICE_ROLES.has(role)) throw httpError(400, 'Tipul de acces nu este valid.');
+    if (role === 'parent' && (typeof childId !== 'string' || !childId)) throw httpError(400, 'Alege copilul pentru accesul părintelui.');
+    if (role !== 'parent' && childId != null) throw httpError(400, 'Copilul poate fi ales doar pentru accesul unui părinte.');
+    if (accessExpiresAt != null && (typeof accessExpiresAt !== 'string' || Number.isNaN(Date.parse(accessExpiresAt)))) {
+      throw httpError(400, 'Data expirării accesului nu este validă.');
+    }
     const raw = Array.from({ length: 16 }, () => ALPHABET[randomInt(ALPHABET.length)]).join('');
     const code = raw.match(/.{4}/gu).join('-');
     const url = this.publicBaseUrl ? `${this.publicBaseUrl}/?invite=${encodeURIComponent(code)}` : null;
     const createdAt = new Date(this.now()).toISOString();
     const expiresAt = new Date(this.now() + INVITE_TTL_DAYS * 86400000).toISOString();
-    const result = this.db.prepare(`INSERT INTO invites (code_hash, code, url, label, created_at, expires_at)
-      VALUES (?, ?, ?, ?, ?, ?)`).run(hash(raw), code, url, label || null, createdAt, expiresAt);
-    return { id: Number(result.lastInsertRowid), code, url, expires_at: expiresAt, expires_in_days: INVITE_TTL_DAYS };
+    const result = this.db.prepare(`INSERT INTO invites
+      (code_hash, code, url, label, created_at, expires_at, role, child_id, access_expires_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(hash(raw), code, url, label || null, createdAt, expiresAt,
+      role, childId, accessExpiresAt);
+    return { id: Number(result.lastInsertRowid), code, url, expires_at: expiresAt, expires_in_days: INVITE_TTL_DAYS,
+      role, child_id: childId, access_expires_at: accessExpiresAt };
   }
 
   listInvites() {
-    const invites = this.db.prepare(`SELECT id, label, code, url, created_at, expires_at, used_at, revoked, device_id
+    const invites = this.db.prepare(`SELECT id, label, code, url, created_at, expires_at, used_at, revoked, device_id,
+      role, child_id, access_expires_at
       FROM invites ORDER BY id DESC`).all().map((row) => ({ ...row, revoked: Boolean(row.revoked) }));
     return { invites, ttl_days: INVITE_TTL_DAYS };
   }
@@ -123,14 +146,19 @@ export class AuthStore {
       if (!invite || invite.revoked || invite.used_at) throw fail(404, 'Invitația nu există sau a fost deja folosită.');
       if (invite.expires_at <= nowIso) throw fail(410, 'Invitația a expirat.');
       const deviceLabel = label || invite.label || 'Telefon';
-      this.db.prepare(`INSERT INTO devices (id, token_hash, label, created_at, last_seen, expires_at)
-        VALUES (?, ?, ?, ?, ?, ?)`).run(deviceId, hash(token), deviceLabel, nowIso, nowIso,
-        new Date(now + SESSION_SECONDS * 1000).toISOString());
+      const sessionExpiry = new Date(now + SESSION_SECONDS * 1000).toISOString();
+      const expiresAt = invite.access_expires_at && invite.access_expires_at < sessionExpiry
+        ? invite.access_expires_at : sessionExpiry;
+      this.db.prepare(`INSERT INTO devices
+        (id, token_hash, label, created_at, last_seen, expires_at, role, child_id, access_expires_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(deviceId, hash(token), deviceLabel, nowIso, nowIso,
+        expiresAt, invite.role || 'treasurer', invite.child_id, invite.access_expires_at);
       const claimed = this.db.prepare(`UPDATE invites SET used_at = ?, device_id = ?, code = NULL, url = NULL
         WHERE id = ? AND used_at IS NULL AND revoked = 0 AND expires_at > ?`).run(nowIso, deviceId, invite.id, nowIso);
       if (claimed.changes !== 1) throw fail(409, 'Invitația a fost deja folosită.');
       this.db.exec('COMMIT');
-      return { token, device: { id: deviceId, label: deviceLabel, created_at: nowIso, last_seen: nowIso } };
+      return { token, device: { id: deviceId, label: deviceLabel, created_at: nowIso, last_seen: nowIso,
+        role: invite.role || 'treasurer', child_id: invite.child_id, access_expires_at: invite.access_expires_at } };
     } catch (error) {
       this.db.exec('ROLLBACK');
       throw error;
@@ -140,8 +168,9 @@ export class AuthStore {
   getDevice(token) {
     if (typeof token !== 'string' || !/^[A-Za-z0-9_-]{43}$/u.test(token)) return null;
     const nowIso = new Date(this.now()).toISOString();
-    const row = this.db.prepare(`SELECT id, label, created_at, last_seen FROM devices
-      WHERE token_hash = ? AND revoked = 0 AND expires_at > ?`).get(hash(token), nowIso);
+    const row = this.db.prepare(`SELECT id, label, created_at, last_seen, role, child_id, access_expires_at FROM devices
+      WHERE token_hash = ? AND revoked = 0 AND expires_at > ?
+        AND (access_expires_at IS NULL OR access_expires_at > ?)`).get(hash(token), nowIso, nowIso);
     if (!row) return null;
     this.db.prepare('UPDATE devices SET last_seen = ? WHERE id = ?').run(nowIso, row.id);
     return { ...row, last_seen: nowIso };
@@ -152,7 +181,8 @@ export class AuthStore {
   }
 
   listDevices() {
-    return { devices: this.db.prepare('SELECT id, label, created_at, last_seen, revoked FROM devices ORDER BY created_at DESC')
+    return { devices: this.db.prepare(`SELECT id, label, created_at, last_seen, revoked, role, child_id, access_expires_at
+      FROM devices ORDER BY created_at DESC`)
       .all().map((row) => ({ ...row, revoked: Boolean(row.revoked), has_push: false })) };
   }
 

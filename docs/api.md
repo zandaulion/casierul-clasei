@@ -1,12 +1,14 @@
-# Implementation contract — first usable version
+# Implementation contract
 
-Single treasurer / one class; multiple invited devices share the same class. Node 24 built-in HTTP and SQLite, no npm runtime dependencies. All money is integer bani; all UI is Romanian. Empty real database on first run (no fixtures in production). The existing prototype remains in `design/`.
+One class; invited devices share the same ledger with treasurer, parent or auditor access. Node 24 built-in HTTP and SQLite. All money is integer bani; all UI is Romanian. Empty real database on first run (no fixtures in production). The existing prototype remains in `design/`.
 
 ## HTTP
 
 Public server stays on `127.0.0.1:8018`. Separate admin listener `127.0.0.1:8118`; public server always returns 404 for `/api/admin` and children, even with forged admin headers. Admin listener requires constant-time `X-Admin-Token` from environment. Console's private Caddy route strips `/casierul-clasei` and proxies to 8118 with the header. Public base URL comes from environment.
 
-`GET /api/health` public. `POST /api/auth/redeem {code,label?}` -> HttpOnly, Secure, SameSite=Lax host-only cookie, response `{device}`. `GET /api/auth/me` -> `{device}`. `POST /api/auth/logout`. Device validation on every business request. Standard seven pwa-invite-console endpoints on admin listener.
+`GET /api/health` public. `POST /api/auth/redeem {code,label?}` -> HttpOnly, Secure, SameSite=Lax host-only cookie, response `{device}`. `GET /api/auth/me` -> `{device}`. `POST /api/auth/logout`. Device validation on every business request. Standard seven pwa-invite-console endpoints on admin listener remain backward compatible. `GET /api/admin/invite-options` lists active children; invite creation also accepts optional `role`, `childId` and `accessExpiresAt`.
+
+Missing roles on legacy invitations and devices migrate to `treasurer`. Treasurer sessions have full access. Auditor sessions can read the complete state and authorized PDFs. Parent sessions receive a server-projected state containing class totals, aggregate expenses and outgoing payments, plus only their associated child's details and transactions. Parent report access is limited to aggregate class/expense reports and that child's individual reports. Every mutation, report issuance and raw JSON export requires the treasurer role.
 
 `GET /api/state` returns state below. `GET /api/export` downloads a JSON snapshot (business data only, no device credentials). Mutations return `{ state, transactionId? }`; errors `{error}` with appropriate HTTP status. Every business POST has `requestId` (idempotency key) and `expectedRevision`. Check idempotency before stale revision; changed payload with reused key is 409. An identical successful retry returns current state and the original transactionId without writing again. If state changed for a new request, return 409 and let user refresh/review. Financial mutations are atomic.
 

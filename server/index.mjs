@@ -172,6 +172,49 @@ function requireMethod(req, method) {
   if (req.method !== method) throw Object.assign(httpError(405, 'Metodă nepermisă.'), { allow: method });
 }
 
+function requireTreasurer(device) {
+  if (device.role !== 'treasurer') throw httpError(403, 'Acest dispozitiv are acces doar pentru citire.');
+}
+
+function canReadReport(report, device) {
+  if (device.role === 'treasurer' || device.role === 'auditor') return true;
+  return device.role === 'parent' && (['class', 'expense'].includes(report.type)
+    || (report.type === 'child' && report.subjectId === device.child_id));
+}
+
+export function projectState(state, device) {
+  if (device.role !== 'parent') return state;
+  const ownChild = state.children.find((child) => child.id === device.child_id);
+  if (!ownChild) throw httpError(403, 'Copilul asociat acestui acces nu mai este disponibil.');
+  const expenses = state.expenses.map((expense) => ({
+    ...expense,
+    comment: '',
+    participantCount: expense.contributions.length,
+    contributions: expense.contributions.filter((contribution) => contribution.childId === device.child_id),
+  }));
+  const transactions = state.transactions.filter((transaction) =>
+    transaction.type === 'payment' || transaction.childId === device.child_id).map((transaction) => ({
+    ...transaction,
+    ...(transaction.childId === device.child_id ? {} : { comment: '' }),
+  }));
+  return {
+    ...state,
+    children: [ownChild],
+    expenses,
+    transactions,
+    reports: (state.reports || []).filter((report) => canReadReport(report, device)),
+  };
+}
+
+function accessLabels(state) {
+  return new Map((state.children || []).map((child) => [child.id, `${child.lastName} ${child.firstName}`]));
+}
+
+function decorateAccess(records, state) {
+  const labels = accessLabels(state);
+  return records.map((record) => ({ ...record, child_label: record.child_id ? labels.get(record.child_id) || null : null }));
+}
+
 export function createApp(options = {}) {
   const config = { ...loadConfig(), ...options };
   const base = new URL(config.publicBaseUrl);
@@ -221,20 +264,24 @@ export function createApp(options = {}) {
       }
       if (pathname === '/api/state') {
         requireMethod(req, 'GET');
-        return sendJson(res, 200, ledger.getState());
+        return sendJson(res, 200, projectState(ledger.getState(), device));
       }
       if (pathname === '/api/export') {
         requireMethod(req, 'GET');
+        requireTreasurer(device);
         return sendJson(res, 200, ledger.exportData(), {
           'Content-Disposition': `attachment; filename="casierul-clasei-${new Date().toISOString().slice(0, 10)}.json"`,
         });
       }
       if (reportPdf) {
         requireMethod(req, 'GET');
+        const report = (ledger.getState().reports || []).find((entry) => entry.id === reportPdf[1]);
+        if (!report || !canReadReport(report, device)) throw httpError(404, 'Raportul nu a fost găsit.');
         return sendPdf(res, ledger.getReportPdf(reportPdf[1]));
       }
       if (pathname === '/api/reports') {
         requireMethod(req, 'POST');
+        requireTreasurer(device);
         checkOrigin(req, config.publicBaseUrl);
         const body = await readJson(req);
         exactKeys(body, ['requestId', 'type', 'subjectId', 'replacesId'], ['requestId', 'type']);
@@ -244,6 +291,7 @@ export function createApp(options = {}) {
         if (!/^[A-Za-z0-9_.:-]{1,128}$/u.test(body.requestId)) throw httpError(400, 'Identificatorul cererii nu este valid.');
         return sendJson(res, 201, await ledger.createReport(body, { id: device.id, label: device.label }));
       }
+      requireTreasurer(device);
       requireMethod(req, 'POST');
       checkOrigin(req, config.publicBaseUrl);
       const body = await readJson(req);
@@ -267,14 +315,39 @@ export function createApp(options = {}) {
     if (!adminTokenMatches(req.headers['x-admin-token'], config.adminToken)) throw httpError(404, 'Nu a fost găsit.');
     if (pathname === '/api/admin/devices') {
       requireMethod(req, 'GET');
-      return sendJson(res, 200, auth.listDevices());
+      const result = auth.listDevices();
+      return sendJson(res, 200, { ...result, devices: decorateAccess(result.devices, ledger.getState()) });
+    }
+    if (pathname === '/api/admin/invite-options') {
+      requireMethod(req, 'GET');
+      return sendJson(res, 200, { children: ledger.getState().children.filter((child) => child.active)
+        .map((child) => ({ id: child.id, name: `${child.lastName} ${child.firstName}` })) });
     }
     if (pathname === '/api/admin/invites') {
-      if (req.method === 'GET') return sendJson(res, 200, auth.listInvites());
+      if (req.method === 'GET') {
+        const result = auth.listInvites();
+        return sendJson(res, 200, { ...result, invites: decorateAccess(result.invites, ledger.getState()) });
+      }
       requireMethod(req, 'POST');
       const body = await readJson(req);
-      exactKeys(body, ['label']);
-      return sendJson(res, 201, auth.createInvite(body.label));
+      exactKeys(body, ['label', 'role', 'childId', 'accessExpiresAt']);
+      const role = body.role ?? 'treasurer';
+      if (!['treasurer', 'parent', 'auditor'].includes(role)) throw httpError(400, 'Tipul de acces nu este valid.');
+      if (role !== 'parent' && body.childId != null) throw httpError(400, 'Copilul poate fi ales doar pentru accesul unui părinte.');
+      if (role === 'parent' && !ledger.getState().children.some((child) => child.active && child.id === body.childId)) {
+        throw httpError(400, 'Copilul ales nu este activ în clasă.');
+      }
+      let accessExpiresAt = null;
+      if (body.accessExpiresAt != null) {
+        if (typeof body.accessExpiresAt !== 'string' || !/^\d{4}-\d{2}-\d{2}$/u.test(body.accessExpiresAt)) {
+          throw httpError(400, 'Data expirării accesului nu este validă.');
+        }
+        accessExpiresAt = `${body.accessExpiresAt}T23:59:59.999Z`;
+        if (accessExpiresAt <= new Date().toISOString()) throw httpError(400, 'Data expirării trebuie să fie în viitor.');
+      }
+      return sendJson(res, 201, auth.createInvite(body.label, {
+        role, childId: role === 'parent' ? body.childId : null, accessExpiresAt,
+      }));
     }
     const device = pathname.match(/^\/api\/admin\/devices\/([A-Za-z0-9_-]{1,100})(?:\/(revoke|label))?$/u);
     if (device) {
