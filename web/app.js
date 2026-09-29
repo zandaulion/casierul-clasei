@@ -26,6 +26,7 @@ let navigationIndex = Number.isSafeInteger(storedNavigation?.index) ? storedNavi
 let navigationOverlay = false, restoringNavigation = false;
 let toastTimer, inviteCode = new URL(location.href).searchParams.get('invite') || '';
 let search = '', showArchived = false, rosterScrollY = 0;
+let pdfModulePromise = null;
 if (['children', 'expenses', 'ledger', 'reports'].includes(storedNavigation?.tab)) tab = storedNavigation.tab;
 if (tab === 'children' && typeof storedNavigation?.childId === 'string') childId = storedNavigation.childId;
 try { pending = JSON.parse(sessionStorage.getItem(pendingKey) || 'null'); } catch { /* Browser storage can be unavailable. */ }
@@ -114,6 +115,12 @@ function canLeave() {
 function closeModal(force = false, fromHistory = false) {
   if (!force && (saving || pending)) { toast('Verifică mai întâi salvarea în așteptare.'); return false; }
   if (!force && modalDirty && !confirm('Renunți la modificările din formular?')) return false;
+  if (modal?.type === 'report-preview') {
+    modal.pdfAbort?.abort();
+    try { modal.pdfRenderTask?.cancel(); } catch { /* The page may already be rendered. */ }
+    Promise.resolve(modal.pdfLoadingTask?.destroy()).catch(() => {});
+    Promise.resolve(modal.pdfDocument?.destroy()).catch(() => {});
+  }
   if ($('#dialog').open) $('#dialog').close();
   modal = null; modalDirty = false;
   if (navigationOverlay && !fromHistory) history.back();
@@ -122,8 +129,10 @@ function closeModal(force = false, fromHistory = false) {
 function openModal(type, title, content, submit = 'Salvează', extra = {}) {
   const alreadyOpen = $('#dialog').open;
   modal = { type, ...extra }; modalDirty = false;
+  $('#dialog').classList.toggle('pdf-dialog', type === 'report-preview');
   $('#dialog-title').textContent = title; $('#modal-content').innerHTML = content;
   $('#modal-error').hidden = true; $('#modal-submit').textContent = submit; $('#modal-submit').hidden = !submit;
+  $('.dialog-actions [data-action="close-modal"]').textContent = extra.closeLabel || 'Renunță';
   if (!alreadyOpen) { pushNavigation(true); $('#dialog').showModal(); }
   else replaceNavigation(true);
   updateNotices();
@@ -251,7 +260,7 @@ function renderReports() {
     <button class="card card-button" data-action="report-child" ${state.children.length ? '' : 'disabled'}><h3>Fișa individuală</h3><div class="caption">${debtors.length} copii au de achitat ${money(debtors.reduce((total, item) => total + item.dueMinor, 0))}</div></button>
   </div>` : '<p>Poți descărca sau partaja rapoartele emise de casier la care ai acces.</p>'}
   <h2 style="margin-top:28px">Arhivă</h2>
-  <div class="stack">${reports.length ? reports.map(report => `<article class="card report-card ${report.replacedById ? 'replaced' : ''}"><div class="row"><h3>${esc(report.code)}</h3>${report.replacedById ? '<span class="badge">Înlocuit</span>' : '<span class="badge">Emis</span>'}</div><div>${esc(reportTypeLabels[report.type])} · ${esc(report.subjectLabel)}</div><div class="caption">${dateText(report.createdAt)} · revizia ${report.stateRevision}</div>${report.replacesId ? '<div class="caption">Raport corectiv</div>' : ''}<div class="report-actions"><button class="primary" data-action="share-report" data-id="${esc(report.id)}">Partajează PDF</button><a href="/api/reports/${encodeURIComponent(report.id)}/pdf" download="${esc(report.filename)}">Descarcă</a>${canWrite() && !report.replacedById ? `<button data-action="replace-report" data-id="${esc(report.id)}">Emite corecție</button>` : ''}</div></article>`).join('') : '<div class="empty"><p>Nu există rapoarte disponibile.</p></div>'}</div>`;
+  <div class="stack">${reports.length ? reports.map(report => `<article class="card report-card ${report.replacedById ? 'replaced' : ''}"><div class="row"><h3>${esc(report.code)}</h3>${report.replacedById ? '<span class="badge">Înlocuit</span>' : '<span class="badge">Emis</span>'}</div><div>${esc(reportTypeLabels[report.type])} · ${esc(report.subjectLabel)}</div><div class="caption">${dateText(report.createdAt)} · revizia ${report.stateRevision}</div>${report.replacesId ? '<div class="caption">Raport corectiv</div>' : ''}<div class="report-actions"><button class="primary" data-action="view-report" data-id="${esc(report.id)}">Vizualizează</button><button data-action="share-report" data-id="${esc(report.id)}">Partajează PDF</button><a href="/api/reports/${encodeURIComponent(report.id)}/pdf" download="${esc(report.filename)}">Descarcă</a>${canWrite() && !report.replacedById ? `<button data-action="replace-report" data-id="${esc(report.id)}">Emite corecție</button>` : ''}</div></article>`).join('') : '<div class="empty"><p>Nu există rapoarte disponibile.</p></div>'}</div>`;
 }
 function reportModal(type, replacesId = null) {
   const replaced = replacesId ? (state.reports || []).find(report => report.id === replacesId) : null;
@@ -291,7 +300,7 @@ async function createReport(form) {
       requestId: modal.requestId, type: modal.reportType, ...(subjectId ? { subjectId } : {}), ...(modal.replacesId ? { replacesId: modal.replacesId } : {}),
     }) });
     state.reports = result.reports;
-    closeModal(true); render(); toast(`${result.report.code} a fost generat. Îl poți partaja acum.`);
+    closeModal(true); render(); toast(`${result.report.code} a fost generat. Îl poți vizualiza sau partaja acum.`);
   } catch (error) { $('#modal-error').textContent = error.message; $('#modal-error').hidden = false; }
   finally { saving = false; updateNotices(); }
 }
@@ -312,6 +321,59 @@ async function shareReport(reportId) {
     }
   } catch (error) { if (error.name !== 'AbortError') toast(error.message || 'PDF-ul nu a putut fi partajat.'); }
   finally { saving = false; updateNotices(); }
+}
+async function loadReportPreview(currentModal, report) {
+  const status = $('#pdf-preview-status'), pages = $('#pdf-preview-pages');
+  const abort = new AbortController(); currentModal.pdfAbort = abort;
+  const timeout = setTimeout(() => abort.abort(), 20000);
+  try {
+    const library = pdfModulePromise ||= import('/vendor/pdfjs/pdf.min.mjs');
+    status.textContent = 'Se încarcă fișierul PDF…';
+    const response = await fetch(`/api/reports/${encodeURIComponent(report.id)}/pdf`, { credentials: 'same-origin', cache: 'no-store', signal: abort.signal });
+    clearTimeout(timeout);
+    if (!response.ok) throw new Error('PDF-ul nu a putut fi încărcat.');
+    status.textContent = 'Se pregătește afișarea…';
+    const pdfjs = await library;
+    pdfjs.GlobalWorkerOptions.workerSrc = '/vendor/pdfjs/pdf.worker.min.mjs';
+    const loadingTask = pdfjs.getDocument({ data: await response.arrayBuffer() });
+    currentModal.pdfLoadingTask = loadingTask;
+    const pdfDocument = await loadingTask.promise;
+    if (modal !== currentModal) { await pdfDocument.destroy(); return; }
+    currentModal.pdfDocument = pdfDocument;
+    for (let pageNumber = 1; pageNumber <= pdfDocument.numPages; pageNumber += 1) {
+      if (modal !== currentModal) return;
+      status.textContent = `Se afișează pagina ${pageNumber} din ${pdfDocument.numPages}…`;
+      const page = await pdfDocument.getPage(pageNumber);
+      const natural = page.getViewport({ scale: 1 });
+      const cssWidth = Math.max(1, Math.min(natural.width, pages.clientWidth));
+      const pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
+      const viewport = page.getViewport({ scale: (cssWidth / natural.width) * pixelRatio });
+      const wrapper = document.createElement('figure');
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.ceil(viewport.width); canvas.height = Math.ceil(viewport.height);
+      canvas.style.width = `${Math.round(viewport.width / pixelRatio)}px`;
+      canvas.style.height = `${Math.round(viewport.height / pixelRatio)}px`;
+      canvas.setAttribute('aria-label', `Pagina ${pageNumber} din ${pdfDocument.numPages}`);
+      wrapper.append(canvas); pages.append(wrapper);
+      const renderTask = page.render({ canvasContext: canvas.getContext('2d'), viewport });
+      currentModal.pdfRenderTask = renderTask;
+      await renderTask.promise;
+      wrapper.dataset.rendered = 'true';
+    }
+    currentModal.pdfRenderTask = null; status.hidden = true;
+  } catch (error) {
+    clearTimeout(timeout);
+    if (modal !== currentModal) return;
+    status.classList.add('error');
+    status.textContent = error.name === 'AbortError' ? 'Încărcarea raportului a durat prea mult. Încearcă din nou.' : (error.message || 'Raportul nu a putut fi afișat.');
+  }
+}
+function viewReport(reportId) {
+  const report = (state.reports || []).find(item => item.id === reportId);
+  if (!report) return;
+  openModal('report-preview', `${report.code} · ${reportTypeLabels[report.type]}`, '<p id="pdf-preview-status" class="caption pdf-preview-status" role="status">Se încarcă raportul…</p><div id="pdf-preview-pages" class="pdf-preview-pages"></div>', null,
+    { reportId, closeLabel: 'Închide' });
+  loadReportPreview(modal, report);
 }
 function settingsModal() {
   const s = state.settings;
@@ -599,6 +661,7 @@ document.addEventListener('click', async event => {
     case 'report-matrix': reportModal('matrix'); break;
     case 'report-expense': reportModal('expense'); break;
     case 'report-child': reportModal('child'); break;
+    case 'view-report': viewReport(button.dataset.id); break;
     case 'share-report': await shareReport(button.dataset.id); break;
     case 'replace-report': {
       const report = (state.reports || []).find(item => item.id === button.dataset.id);
