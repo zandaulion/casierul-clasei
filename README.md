@@ -52,7 +52,7 @@ Avansul poate acoperi ulterior alte contribuții sau poate fi restituit. Folosir
 - **Corecții:** operațiunile confirmate se anulează printr-o înregistrare separată, cu motiv, păstrând istoricul. O cheltuială fără încasări sau plăți active poate fi anulată și recreată.
 - **Export:** copie JSON a datelor și istoricului, fără credentiale. Restaurarea automată din JSON nu este inclusă.
 - **Identitate vizuală:** sigla școlii și sigla clasei configurate din aplicație apar compact în antetul aplicației și în antetul PDF-urilor.
-- **Rapoarte PDF:** verde pentru achitat, galben pentru parțial, roșu pentru restant, albastru pentru solduri și bani dați mai departe. Fiecare PDF păstrează siglele și culorile de la momentul emiterii.
+- **Rapoarte PDF:** vizualizare directă în aplicație, partajare și descărcare; verde pentru achitat, galben pentru parțial, roșu pentru restant, albastru pentru solduri și bani dați mai departe. Fiecare PDF păstrează siglele și culorile de la momentul emiterii.
 
 Sumele sunt stocate în bani întregi; împărțirea unui total distribuie exact și ultimii bani. Contribuțiile unei cheltuieli sunt fixate la creare. Soldul fondului include avansurile deținute, afișate și separat.
 

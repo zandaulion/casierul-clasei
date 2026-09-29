@@ -45,12 +45,12 @@ async function evaluate(expression) {
   if (result.exceptionDetails) throw new Error(JSON.stringify(result.exceptionDetails));
   return result.result.value;
 }
-async function until(expression, label = expression) {
-  for (let i = 0; i < 100; i++) {
+async function until(expression, label = expression, attempts = 100) {
+  for (let i = 0; i < attempts; i++) {
     try { if (await evaluate(expression)) return; } catch (error) { if (!/context|navigat/i.test(error.message)) throw error; }
     await new Promise(resolve => setTimeout(resolve, 60));
   }
-  const info = await evaluate('({page:document.body.innerText,modal:document.getElementById("modal-error")?.textContent})');
+  const info = await evaluate('({page:document.body.innerText,modal:document.getElementById("modal-error")?.textContent,pdfStatus:document.getElementById("pdf-preview-status")?.textContent})');
   throw new Error('Timed out: ' + label + '\n' + JSON.stringify(info));
 }
 const click = selector => evaluate('document.querySelector(' + JSON.stringify(selector) + ').click()');
@@ -261,6 +261,15 @@ try {
   assert.equal(snapshot().reports.length, 1);
   assert.equal(snapshot().reports[0].code, 'R-0001');
   assert.equal(app.ledger.getReportPdf(snapshot().reports[0].id).pdf.subarray(0, 5).toString(), '%PDF-');
+  await click('[data-action=view-report]');
+  await until('document.querySelector("#pdf-preview-pages figure[data-rendered=true] canvas")', 'PDF rendered inside the app', 350);
+  assert.equal(await evaluate('(() => { const canvas=document.querySelector("#pdf-preview-pages canvas"); return canvas.width > 0 && canvas.height > 0 && canvas.getBoundingClientRect().right <= innerWidth; })()'), true, 'PDF preview fits the viewport');
+  await screenshot('pdf-preview');
+  await page('Emulation.setDeviceMetricsOverride', { width: 320, height: 700, deviceScaleFactor: 1, mobile: true });
+  assert.equal(await evaluate('document.documentElement.scrollWidth <= innerWidth && document.querySelector("#pdf-preview-pages canvas").getBoundingClientRect().right <= innerWidth'), true, 'PDF preview fits a small phone');
+  await page('Emulation.setDeviceMetricsOverride', { width: 412, height: 915, deviceScaleFactor: 1, mobile: true });
+  await click('[data-action=close-modal]');
+  await until('!document.getElementById("dialog").open', 'close PDF preview');
   await evaluate(`(() => {
     window.__sharedReport = null;
     Object.defineProperty(navigator, 'canShare', { configurable: true, value: () => true });
@@ -303,7 +312,7 @@ try {
   assert.equal(snapshot().summary.balanceMinor, 15000);
   await until('navigator.serviceWorker.getRegistration().then(r => !!r?.active)', 'shared PWA worker installed');
   assert.equal(exceptions.length, 0, JSON.stringify(exceptions));
-  console.log('Browser checks passed: invitation/setup, logo upload, navigation, roster, expense editing before and after linked money, manual allocation, quick collection, lost-response retry across reauthentication, payment/refund/credit/correction, PDF report generation and sharing, stale-data protection, reload, offline protection, mobile/dark layout, and PWA worker.');
+  console.log('Browser checks passed: invitation/setup, logo upload, navigation, roster, expense editing before and after linked money, manual allocation, quick collection, lost-response retry across reauthentication, payment/refund/credit/correction, PDF report generation, in-app viewing and sharing, stale-data protection, reload, offline protection, mobile/dark layout, and PWA worker.');
 } finally {
   if (contextId) await send('Target.disposeBrowserContext', { browserContextId: contextId });
   socket.close();
