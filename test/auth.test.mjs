@@ -154,6 +154,7 @@ function stubLedger() {
     getState() { return { revision: 0, children: [], expenses: [], transactions: [] }; },
     dispatch(operation, body, actor) { this.calls.push({ operation, body, actor }); return { state: this.getState() }; },
     exportData() { return { version: 1, state: this.getState() }; },
+    getBrandingImage(kind) { return kind === 'school' ? { mimeType: 'image/png', data: Buffer.from('logo'), updatedAt: '2026-09-29T10:00:00Z' } : null; },
     close() {},
   };
 }
@@ -316,7 +317,7 @@ test('business routes enforce body types, size, ids, and method before dispatch'
     method: 'POST', body: base, headers: { Cookie: cookie, 'Content-Type': 'text/plain' },
   })).status, 415);
   assert.equal((await publicRequest('/api/children', {
-    method: 'POST', body: { ...base, firstName: 'a'.repeat(140000) }, headers: { Cookie: cookie },
+    method: 'POST', body: { ...base, firstName: 'a'.repeat(1100000) }, headers: { Cookie: cookie },
   })).status, 413);
   assert.equal((await publicRequest('/api/children', { headers: { Cookie: cookie } })).status, 405);
   assert.equal((await publicRequest('/api/missing', { headers: { Cookie: cookie } })).status, 404);
@@ -361,6 +362,17 @@ test('export requires a session and contains only business data; logout invalida
   assert.equal(logout.status, 200);
   assert.ok(logout.headers.get('set-cookie').includes('Max-Age=0'));
   assert.equal((await publicRequest('/api/state', { headers: { Cookie: cookie } })).status, 401);
+});
+
+test('configured branding images require an authenticated device', async (t) => {
+  const { publicRequest, activate } = await fixture(t);
+  assert.equal((await publicRequest('/api/branding/school')).status, 401);
+  const { cookie } = await activate();
+  const logo = await publicRequest('/api/branding/school', { headers: { Cookie: cookie } });
+  assert.equal(logo.status, 200);
+  assert.equal(logo.headers.get('content-type'), 'image/png');
+  assert.equal(await logo.text(), 'logo');
+  assert.equal((await publicRequest('/api/branding/class', { headers: { Cookie: cookie } })).status, 404);
 });
 
 test('static shell has safe headers, stamped worker, correct content types, and no traversal or symlinks', async (t) => {

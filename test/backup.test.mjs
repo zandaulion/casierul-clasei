@@ -7,6 +7,7 @@ import { randomUUID } from 'node:crypto';
 import { backupDatabases } from '../scripts/backup.mjs';
 import { Ledger } from '../server/ledger.mjs';
 import { AuthStore } from '../server/auth.mjs';
+const tinyPng = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
 
 test('live WAL-backed STRICT databases restore as standalone private files with money, retry and access intact', async t => {
   const directory = await mkdtemp(path.join(tmpdir(), 'casierul-backup-'));
@@ -22,6 +23,7 @@ test('live WAL-backed STRICT databases restore as standalone private files with 
   const child = ledger.dispatch('child.create', { firstName: 'Ana', lastName: 'Avram', requestId: randomUUID(), expectedRevision: 0 }, actor).state.children[0];
   const request = { childId: child.id, receivedMinor: 12500, changeMinor: 500, allocations: [], requestId: randomUUID(), expectedRevision: 1 };
   const receipt = ledger.dispatch('collection.create', request, actor);
+  ledger.dispatch('settings.update', { schoolLogo: tinyPng, requestId: randomUUID(), expectedRevision: 2 }, actor);
   const expected = ledger.getState();
   assert.ok((await stat(path.join(directory, 'ledger.sqlite-wal'))).size > 0);
   assert.ok((await stat(path.join(directory, 'auth.sqlite-wal'))).size > 0);
@@ -32,7 +34,7 @@ test('live WAL-backed STRICT databases restore as standalone private files with 
   for (const name of ['ledger.sqlite', 'auth.sqlite']) assert.equal((await stat(path.join(folder, name))).mode & 0o777, 0o600);
 
   // Later live writes must not change the completed snapshot.
-  ledger.dispatch('payment.create', { amountMinor: 1000, destination: 'Magazin', requestId: randomUUID(), expectedRevision: 2 }, actor);
+  ledger.dispatch('payment.create', { amountMinor: 1000, destination: 'Magazin', requestId: randomUUID(), expectedRevision: 3 }, actor);
   const restored = path.join(directory, 'restored');
   await mkdir(restored);
   for (const name of ['ledger.sqlite', 'auth.sqlite']) await copyFile(path.join(folder, name), path.join(restored, name));
@@ -41,6 +43,7 @@ test('live WAL-backed STRICT databases restore as standalone private files with 
   try {
     assert.deepEqual(restoredLedger.getState(), expected);
     assert.equal(restoredLedger.getState().summary.balanceMinor, 12000);
+    assert.ok(restoredLedger.getBrandingImage('school').data.length > 0);
     assert.equal(restoredLedger.dispatch('collection.create', request, actor).transactionId, receipt.transactionId);
     assert.equal(restoredLedger.getState().transactions.length, 1);
     assert.equal(restoredAuth.getDevice(device.token).id, device.device.id);

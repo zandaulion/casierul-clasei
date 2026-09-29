@@ -14,7 +14,7 @@ Missing roles on legacy invitations and devices migrate to `treasurer`. Treasure
 
 | Endpoint | Ledger dispatch operation | Body fields beyond requestId/expectedRevision |
 | --- | --- | --- |
-| POST /api/settings | settings.update | schoolName, className, schoolYear, openingBalanceMinor (opening editable only before financial transactions) |
+| POST /api/settings | settings.update | schoolName, className, schoolYear, openingBalanceMinor (opening editable only before financial transactions), schoolLogo/classLogo as resized PNG data URLs or null |
 | POST /api/children | child.create | firstName, lastName |
 | POST /api/children/bulk | children.create | children: [{firstName,lastName}] |
 | POST /api/children/:id | child.update | firstName, lastName, active?; server adds childId from URL |
@@ -36,7 +36,7 @@ Missing roles on legacy invitations and devices migrate to `treasurer`. Treasure
 ```
 {
  revision: 0,
- settings: {schoolName:'',className:'',schoolYear:'',openingBalanceMinor:0},
+ settings: {schoolName:'',className:'',schoolYear:'',openingBalanceMinor:0,hasSchoolLogo:false,hasClassLogo:false},
  children: [{id,firstName,lastName,active,creditMinor,dueMinor,
    contributions:[{expenseId,title,dueDate,amountMinor,paidMinor,remainingMinor}]}],
  expenses: [{id,title,type,amountMinor,totalMinor,collectedMinor,paidOutMinor,
@@ -47,6 +47,8 @@ Missing roles on legacy invitations and devices migrate to `treasurer`. Treasure
  summary:{balanceMinor,totalReceivedMinor,totalPaidMinor,totalCreditMinor,totalDueMinor}
 }
 ```
+
+`GET /api/branding/school` and `GET /api/branding/class` return configured PNG images to authenticated devices. Logo bytes stay in SQLite and out of `/api/state` and JSON export payloads. Issued PDFs embed the current images and remain immutable after branding changes.
 
 Types: collection, payment, credit_apply, refund, reversal. `amountMinor` is gross received for collections, spent for payments, applied for credit, refunded for refunds. Sum of retained collections minus allocations, credit applications, and refunds = child credit. Balance includes opening + collections less change − outgoing payments − refunds; applying credit is no cash movement. Reversal records negate the target's effects once. Reject reversals that would make a child's credit negative. Expenses with opted-out children simply omit them from participants; split expenses divide exactly in integer bani with deterministic remainder distribution. Child debts are not netted against credit until explicit application. Default occurredAt to now; validate dates and request sizes. Do not silently change confirmed contributions later.
 

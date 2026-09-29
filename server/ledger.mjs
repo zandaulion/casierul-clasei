@@ -6,6 +6,8 @@ import { REPORT_TYPES, renderReportPdf, reportCode, reportFilename, reportSubjec
 
 const MAX_MONEY = 1_000_000_000_000;
 const MAX_CHILDREN = 500;
+const MAX_LOGO_BYTES = 256 * 1024;
+const MAX_REQUEST_BYTES = 1024 * 1024;
 const names = new Intl.Collator('ro', { sensitivity: 'base', numeric: true });
 
 function fail(message, status = 400) {
@@ -67,6 +69,23 @@ function canonical(value) {
     return `{${Object.keys(value).sort().map(key => `${JSON.stringify(key)}:${canonical(value[key])}`).join(',')}}`;
   }
   return JSON.stringify(value);
+}
+
+function logo(value, label) {
+  if (value === null) return null;
+  if (typeof value !== 'string' || !value.startsWith('data:image/png;base64,')) fail(`${label}: folosește o imagine validă.`);
+  const encoded = value.slice('data:image/png;base64,'.length);
+  if (!encoded || encoded.length > Math.ceil(MAX_LOGO_BYTES / 3) * 4 || !/^[A-Za-z0-9+/]+={0,2}$/u.test(encoded)) {
+    fail(`${label}: imaginea este prea mare sau nu este validă.`);
+  }
+  const data = Buffer.from(encoded, 'base64');
+  if (data.length > MAX_LOGO_BYTES || data.toString('base64') !== encoded
+    || !data.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10])) || data.length < 24) {
+    fail(`${label}: imaginea PNG nu este validă.`);
+  }
+  const width = data.readUInt32BE(16), height = data.readUInt32BE(20);
+  if (!width || !height || width > 1024 || height > 1024) fail(`${label}: dimensiunile maxime sunt 1024 × 1024 px.`);
+  return data;
 }
 
 const SCHEMA = `
@@ -133,6 +152,12 @@ CREATE TABLE IF NOT EXISTS reports (
   sha256 TEXT NOT NULL,
   snapshot TEXT NOT NULL,
   pdf BLOB NOT NULL
+) STRICT;
+CREATE TABLE IF NOT EXISTS branding (
+  kind TEXT PRIMARY KEY CHECK(kind IN ('school', 'class')),
+  mime_type TEXT NOT NULL CHECK(mime_type = 'image/png'),
+  data BLOB NOT NULL,
+  updated_at TEXT NOT NULL
 ) STRICT;
 CREATE INDEX IF NOT EXISTS allocations_expense ON allocations(expense_id);
 CREATE INDEX IF NOT EXISTS transactions_child ON transactions(child_id);
@@ -233,6 +258,12 @@ export class Ledger {
     return { format: 'casierul-clasei', version: 1, exportedAt: new Date().toISOString(), state: this.getState() };
   }
 
+  getBrandingImage(kind) {
+    if (!['school', 'class'].includes(kind)) fail('Sigla nu este validă.', 404);
+    const row = this.#one('SELECT mime_type, data, updated_at FROM branding WHERE kind = ?', kind);
+    return row ? { mimeType: row.mime_type, data: Buffer.from(row.data), updatedAt: row.updated_at } : null;
+  }
+
   #reports() {
     return this.#all(`SELECT serial, id, type, subject_id, subject_label, created_at, state_revision,
       created_by_label, replaces_id, replaced_by_id, filename, sha256, length(pdf) AS size
@@ -279,7 +310,11 @@ export class Ledger {
       const report = { id, serial, code: reportCode(serial), type, subjectId: subject.id, subjectLabel: subject.label,
         createdAt, stateRevision: state.revision, createdByLabel: actorLabel,
         replacesId: replaced?.id ?? null, replacesCode: replaced ? reportCode(replaced.serial) : null };
-      const pdf = await renderReportPdf(report, state);
+      const branding = Object.fromEntries(['school', 'class'].map((kind) => {
+        const image = this.getBrandingImage(kind);
+        return [kind, image?.data ?? null];
+      }));
+      const pdf = await renderReportPdf(report, state, branding);
       const sha256 = createHash('sha256').update(pdf).digest('hex');
       const filename = reportFilename(report);
       this.#run(`INSERT INTO reports (serial, id, request_id, request_fingerprint, type, subject_id, subject_label,
@@ -374,9 +409,11 @@ export class Ledger {
       return { id: row.id, firstName: row.first_name, lastName: row.last_name, active: Boolean(row.active),
         creditMinor: childCredit.get(row.id), dueMinor: sum(contributions.map(c => c.remainingMinor)), contributions };
     }).sort((a, b) => names.compare(a.lastName, b.lastName) || names.compare(a.firstName, b.firstName) || a.id.localeCompare(b.id));
+    const branding = new Set(this.#all('SELECT kind FROM branding').map(row => row.kind));
     return {
       revision: meta.revision,
-      settings: { schoolName: meta.school_name, className: meta.class_name, schoolYear: meta.school_year, openingBalanceMinor: meta.opening_balance },
+      settings: { schoolName: meta.school_name, className: meta.class_name, schoolYear: meta.school_year,
+        openingBalanceMinor: meta.opening_balance, hasSchoolLogo: branding.has('school'), hasClassLogo: branding.has('class') },
       children, expenses, transactions: transactions.reverse(),
       summary: { balanceMinor: add(meta.opening_balance, totalReceivedMinor - totalPaidMinor),
         totalReceivedMinor, totalPaidMinor, totalCreditMinor: sum(children.map(child => child.creditMinor)),
@@ -389,7 +426,7 @@ export class Ledger {
     object(body);
     let serialized;
     try { serialized = JSON.stringify(body); } catch { fail('Datele cererii nu sunt valide.'); }
-    if (Buffer.byteLength(serialized) > 128 * 1024) fail('Cererea este prea mare.', 413);
+    if (Buffer.byteLength(serialized) > MAX_REQUEST_BYTES) fail('Cererea este prea mare.', 413);
     const requestId = text(body.requestId, 'Identificatorul cererii', 128);
     const expectedRevision = integer(body.expectedRevision, 'Versiunea datelor', 0, Number.MAX_SAFE_INTEGER);
     const fingerprint = createHash('sha256').update(canonical({ operation, body })).digest('hex');
@@ -479,6 +516,14 @@ export class Ledger {
       const opening = body.openingBalanceMinor === undefined ? old.openingBalanceMinor : integer(body.openingBalanceMinor, 'Soldul inițial');
       if (state.transactions.length && opening !== old.openingBalanceMinor) fail('Soldul inițial nu se mai poate modifica după prima operațiune financiară.', 409);
       this.#run('UPDATE metadata SET school_name = ?, class_name = ?, school_year = ?, opening_balance = ? WHERE singleton = 1', schoolName, className, schoolYear, opening);
+      for (const [field, kind, label] of [['schoolLogo', 'school', 'Sigla școlii'], ['classLogo', 'class', 'Sigla clasei']]) {
+        if (!Object.hasOwn(body, field)) continue;
+        const data = logo(body[field], label);
+        if (data === null) this.#run('DELETE FROM branding WHERE kind = ?', kind);
+        else this.#run(`INSERT INTO branding (kind, mime_type, data, updated_at) VALUES (?, 'image/png', ?, ?)
+          ON CONFLICT(kind) DO UPDATE SET mime_type = excluded.mime_type, data = excluded.data, updated_at = excluded.updated_at`,
+        kind, data, new Date().toISOString());
+      }
       return;
     }
     if (operation === 'child.create' || operation === 'children.create') {

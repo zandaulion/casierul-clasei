@@ -8,6 +8,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { Ledger } from '../server/ledger.mjs';
 
 const actor = { id: 'device-test', label: 'Telefonul casierului' };
+const tinyPng = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
 function fixture(t, disk = false) {
   const directory = disk ? mkdtempSync(join(tmpdir(), 'casierul-ledger-')) : null;
   const path = directory ? join(directory, 'ledger.sqlite') : ':memory:';
@@ -126,7 +127,12 @@ test('an unpaid participant can be removed after other participants paid', t => 
 
 test('PDF reports are immutable, idempotent and keep correction history', async t => {
   const { ledger, post, child, expense } = fixture(t);
-  post('settings.update', { schoolName: 'Școala 1', className: 'IX A', schoolYear: '2026–2027', openingBalanceMinor: 1000 });
+  post('settings.update', { schoolName: 'Școala 1', className: 'IX A', schoolYear: '2026–2027', openingBalanceMinor: 1000,
+    schoolLogo: tinyPng, classLogo: tinyPng });
+  assert.equal(ledger.getState().settings.hasSchoolLogo, true);
+  assert.equal(ledger.getState().settings.hasClassLogo, true);
+  assert.equal(ledger.getBrandingImage('school').mimeType, 'image/png');
+  assert.equal(JSON.stringify(ledger.exportData()).includes(tinyPng.slice(30)), false);
   const ana = child('Ana', 'Avram');
   const books = expense([ana], 3000, 'fixed', { title: 'Poze carnet' });
   post('collection.create', { childId: ana, receivedMinor: 3000, changeMinor: 0,
@@ -139,11 +145,14 @@ test('PDF reports are immutable, idempotent and keep correction history', async 
   assert.match(first.report.sha256, /^[a-f0-9]{64}$/u);
   const pdf = ledger.getReportPdf(first.report.id);
   assert.equal(pdf.pdf.subarray(0, 5).toString(), '%PDF-');
+  assert.match(pdf.pdf.toString('latin1'), /\/Subtype \/Image/u);
   assert.equal(pdf.filename, first.report.filename);
   const retried = await ledger.createReport({ requestId, type: 'class' }, actor);
   assert.equal(retried.report.id, first.report.id);
   assert.equal(retried.reports.length, 1);
   post('payment.create', { amountMinor: 1000, destination: 'Fotograf', expenseId: books });
+  post('settings.update', { classLogo: null });
+  assert.equal(ledger.getState().settings.hasClassLogo, false);
   assert.deepEqual(ledger.getReportPdf(first.report.id).pdf, pdf.pdf, 'later ledger changes cannot alter an issued PDF');
   const expenseReport = await ledger.createReport({ requestId: randomUUID(), type: 'expense', subjectId: books }, actor);
   assert.equal(expenseReport.report.subjectLabel, 'Poze carnet');
@@ -159,6 +168,7 @@ test('PDF reports are immutable, idempotent and keep correction history', async 
   assert.equal(correction.report.replacesId, first.report.id);
   assert.equal(correction.reports.find(report => report.id === first.report.id).replacedById, correction.report.id);
   await assert.rejects(ledger.createReport({ requestId: randomUUID(), type: 'class', replacesId: first.report.id }, actor), status(409));
+  assert.throws(() => post('settings.update', { schoolLogo: 'data:image/png;base64,invalid' }), status(400));
 });
 
 test('collection can earmark one expense and retain excess; applying credit has no cash movement', t => {
