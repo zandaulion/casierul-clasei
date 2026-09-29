@@ -27,15 +27,19 @@ Fișierele din `web/` sunt încărcate de server la pornire. După orice modific
 - Directorul de date este privat (0700); nu se află în directorul public.
 - Fiecare invitație acordă un rol numai pentru clasa aleasă. Rolurile sunt casier, părinte sau auditor; părintele este limitat și la copilul ales.
 - Dispozitivele de casier existente la migrare devin proprietari și pot crea clase. Pe o instalare nouă, primul casier activat devine proprietar.
+- Proprietarul care creează o clasă primește automat drept de casier în ea. Ceilalți proprietari nu primesc automat acces și trebuie invitați separat.
+- Expirarea este verificată pentru fiecare drept pe clasă. Revocarea sau ștergerea din consolă afectează întregul dispozitiv și toate drepturile lui.
 
-Invitațiile se generează din consola PWA existentă sau local:
+Pentru accesuri pe clase și pentru rolurile părinte/auditor, folosește consola PWA privată: alege rolul, apoi clasa întreagă sau copilul. Comanda locală de mai jos păstrează compatibilitatea operațională și emite numai un acces de casier pentru clasa implicită:
 
 ```
 node scripts/admin.mjs invite "Telefonul meu"
 node scripts/admin.mjs devices
 ```
 
-Codurile de invitație sunt de unică folosință și expiră în șapte zile. Deschiderea unui link nu consumă codul; apăsarea „Activează” îl consumă. Sesiunea este păstrată într-un cookie Secure și HttpOnly. Revocarea din consolă oprește accesul la următoarea cerere online.
+Codurile de invitație sunt de unică folosință și expiră în șapte zile. Deschiderea unui link nu consumă codul; apăsarea **Activează** sau confirmarea din **Adaugă acces din invitație** îl consumă. Sesiunea este păstrată într-un cookie Secure și HttpOnly. Pentru adăugarea unei a doua clase pe același dispozitiv se introduce codul în aplicația deja activată; deschiderea linkului de activare ar crea un dispozitiv nou. Revocarea din consolă oprește toate drepturile dispozitivului la următoarea cerere online.
+
+Fluxul complet pentru creare, invitații și comutare este documentat în [Mai multe școli, clase și drepturi de acces](multiple-classrooms.md).
 
 ## Copii de siguranță
 
@@ -47,7 +51,7 @@ Backup manual:
 systemctl --user start casierul-clasei-backup.service
 ```
 
-Pentru restaurare, oprește aplicația, păstrează o copie a întregului director curent de date, apoi înlocuiește `auth.sqlite` și toate bazele claselor cu fișierele din aceeași copie datată. Fișierele WAL și SHM vechi nu trebuie păstrate lângă bazele restaurate. Păstrează proprietarul `opc` și permisiunile private, pornește aplicația și verifică soldurile fiecărei clase. Nu restaura peste o bază deschisă de un proces activ.
+Pentru restaurare, oprește aplicația, păstrează o copie a întregului director curent de date, apoi înlocuiește `auth.sqlite` și toate bazele claselor cu fișierele din aceeași copie datată. Catalogul și registrele trebuie să provină din același subdirector de backup. Fișierele WAL și SHM vechi nu trebuie păstrate lângă bazele restaurate. Păstrează proprietarul `opc` și permisiunile private, pornește aplicația și verifică soldurile fiecărei clase. Nu restaura peste o bază deschisă de un proces activ.
 
 Exportul JSON din aplicație conține datele registrului și istoricul, fără credentiale. Este util pentru verificare și păstrarea unei copii lizibile; restaurarea automată din JSON nu este implementată.
 
@@ -61,3 +65,5 @@ curl -fsS http://127.0.0.1:8018/api/health
 ```
 
 Testele folosesc baze temporare, nu registrul de producție. Pentru un browser blocat pe o versiune veche, `/bust` golește cache-ul aplicației și reîncarcă versiunea curentă, fără a șterge registrul de pe server.
+
+După o migrare sau restaurare, verifică și că `auth.sqlite` conține clasa `default`, că există câte un fișier pentru fiecare clasă din catalog și că dispozitivul proprietar vede selectorul după adăugarea celei de-a doua clase. Nu redenumi manual fișierele `classroom-<uuid>.sqlite`; numele lor este legat de catalogul din `auth.sqlite`.
