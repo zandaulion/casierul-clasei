@@ -51,12 +51,13 @@ Avansul poate acoperi ulterior alte contribuții sau poate fi restituit. Folosir
 - **Copii:** contribuții, restanțe, avansuri și istoricul fiecărui copil.
 - **Cheltuieli:** participanți, contribuții calculate, termen, sume încasate și plătite. O cheltuială poate fi editată; suma, calculul și participanții se blochează cât timp are operațiuni financiare active, iar denumirea, datele și comentariile rămân editabile. Pentru calculul pe cantități, cantitatea unui participant existent poate fi corectată dacă noua contribuție nu scade sub suma deja achitată.
 - **Registru:** numerar disponibil, încasări, bani dați, restituiri, corecții și sume avansate temporar fondului. O sumă plătită personal poate fi asociată unei cheltuieli și restituită apoi parțial sau integral; aplicația arată separat cât îi mai datorează clasa persoanei care a avansat banii.
+- **Documente justificative:** atașează PDF-uri sau fotografii la cheltuieli și la plățile din registru. Fiecare document are amprentă SHA-256 și poate rămâne doar pentru casier/auditori sau poate fi făcut vizibil părinților cu acces la clasă.
 - **Corecții:** operațiunile confirmate se anulează printr-o înregistrare separată, cu motiv, păstrând istoricul. O cheltuială fără încasări sau plăți active poate fi anulată și recreată.
 - **Export:** copie JSON a datelor și istoricului, fără credentiale. Restaurarea automată din JSON nu este inclusă.
 - **Identitate vizuală:** sigla școlii și sigla clasei configurate din aplicație apar compact în antetul aplicației și în antetul PDF-urilor.
 - **Rapoarte PDF:** vizualizare directă în aplicație, partajare și descărcare; verde pentru achitat, galben pentru parțial, roșu pentru restant, albastru pentru solduri și bani dați mai departe. Fiecare PDF păstrează siglele și culorile de la momentul emiterii.
 
-Sumele sunt stocate în bani întregi; împărțirea unui total distribuie exact și ultimii bani. Contribuțiile unei cheltuieli sunt fixate la creare. Numerarul disponibil include avansurile copiilor și sumele avansate temporar fondului, iar datoriile aferente sunt afișate separat. „Sold după restituirea sumelor avansate” arată ce ar rămâne după stingerea lor.
+Sumele sunt stocate în bani întregi; împărțirea unui total distribuie exact și ultimii bani. Contribuțiile unei cheltuieli sunt fixate la creare. Numerarul disponibil include avansurile copiilor și sumele avansate temporar fondului, iar datoriile aferente sunt afișate separat. „Sold după restituirea sumelor avansate” arată ce ar rămâne după stingerea lor. Documentele sunt incluse în copiile de siguranță SQLite; exportul JSON conține numai metadatele lor.
 
 Salvarea necesită internet. La pierderea răspunsului, **Verifică / reîncearcă** confirmă aceeași cerere fără dublarea încasării. Modificările făcute pe alt dispozitiv cer verificarea sumelor înainte de salvare. Nu există coadă de operațiuni offline.
 

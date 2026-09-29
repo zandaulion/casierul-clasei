@@ -8,6 +8,10 @@ const MAX_MONEY = 1_000_000_000_000;
 const MAX_CHILDREN = 500;
 const MAX_LOGO_BYTES = 256 * 1024;
 const MAX_REQUEST_BYTES = 1024 * 1024;
+export const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
+const MAX_ATTACHMENTS_PER_ENTITY = 25;
+const MAX_ATTACHMENT_STORAGE_BYTES = 200 * 1024 * 1024;
+const ATTACHMENT_TYPES = new Set(['application/pdf', 'image/jpeg', 'image/png', 'image/webp']);
 const names = new Intl.Collator('ro', { sensitivity: 'base', numeric: true });
 
 function fail(message, status = 400) {
@@ -88,6 +92,19 @@ function logo(value, label) {
   return data;
 }
 
+function attachmentData(value, mimeType) {
+  if (!Buffer.isBuffer(value) || !value.length || value.length > MAX_ATTACHMENT_BYTES) {
+    fail(`Documentul trebuie să aibă între 1 octet și ${MAX_ATTACHMENT_BYTES / 1024 / 1024} MB.`, 413);
+  }
+  if (!ATTACHMENT_TYPES.has(mimeType)) fail('Folosește un fișier PDF, JPG, PNG sau WebP.', 415);
+  const valid = mimeType === 'application/pdf' ? value.subarray(0, 5).toString() === '%PDF-'
+    : mimeType === 'image/png' ? value.length >= 8 && value.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))
+      : mimeType === 'image/jpeg' ? value.length >= 3 && value[0] === 0xff && value[1] === 0xd8 && value[2] === 0xff
+        : value.length >= 12 && value.subarray(0, 4).toString() === 'RIFF' && value.subarray(8, 12).toString() === 'WEBP';
+  if (!valid) fail('Conținutul documentului nu corespunde tipului de fișier.', 415);
+  return value;
+}
+
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS metadata (
   singleton INTEGER PRIMARY KEY CHECK(singleton = 1),
@@ -161,10 +178,22 @@ CREATE TABLE IF NOT EXISTS branding (
   data BLOB NOT NULL,
   updated_at TEXT NOT NULL
 ) STRICT;
+CREATE TABLE IF NOT EXISTS attachments (
+  id TEXT PRIMARY KEY,
+  request_id TEXT NOT NULL UNIQUE, request_fingerprint TEXT NOT NULL,
+  expense_id TEXT REFERENCES expenses(id), transaction_id TEXT REFERENCES transactions(id),
+  filename TEXT NOT NULL, mime_type TEXT NOT NULL,
+  size INTEGER NOT NULL CHECK(size > 0), sha256 TEXT NOT NULL,
+  data BLOB NOT NULL, visibility TEXT NOT NULL CHECK(visibility IN ('internal', 'class')),
+  created_at TEXT NOT NULL, actor_id TEXT NOT NULL, actor_label TEXT NOT NULL,
+  CHECK((expense_id IS NOT NULL) <> (transaction_id IS NOT NULL))
+) STRICT;
 CREATE INDEX IF NOT EXISTS allocations_expense ON allocations(expense_id);
 CREATE INDEX IF NOT EXISTS transactions_child ON transactions(child_id);
 CREATE INDEX IF NOT EXISTS transactions_expense ON transactions(expense_id);
 CREATE INDEX IF NOT EXISTS reports_created ON reports(serial DESC);
+CREATE INDEX IF NOT EXISTS attachments_expense ON attachments(expense_id);
+CREATE INDEX IF NOT EXISTS attachments_transaction ON attachments(transaction_id);
 CREATE TRIGGER IF NOT EXISTS transactions_no_update BEFORE UPDATE ON transactions BEGIN
   SELECT RAISE(ABORT, 'Financial history is immutable');
 END;
@@ -176,6 +205,12 @@ CREATE TRIGGER IF NOT EXISTS allocations_no_update BEFORE UPDATE ON allocations 
 END;
 CREATE TRIGGER IF NOT EXISTS allocations_no_delete BEFORE DELETE ON allocations BEGIN
   SELECT RAISE(ABORT, 'Financial allocations are immutable');
+END;
+CREATE TRIGGER IF NOT EXISTS attachments_no_update BEFORE UPDATE ON attachments BEGIN
+  SELECT RAISE(ABORT, 'Attached documents are immutable');
+END;
+CREATE TRIGGER IF NOT EXISTS attachments_no_delete BEFORE DELETE ON attachments BEGIN
+  SELECT RAISE(ABORT, 'Attached documents are immutable');
 END;
 DROP TRIGGER IF EXISTS contributions_no_update;
 DROP TRIGGER IF EXISTS contributions_no_delete;
@@ -311,6 +346,80 @@ export class Ledger {
     if (!['school', 'class'].includes(kind)) fail('Sigla nu este validă.', 404);
     const row = this.#one('SELECT mime_type, data, updated_at FROM branding WHERE kind = ?', kind);
     return row ? { mimeType: row.mime_type, data: Buffer.from(row.data), updatedAt: row.updated_at } : null;
+  }
+
+  #attachments() {
+    return this.#all(`SELECT id, expense_id, transaction_id, filename, mime_type, size, sha256,
+      visibility, created_at, actor_label FROM attachments ORDER BY rowid`).map(row => ({
+      id: row.id, entityType: row.expense_id ? 'expense' : 'payment',
+      entityId: row.expense_id ?? row.transaction_id, filename: row.filename, mimeType: row.mime_type,
+      size: row.size, sha256: row.sha256, visibility: row.visibility,
+      createdAt: row.created_at, createdByLabel: row.actor_label,
+    }));
+  }
+
+  createAttachment(body, actor) {
+    object(body);
+    const requestId = text(body.requestId, 'Identificatorul cererii', 128);
+    const expectedRevision = integer(body.expectedRevision, 'Versiunea datelor', 0, Number.MAX_SAFE_INTEGER);
+    if (!['expense', 'payment'].includes(body.entityType)) fail('Tipul înregistrării nu este valid.');
+    const entityId = text(body.entityId, 'Înregistrarea', 128);
+    const filename = text(body.filename, 'Numele documentului', 240);
+    if (/[\\/]/u.test(filename) || filename === '.' || filename === '..') fail('Numele documentului nu este valid.');
+    const mimeType = text(body.mimeType, 'Tipul documentului', 100).toLowerCase();
+    const data = attachmentData(body.data, mimeType);
+    if (!['internal', 'class'].includes(body.visibility)) fail('Vizibilitatea documentului nu este validă.');
+    const who = object(actor, 'Dispozitivul');
+    const actorId = text(who.id, 'Dispozitivul', 128), actorLabel = text(who.label, 'Numele dispozitivului', 160);
+    const sha256 = createHash('sha256').update(data).digest('hex');
+    const fingerprint = createHash('sha256').update(canonical({ entityType: body.entityType, entityId,
+      filename, mimeType, size: data.length, sha256, visibility: body.visibility })).digest('hex');
+    this.#db.exec('BEGIN IMMEDIATE');
+    try {
+      const repeated = this.#one('SELECT id, request_fingerprint FROM attachments WHERE request_id = ?', requestId);
+      if (repeated) {
+        if (repeated.request_fingerprint !== fingerprint) fail('Identificatorul cererii a fost deja folosit pentru alt document.', 409);
+        const state = this.#state();
+        this.#db.exec('COMMIT');
+        return { state, attachmentId: repeated.id };
+      }
+      const state = this.#state();
+      if (state.revision !== expectedRevision) fail('Datele s-au schimbat pe alt dispozitiv. Reîncărcați și verificați documentul.', 409);
+      if (body.entityType === 'expense') {
+        if (!state.expenses.some(item => item.id === entityId)) fail('Cheltuiala nu există.', 404);
+      } else {
+        const transaction = state.transactions.find(item => item.id === entityId);
+        if (!transaction || transaction.type !== 'payment') fail('Plata nu există.', 404);
+      }
+      if (state.attachments.filter(item => item.entityType === body.entityType && item.entityId === entityId).length >= MAX_ATTACHMENTS_PER_ENTITY) {
+        fail(`O înregistrare poate avea cel mult ${MAX_ATTACHMENTS_PER_ENTITY} de documente.`, 409);
+      }
+      const storedBytes = Number(this.#one('SELECT COALESCE(SUM(size), 0) AS total FROM attachments').total);
+      if (storedBytes + data.length > MAX_ATTACHMENT_STORAGE_BYTES) fail('Spațiul alocat documentelor clasei este plin.', 413);
+      const id = randomUUID(), createdAt = new Date().toISOString();
+      this.#run(`INSERT INTO attachments (id, request_id, request_fingerprint, expense_id, transaction_id,
+        filename, mime_type, size, sha256, data, visibility, created_at, actor_id, actor_label)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, id, requestId, fingerprint,
+      body.entityType === 'expense' ? entityId : null, body.entityType === 'payment' ? entityId : null,
+      filename, mimeType, data.length, sha256, data, body.visibility, createdAt, actorId, actorLabel);
+      this.#run('UPDATE metadata SET revision = revision + 1 WHERE singleton = 1');
+      const next = this.#state();
+      this.#db.exec('COMMIT');
+      return { state: next, attachmentId: id };
+    } catch (error) {
+      this.#db.exec('ROLLBACK');
+      throw error;
+    }
+  }
+
+  getAttachment(attachmentId) {
+    const id = text(attachmentId, 'Documentul', 128);
+    const row = this.#one(`SELECT id, expense_id, transaction_id, filename, mime_type, size, sha256,
+      visibility, created_at, actor_label, data FROM attachments WHERE id = ?`, id);
+    if (!row) fail('Documentul nu există.', 404);
+    return { id: row.id, entityType: row.expense_id ? 'expense' : 'payment', entityId: row.expense_id ?? row.transaction_id,
+      filename: row.filename, mimeType: row.mime_type, size: row.size, sha256: row.sha256,
+      visibility: row.visibility, createdAt: row.created_at, createdByLabel: row.actor_label, data: Buffer.from(row.data) };
   }
 
   #reports() {
@@ -482,7 +591,7 @@ export class Ledger {
       settings: { schoolName: meta.school_name, className: meta.class_name, schoolYear: meta.school_year,
         openingBalanceMinor: meta.opening_balance, hasSchoolLogo: branding.has('school'), hasClassLogo: branding.has('class'),
         schoolLogoVersion: branding.get('school') ?? null, classLogoVersion: branding.get('class') ?? null },
-      children, expenses, advances, transactions: transactions.reverse(),
+      children, expenses, advances, attachments: this.#attachments(), transactions: transactions.reverse(),
       summary: { balanceMinor, netBalanceMinor: balanceMinor - totalAdvanceOutstandingMinor,
         totalReceivedMinor, totalPaidMinor, totalCreditMinor: sum(children.map(child => child.creditMinor)),
         totalDueMinor: sum(children.map(child => child.dueMinor)), totalAdvancedMinor,

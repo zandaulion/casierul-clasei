@@ -111,7 +111,8 @@ test('parent state exposes class totals and only the associated child', () => {
   const state = { revision: 2, settings: {}, summary: { totalDueMinor: 2000 }, children: [child('ana', 'Ana'), child('ion', 'Ion')],
     expenses: [{ id: 'expense-1', title: 'Poze', comment: 'notă internă', contributions: [
       { childId: 'ana', amountMinor: 1000 }, { childId: 'ion', amountMinor: 1000 }], totalMinor: 2000 }],
-    advances: [{ id: 'advance', person: 'Casier', comment: 'notă internă' }], transactions: [
+    advances: [{ id: 'advance', person: 'Casier', comment: 'notă internă' }],
+    attachments: [{ id: 'internal-doc', visibility: 'internal' }, { id: 'class-doc', visibility: 'class' }], transactions: [
       { id: 'own', type: 'collection', childId: 'ana', comment: 'propriu' },
       { id: 'other', type: 'collection', childId: 'ion', comment: 'privat' },
       { id: 'payment', type: 'payment', childId: null, comment: 'intern' },
@@ -128,6 +129,7 @@ test('parent state exposes class totals and only the associated child', () => {
   assert.deepEqual(view.transactions.map((item) => item.id), ['own', 'payment', 'advance', 'repayment']);
   assert.equal(view.transactions[1].comment, '');
   assert.equal(view.advances[0].comment, '');
+  assert.deepEqual(view.attachments.map((item) => item.id), ['class-doc']);
   assert.deepEqual(view.reports.map((item) => item.id), ['class', 'own-report']);
   assert.equal(view.summary.totalDueMinor, 2000);
 });
@@ -306,6 +308,10 @@ test('read-only devices can read state but cannot mutate, export or issue report
   assert.equal((await publicRequest('/api/reports', { method: 'POST', headers, body: {
     requestId: 'read-only-report', type: 'class',
   } })).status, 403);
+  assert.equal((await publicRequest('/api/expenses/expense-1/attachments', { method: 'POST', headers: {
+    ...headers, 'Content-Type': 'application/pdf', 'X-Request-Id': 'read-only-document',
+    'X-Expected-Revision': '0', 'X-Filename': 'bon.pdf', 'X-Visibility': 'internal',
+  }, body: '%PDF-1.4\n%%EOF' })).status, 403);
   assert.equal(ledger.calls.length, 0);
 });
 

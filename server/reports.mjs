@@ -18,6 +18,8 @@ const money = minor => `${moneyFormat.format(minor / 100)} lei`;
 const personName = child => `${child.lastName} ${child.firstName}`;
 const activeTransactions = state => state.transactions.filter(tx => tx.type !== 'reversal' && !tx.reversed);
 const sum = values => values.reduce((total, value) => total + value, 0);
+const sharedAttachments = (state, entityType, entityId) => (state.attachments || [])
+  .filter(item => item.visibility === 'class' && item.entityType === entityType && item.entityId === entityId);
 
 function expenseStatus(state, expense) {
   const contributions = state.children.map(child => child.contributions.find(item => item.expenseId === expense.id)).filter(Boolean);
@@ -211,7 +213,7 @@ export async function renderReportPdf(report, state, branding = {}) {
       const due = expenseStatus(state, expense);
       const tone = due.amountMinor === 0 ? 'positive' : expense.collectedMinor > 0 ? 'warning' : 'negative';
       item(expense.title, money(expense.totalMinor),
-        `Încasat ${money(expense.collectedMinor)} · Dat mai departe ${money(expense.paidOutMinor)} · Restanțe: ${due.count} copii · ${money(due.amountMinor)}`,
+        `Încasat ${money(expense.collectedMinor)} · Dat mai departe ${money(expense.paidOutMinor)} · Restanțe: ${due.count} copii · ${money(due.amountMinor)} · Documente partajate: ${sharedAttachments(state, 'expense', expense.id).length}`,
         expense.comment, tone);
     }
     const payments = transactions.filter(tx => tx.type === 'payment');
@@ -220,7 +222,7 @@ export async function renderReportPdf(report, state, branding = {}) {
     for (const payment of payments) {
       const expense = state.expenses.find(entry => entry.id === payment.expenseId);
       item(payment.destination || 'Plată', money(payment.amountMinor),
-        `${dateTimeFormat.format(new Date(payment.occurredAt))}${expense ? ` · ${expense.title}` : ' · Fără cheltuială asociată'}`, payment.comment, 'info');
+        `${dateTimeFormat.format(new Date(payment.occurredAt))}${expense ? ` · ${expense.title}` : ' · Fără cheltuială asociată'} · Documente partajate: ${sharedAttachments(state, 'payment', payment.id).length}`, payment.comment, 'info');
     }
     const corrections = state.transactions.filter(tx => tx.type === 'reversal');
     if (corrections.length) {
@@ -252,6 +254,12 @@ export async function renderReportPdf(report, state, branding = {}) {
     section('Bani dați mai departe');
     if (!payments.length) note('Nu ai înregistrat bani dați mai departe pentru această cheltuială.');
     for (const payment of payments) item(payment.destination || 'Plată', money(payment.amountMinor), dateTimeFormat.format(new Date(payment.occurredAt)), payment.comment, 'info');
+    const documents = [...sharedAttachments(state, 'expense', expense.id),
+      ...payments.flatMap(payment => sharedAttachments(state, 'payment', payment.id))];
+    section('Documente justificative partajate');
+    if (!documents.length) note('Nu există documente justificative vizibile părinților pentru această cheltuială.');
+    for (const document of documents) item(document.filename, `${Math.max(1, Math.round(document.size / 1024))} KB`,
+      `${dateTimeFormat.format(new Date(document.createdAt))} · SHA-256 ${document.sha256}`, '', 'info');
     if (relatedAdvances.length) {
       section('Finanțare temporară');
       for (const advance of relatedAdvances) item(advance.person, money(advance.amountMinor),

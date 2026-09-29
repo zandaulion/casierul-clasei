@@ -5,6 +5,7 @@ import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { AuthStore, adminTokenMatches, clearSessionCookie, httpError, readSessionCookie, sessionCookie } from './auth.mjs';
 import { ClassroomLedgers } from './classrooms.mjs';
+import { MAX_ATTACHMENT_BYTES } from './ledger.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const MAX_BODY_BYTES = 1024 * 1024;
@@ -58,6 +59,19 @@ function sendImage(res, image) {
   res.end(image.data);
 }
 
+function contentDisposition(filename, disposition = 'inline') {
+  const fallback = filename.normalize('NFKD').replace(/[^\x20-\x7e]/gu, '_').replace(/["\\]/gu, '_') || 'document';
+  const encoded = encodeURIComponent(filename).replace(/['()*]/gu, character => `%${character.charCodeAt(0).toString(16).toUpperCase()}`);
+  return `${disposition}; filename="${fallback}"; filename*=UTF-8''${encoded}`;
+}
+
+function sendAttachment(res, attachment, download = false) {
+  res.writeHead(200, { 'Content-Type': attachment.mimeType, 'Content-Length': attachment.data.length,
+    'Content-Disposition': contentDisposition(attachment.filename, download ? 'attachment' : 'inline'),
+    'Cross-Origin-Resource-Policy': 'same-origin', 'X-Content-SHA256': attachment.sha256 });
+  res.end(attachment.data);
+}
+
 function exactKeys(body, allowed, required = []) {
   if (!body || typeof body !== 'object' || Array.isArray(body)) throw httpError(400, 'Corpul cererii trebuie să fie un obiect JSON.');
   if (Object.keys(body).some((key) => !allowed.includes(key)) || required.some((key) => !Object.hasOwn(body, key))) {
@@ -84,6 +98,28 @@ async function readJson(req, { allowEmpty = false } = {}) {
   catch { throw httpError(400, 'JSON invalid.'); }
   exactKeys(body, Object.keys(body || {}));
   return body;
+}
+
+async function readBytes(req, limit) {
+  const declared = req.headers['content-length'];
+  if (declared != null && (!/^\d+$/u.test(declared) || Number(declared) > limit)) throw httpError(413, 'Documentul este prea mare.');
+  let size = 0;
+  const chunks = [];
+  for await (const chunk of req) {
+    size += chunk.length;
+    if (size > limit) throw httpError(413, 'Documentul este prea mare.');
+    chunks.push(chunk);
+  }
+  if (!size) throw httpError(400, 'Documentul este gol.');
+  return Buffer.concat(chunks);
+}
+
+function query(req, allowed) {
+  let params;
+  try { params = new URL(req.url || '/', 'http://localhost').searchParams; }
+  catch { throw httpError(400, 'Adresa cererii nu este validă.'); }
+  if ([...params.keys()].some(key => !allowed.includes(key) || params.getAll(key).length !== 1)) throw httpError(400, 'Parametrii cererii nu sunt valizi.');
+  return params;
 }
 
 function checkOrigin(req, publicOrigin) {
@@ -224,6 +260,7 @@ export function projectState(state, device) {
     children: [ownChild],
     expenses,
     advances: (state.advances || []).map((advance) => ({ ...advance, comment: '' })),
+    attachments: (state.attachments || []).filter((attachment) => attachment.visibility === 'class'),
     transactions,
     reports: (state.reports || []).filter((report) => canReadReport(report, device)),
   };
@@ -280,7 +317,9 @@ export function createApp(options = {}) {
       const route = BUSINESS_ROUTES.find(([pattern]) => pattern.test(pathname));
       const reportPdf = pathname.match(/^\/api\/reports\/([A-Za-z0-9_-]{1,100})\/pdf$/u);
       const brandingImage = pathname.match(/^\/api\/branding\/(school|class)$/u);
-      if (!route && !reportPdf && !brandingImage && !['/api/auth/me', '/api/auth/access', '/api/auth/logout', '/api/state', '/api/export', '/api/reports', '/api/classrooms'].includes(pathname)) throw httpError(404, 'Nu a fost găsit.');
+      const attachmentFile = pathname.match(/^\/api\/attachments\/([A-Za-z0-9_-]{1,100})$/u);
+      const attachmentUpload = pathname.match(/^\/api\/(expenses|payments)\/([A-Za-z0-9_-]{1,100})\/attachments$/u);
+      if (!route && !reportPdf && !brandingImage && !attachmentFile && !attachmentUpload && !['/api/auth/me', '/api/auth/access', '/api/auth/logout', '/api/state', '/api/export', '/api/reports', '/api/classrooms'].includes(pathname)) throw httpError(404, 'Nu a fost găsit.');
       const token = readSessionCookie(req.headers.cookie, config.cookieSecure);
       const device = auth.getDevice(token);
       if (!device) throw httpError(401, 'Activează acest dispozitiv cu o invitație.');
@@ -322,6 +361,14 @@ export function createApp(options = {}) {
         if (!image) throw httpError(404, 'Sigla nu a fost configurată.');
         return sendImage(res, image);
       }
+      if (attachmentFile) {
+        requireMethod(req, 'GET');
+        const params = query(req, ['classroom', 'download']);
+        if (params.get('download') != null && params.get('download') !== '1') throw httpError(400, 'Parametrul de descărcare nu este valid.');
+        const attachment = context.ledger.getAttachment(attachmentFile[1]);
+        if (context.scopedDevice.role === 'parent' && attachment.visibility !== 'class') throw httpError(404, 'Documentul nu a fost găsit.');
+        return sendAttachment(res, attachment, params.get('download') === '1');
+      }
       if (pathname === '/api/export') {
         requireMethod(req, 'GET');
         requireTreasurer(context.scopedDevice);
@@ -346,6 +393,27 @@ export function createApp(options = {}) {
         }
         if (!/^[A-Za-z0-9_.:-]{1,128}$/u.test(body.requestId)) throw httpError(400, 'Identificatorul cererii nu este valid.');
         return sendJson(res, 201, await context.ledger.createReport(body, { id: device.id, label: device.label }));
+      }
+      if (attachmentUpload) {
+        requireMethod(req, 'POST');
+        requireTreasurer(context.scopedDevice);
+        checkOrigin(req, config.publicBaseUrl);
+        query(req, ['classroom']);
+        const requestId = req.headers['x-request-id'], expectedRevision = req.headers['x-expected-revision'];
+        if (typeof requestId !== 'string' || !/^[A-Za-z0-9_.:-]{1,128}$/u.test(requestId)
+          || typeof expectedRevision !== 'string' || !/^\d+$/u.test(expectedRevision) || !Number.isSafeInteger(Number(expectedRevision))) {
+          throw httpError(400, 'Identificatorul cererii sau revizia nu este validă.');
+        }
+        const encodedFilename = req.headers['x-filename'], visibility = req.headers['x-visibility'];
+        let filename;
+        try { filename = typeof encodedFilename === 'string' ? decodeURIComponent(encodedFilename) : null; }
+        catch { throw httpError(400, 'Numele documentului nu este valid.'); }
+        if (!filename || typeof visibility !== 'string') throw httpError(400, 'Datele documentului sunt incomplete.');
+        const mimeType = (req.headers['content-type'] || '').toLowerCase();
+        const data = await readBytes(req, MAX_ATTACHMENT_BYTES);
+        return sendJson(res, 201, context.ledger.createAttachment({ requestId, expectedRevision: Number(expectedRevision),
+          entityType: attachmentUpload[1] === 'expenses' ? 'expense' : 'payment', entityId: attachmentUpload[2], filename,
+          visibility, mimeType, data }, { id: device.id, label: device.label }));
       }
       requireTreasurer(context.scopedDevice);
       requireMethod(req, 'POST');
