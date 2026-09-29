@@ -409,11 +409,12 @@ export class Ledger {
       return { id: row.id, firstName: row.first_name, lastName: row.last_name, active: Boolean(row.active),
         creditMinor: childCredit.get(row.id), dueMinor: sum(contributions.map(c => c.remainingMinor)), contributions };
     }).sort((a, b) => names.compare(a.lastName, b.lastName) || names.compare(a.firstName, b.firstName) || a.id.localeCompare(b.id));
-    const branding = new Set(this.#all('SELECT kind FROM branding').map(row => row.kind));
+    const branding = new Map(this.#all('SELECT kind, updated_at FROM branding').map(row => [row.kind, row.updated_at]));
     return {
       revision: meta.revision,
       settings: { schoolName: meta.school_name, className: meta.class_name, schoolYear: meta.school_year,
-        openingBalanceMinor: meta.opening_balance, hasSchoolLogo: branding.has('school'), hasClassLogo: branding.has('class') },
+        openingBalanceMinor: meta.opening_balance, hasSchoolLogo: branding.has('school'), hasClassLogo: branding.has('class'),
+        schoolLogoVersion: branding.get('school') ?? null, classLogoVersion: branding.get('class') ?? null },
       children, expenses, transactions: transactions.reverse(),
       summary: { balanceMinor: add(meta.opening_balance, totalReceivedMinor - totalPaidMinor),
         totalReceivedMinor, totalPaidMinor, totalCreditMinor: sum(children.map(child => child.creditMinor)),
