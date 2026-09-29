@@ -12,7 +12,9 @@ const origin = 'http://127.0.0.1:18028';
 const actor = { id: 'polish-fixture', label: 'Date sintetice pentru verificare' };
 const contexts = new Set(), pending = new Map(), exceptions = [], failedAssets = [];
 const loadedAssets = new Set(), screenshots = [];
-let app, socket, sessionId, sequence = 0, activeRole = '', checkedViews = 0;
+const viewports = [[320, 700], [390, 844], [768, 1024], [834, 1194], [1024, 768],
+  [1280, 720], [1366, 768], [1440, 900], [1920, 1080]];
+let app, socket, sessionId, sequence = 0, activeRole = '', checkedViews = 0, pdfResponses = 0;
 
 function send(method, params = {}, session) {
   const id = ++sequence;
@@ -50,8 +52,8 @@ async function screenshot(name) {
   await fs.writeFile(filename, Buffer.from(data, 'base64'));
   screenshots.push(filename);
 }
-async function viewport(width, height, theme) {
-  await page('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: width < 768 });
+async function viewport(width, height, theme, deviceScaleFactor = 1) {
+  await page('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor, mobile: width < 768 });
   await page('Emulation.setEmulatedMedia', { features: [
     { name: 'prefers-color-scheme', value: theme }, { name: 'prefers-reduced-motion', value: 'reduce' },
   ] });
@@ -136,15 +138,56 @@ async function checkLayout(label, { navigation = true } = {}) {
     assert.equal(layout.tabsFit, true, `${label}: navigation fits the viewport`);
   }
 }
+async function checkAdaptiveGeometry(role, tab, width, label) {
+  const geometry = await evaluate(`(() => {
+    const rect = selector => {
+      const element = document.querySelector(selector);
+      if (!element) return null;
+      const { left, right, top, bottom, width, height } = element.getBoundingClientRect();
+      return { left, right, top, bottom, width, height };
+    };
+    const firstPair = selector => [...document.querySelectorAll(selector)].slice(0, 2).map(element => {
+      const { left, right, top, bottom } = element.getBoundingClientRect();
+      return { left, right, top, bottom };
+    });
+    return { app: rect('.app'), main: rect('#main'), nav: rect('#tabs'),
+      children: firstPair('.children > .child'), expenses: firstPair('.expense-grid > .expense-card'),
+      reports: firstPair('.report-types > .report-type'),
+      ledger: [rect('.ledger-overview'), rect('.ledger-history')],
+      child: [rect('.child-overview'), rect('.child-contributions')] };
+  })()`);
+  const columns = (pair, description) => {
+    assert.equal(pair.length, 2, `${label}: ${description} has two populated sections`);
+    assert.ok(pair.every(Boolean), `${label}: ${description} sections exist`);
+    assert.ok(pair[0].right <= pair[1].left + 1, `${label}: ${description} uses separate columns ${JSON.stringify(pair)}`);
+  };
+  if (width >= 720) {
+    if (tab === 'children' && role !== 'parent') columns(geometry.children, 'class roster');
+    if (tab === 'expenses') columns(geometry.expenses, 'expenses');
+    if (tab === 'reports' && role === 'treasurer') columns(geometry.reports, 'report choices');
+  }
+  if (width >= 1000) {
+    if (tab === 'ledger') columns(geometry.ledger, 'fund summary and history');
+    if (tab === 'children' && role === 'parent') columns(geometry.child, 'child summary and contributions');
+  }
+  if (width >= 1120) {
+    assert.ok(geometry.nav.right <= geometry.main.left + 1, `${label}: navigation is beside the content`);
+    assert.ok(geometry.nav.height > geometry.nav.width, `${label}: navigation runs vertically`);
+    assert.ok(geometry.app.width > 1000, `${label}: the shell makes use of the wider screen`);
+  } else {
+    assert.ok(geometry.nav.width > geometry.nav.height, `${label}: compact navigation stays horizontal`);
+  }
+}
 async function checkTabs(role) {
   for (const theme of ['light', 'dark']) {
-    for (const [width, height] of [[320, 700], [390, 844], [768, 1024], [1440, 900]]) {
+    for (const [width, height] of viewports) {
       await viewport(width, height, theme);
       for (const tab of ['children', 'expenses', 'ledger', 'reports']) {
         await click(`[data-tab="${tab}"]`);
         await settle();
         const label = `${role}-${tab}-${width}-${theme}`;
         await checkLayout(label);
+        await checkAdaptiveGeometry(role, tab, width, label);
         assert.equal(await evaluate(`document.querySelector('[data-tab="${tab}"]').getAttribute('aria-current')`), 'page', `${label}: active tab`);
         if (tab === 'children' && role === 'parent') {
           assert.equal(await evaluate('!!document.querySelector(".parent-summary") && !document.getElementById("child-search")'), true, 'parent lands directly on own child');
@@ -156,10 +199,58 @@ async function checkTabs(role) {
         if (tab === 'expenses') assert.ok(await evaluate('document.querySelectorAll(".expense-progress").length > 0'), `${label}: expense progress is shown`);
         if (role !== 'treasurer') assert.equal(await evaluate('!!document.querySelector("#collection-save, [data-action=add-child], [data-action=payment], [data-action=report-class]")'), false, `${label}: no write controls`);
         checkedViews++;
-        if (width === 390 || (role === 'treasurer' && width === 1440 && theme === 'light')) await screenshot(label);
+        if (width === 390 || (role === 'treasurer' && [768, 1024, 1366, 1920].includes(width) && theme === 'light')) await screenshot(label);
       }
     }
   }
+}
+async function checkAdaptivePdf(reportId) {
+  const reportSelector = `[data-action="view-report"][data-id="${reportId}"]`;
+  const downloadsBefore = pdfResponses;
+  const ready = 'document.querySelector("#pdf-preview-status").hidden && document.querySelectorAll("#pdf-preview-pages figure[data-rendered=true]").length === document.querySelectorAll("#pdf-preview-pages figure").length && document.querySelectorAll("#pdf-preview-pages figure").length > 0';
+  const sharp = `(() => {
+    const canvases = [...document.querySelectorAll('#pdf-preview-pages canvas')];
+    const ratio = Math.min(devicePixelRatio || 1, 2);
+    return canvases.length > 0 && canvases.every(canvas => Math.abs(canvas.width - canvas.getBoundingClientRect().width * ratio) <= 1.5);
+  })()`;
+  await viewport(390, 844, 'light');
+  await click('[data-tab=reports]');
+  await click(reportSelector);
+  await until(ready, 'first PDF render', 400);
+  await until(sharp, 'first PDF sharp render');
+  const narrowWidth = await evaluate('document.querySelector("#pdf-preview-pages canvas").getBoundingClientRect().width');
+  const pageCount = await evaluate('document.querySelectorAll("#pdf-preview-pages figure").length');
+  for (const [width, height, density = 1] of [[1366, 768, 2], [1024, 768], [834, 1194], [1194, 834], [320, 700], [1440, 900]]) {
+    await viewport(width, height, 'light', density);
+    const scrollTop = await evaluate('document.querySelector("#dialog").scrollTop');
+    await until(sharp, `PDF sharp render at ${width}px and ${density}x density`, 400);
+    assert.ok(Math.abs(await evaluate('document.querySelector("#dialog").scrollTop') - scrollTop) <= 2, 'PDF repaint preserves the dialog scroll position');
+    assert.equal(await evaluate('document.querySelectorAll("#pdf-preview-pages figure").length'), pageCount, 'PDF resizing never duplicates page containers');
+    assert.equal(await evaluate('document.querySelectorAll("#pdf-preview-pages canvas").length'), pageCount, 'PDF preview keeps one canvas per page');
+    assert.equal(await evaluate('document.documentElement.scrollWidth <= innerWidth && document.querySelector("#dialog").scrollWidth <= document.querySelector("#dialog").clientWidth'), true, 'PDF preview fits the viewport without horizontal scrolling');
+    if (width === 1366) assert.ok(await evaluate('document.querySelector("#pdf-preview-pages canvas").getBoundingClientRect().width') > narrowWidth * 2, 'PDF preview uses the available laptop width');
+    await evaluate('document.querySelector("#dialog").scrollTop = 250');
+  }
+  assert.equal(pdfResponses - downloadsBefore, 1, 'resizing reuses the loaded PDF without another download');
+  await screenshot('adaptive-pdf-desktop');
+  // Close during pending resize work, reopen, then close another preview while
+  // it is loading. Disposed renderers must never modify a later dialog.
+  for (const [width, height] of [[900, 700], [1100, 750], [768, 1024]]) await viewport(width, height, 'light');
+  await click('#dialog .dialog-actions [data-action=close-modal]');
+  await until('!document.querySelector("#dialog").open');
+  await new Promise(resolve => setTimeout(resolve, 250));
+  await click(reportSelector);
+  await until(ready, 'reopened PDF preview', 400);
+  await until(sharp, 'reopened PDF sharp render', 400);
+  assert.equal(pdfResponses - downloadsBefore, 2, 'reopening downloads the PDF once');
+  await click('#dialog .dialog-actions [data-action=close-modal]');
+  await until('!document.querySelector("#dialog").open');
+  await click(reportSelector);
+  await click('#dialog .dialog-actions [data-action=close-modal]');
+  await new Promise(resolve => setTimeout(resolve, 500));
+  assert.equal(await evaluate('document.querySelector("#dialog").open'), false, 'canceled PDF load leaves the dialog closed');
+  assert.deepEqual(exceptions, [], 'PDF resize, close and canceled loads cause no browser errors');
+  await click('[data-tab=children]');
 }
 async function scaleText(factor) {
   await evaluate(`(() => {
@@ -182,8 +273,12 @@ async function restoreText() {
 async function checkDock(label) {
   await checkLayout(label, { navigation: false });
   assert.equal(await evaluate('document.getElementById("tabs").hidden'), true, 'treasurer collection keeps its focused layout');
-  const dock = await evaluate('(() => { const element = document.querySelector(".collection-dock"), box = element.getBoundingClientRect(); return { position: getComputedStyle(element).position, top: box.top, bottom: box.bottom, height: innerHeight }; })()');
+  const dock = await evaluate('(() => { const element = document.querySelector(".collection-dock"), box = element.getBoundingClientRect(), choices = document.querySelector("[data-target]").getBoundingClientRect(); return { position: getComputedStyle(element).position, left: box.left, top: box.top, bottom: box.bottom, height: innerHeight, width: innerWidth, choicesRight: choices.right }; })()');
   if (dock.position === 'fixed') assert.ok(dock.top >= -1 && dock.bottom <= dock.height + 1, `${label}: fixed dock fits the viewport ${JSON.stringify(dock)}`);
+  if (dock.width >= 1000) {
+    assert.notEqual(dock.position, 'fixed', `${label}: the wide payment panel participates in the page layout`);
+    assert.ok(dock.left >= dock.choicesRight - 1, `${label}: contributions and payment panel occupy separate columns ${JSON.stringify(dock)}`);
+  }
   // Short screens may scroll within the action panel or put it in normal page
   // flow. Each control must remain reachable without another layer covering it.
   for (const selector of ['#received', '[data-excess=change]', '[data-excess=credit]', '#collection-save']) {
@@ -197,7 +292,56 @@ async function checkDock(label) {
     assert.equal(reachable, true, `${label}: ${selector} remains reachable`);
   }
 }
-async function checkCollection(ana) {
+const collectionDraft = () => evaluate(`(() => ({
+  amount: document.querySelector('#received').value,
+  target: document.querySelector('[data-target][aria-pressed=true]')?.dataset.target || null,
+  excess: document.querySelector('[data-excess][aria-pressed=true]')?.dataset.excess,
+  manual: document.querySelector('#manual').checked,
+  allocations: [...document.querySelectorAll('[data-allocation]')].map(input => ({
+    expense: input.dataset.allocation, value: input.value, readOnly: input.readOnly,
+  })),
+  date: document.querySelector('#collection-date').value,
+  comment: document.querySelector('#collection-comment').value,
+  summary: document.querySelector('#collection-dock-summary').textContent,
+  save: document.querySelector('#collection-save').textContent,
+}))()`);
+async function checkDraftResizing(photos) {
+  await viewport(390, 844, 'light');
+  await click(`[data-target="${photos}"]`);
+  await fill('#received', '45.50');
+  await fill('#collection-comment', 'Schiță păstrată la rotirea tabletei');
+  await fill('#collection-date', '2026-09-29T17:30');
+  const singleExpense = await collectionDraft();
+  assert.equal(singleExpense.target, photos, 'draft has a selected contribution');
+  assert.equal(singleExpense.amount, '45.50', 'draft has a typed amount including bani');
+  for (const [width, height] of [[834, 1194], [1194, 834], [1366, 768], [768, 1024], [390, 844]]) {
+    await evaluate('document.querySelector("#received").focus()');
+    await viewport(width, height, 'light');
+    assert.deepEqual(await collectionDraft(), singleExpense, `selected contribution, amount and details survive resizing to ${width}x${height}`);
+    assert.equal(await evaluate('document.activeElement.id'), 'received', 'resizing preserves the focused amount input');
+    await checkDock(`selected-contribution-resize-${width}`);
+  }
+  await evaluate('document.querySelector("#allocation-details").open = true');
+  await click('#manual');
+  const allocations = await evaluate('[...document.querySelectorAll("[data-allocation]")].map(input => input.dataset.allocation)');
+  for (const id of allocations) await fill(`[data-allocation="${id}"]`, '0');
+  await fill(`[data-allocation="${photos}"]`, '12.50');
+  await fill(`[data-allocation="${allocations.find(id => id !== photos)}"]`, '10');
+  const manualExpense = await collectionDraft();
+  assert.equal(manualExpense.manual, true, 'draft has manual allocations');
+  assert.ok(manualExpense.allocations.every(input => !input.readOnly), 'manual allocation fields are editable');
+  for (const [width, height] of [[1280, 600], [1024, 768], [768, 1024], [320, 700], [1366, 768]]) {
+    await viewport(width, height, 'dark');
+    assert.deepEqual(await collectionDraft(), manualExpense, `manual allocations and typed details survive resizing to ${width}x${height}`);
+    await checkDock(`manual-contribution-resize-${width}`);
+  }
+  await evaluate('document.querySelector("#received").focus()');
+  await page('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Tab', code: 'Tab', windowsVirtualKeyCode: 9 });
+  await page('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Tab', code: 'Tab', windowsVirtualKeyCode: 9 });
+  assert.equal(await evaluate('document.activeElement.dataset.excess'), 'change', 'keyboard focus moves from amount to the change choice');
+  assert.equal(await evaluate('(() => { const element = document.activeElement, box = element.getBoundingClientRect(); const hit = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2); return box.top >= 0 && box.bottom <= innerHeight && (hit === element || element.contains(hit)); })()'), true, 'keyboard focus is visible within the wide payment panel');
+}
+async function checkCollection(ana, photos) {
   await click('[data-tab=children]'); await click(`[data-child="${ana}"]`);
   await fill('#received', '150');
   const summaryText = () => evaluate('document.querySelector("#collection-dock-summary").textContent.replace(/\\s+/g, " ")');
@@ -216,7 +360,8 @@ async function checkCollection(ana) {
   assert.match(await selectedExcess(), /avans/iu, 'new credit is the selected outcome');
   assertAmounts(await evaluate('document.getElementById("collection-save").textContent'), ['150'], 'net collection includes retained credit');
   for (const theme of ['light', 'dark']) {
-    for (const [width, height, scale] of [[320, 480, 1], [390, 844, 1], [768, 1024, 1], [1440, 900, 1], [390, 520, 2]]) {
+    for (const [width, height, scale] of [[320, 480, 1], [390, 844, 1], [768, 1024, 1], [834, 1194, 1],
+      [1024, 768, 1], [1280, 600, 1], [1366, 768, 1], [1920, 1080, 1], [390, 520, 2], [1280, 600, 2]]) {
       await viewport(width, height, theme);
       if (scale > 1) await scaleText(scale);
       const label = `collection-${width}x${height}-${theme}-${scale}x-text`;
@@ -225,12 +370,13 @@ async function checkCollection(ana) {
       if (scale > 1) await restoreText();
     }
   }
+  await checkDraftResizing(photos);
 }
 
 try {
   app = await start({ dataDir: temporary, publicBaseUrl: origin, port: 18028, adminPort: 0,
     adminToken: 'polish-test-only', cookieSecure: false });
-  const { ana } = seed();
+  const { ana, photos } = seed();
   await app.ledger.createReport({ requestId: randomUUID(), type: 'class' }, actor);
   await app.ledger.createReport({ requestId: randomUUID(), type: 'child', subjectId: ana }, actor);
   const before = app.ledger.getState();
@@ -244,6 +390,7 @@ try {
       if (message.method === 'Page.javascriptDialogOpening') send('Page.handleJavaScriptDialog', { accept: true }, sessionId).catch(() => {});
       if (message.method === 'Network.responseReceived') {
         const { type, response } = message.params;
+        if (new URL(response.url).pathname.endsWith('/pdf')) pdfResponses++;
         if (['Script', 'Stylesheet', 'Image', 'Font'].includes(type)) {
           loadedAssets.add(new URL(response.url).pathname);
           if (response.status >= 400) failedAssets.push({ role: activeRole, type, url: response.url, status: response.status });
@@ -259,7 +406,10 @@ try {
   for (const role of ['treasurer', 'parent', 'auditor']) {
     const context = await openRole(role, ana);
     await checkTabs(role);
-    if (role === 'treasurer') await checkCollection(ana);
+    if (role === 'treasurer') {
+      await checkAdaptivePdf(before.reports.find(report => report.type === 'class').id);
+      await checkCollection(ana, photos);
+    }
     if (role === 'auditor') {
       await click('[data-tab=children]'); await click(`[data-child="${ana}"]`);
       assert.equal(await evaluate('!document.getElementById("tabs").hidden && !document.querySelector(".app").classList.contains("collecting")'), true, 'auditor child keeps navigation');
@@ -267,19 +417,23 @@ try {
       await screenshot('auditor-child-detail');
     }
     if (role !== 'treasurer') {
-      await viewport(390, 600, 'light');
       if (role === 'parent') await click('[data-tab=children]');
+      for (const [width, height] of [[390, 600], [1280, 720]]) {
+        await viewport(width, height, 'light');
+        await scaleText(2);
+        await checkLayout(`${role}-child-${width}-2x-text`);
+        await screenshot(`${role}-child-${width}-2x-text`);
+        await restoreText();
+      }
+    }
+    await click('[data-tab=reports]');
+    for (const [width, height] of [[320, 700], [1280, 600]]) {
+      await viewport(width, height, 'light');
       await scaleText(2);
-      await checkLayout(`${role}-child-2x-text`);
-      await screenshot(`${role}-child-2x-text`);
+      await checkLayout(`${role}-reports-${width}-2x-text`);
+      await screenshot(`${role}-reports-${width}-2x-text`);
       await restoreText();
     }
-    await viewport(320, 700, 'light');
-    await click('[data-tab=reports]');
-    await scaleText(2);
-    await checkLayout(`${role}-reports-2x-text`);
-    await screenshot(`${role}-reports-2x-text`);
-    await restoreText();
     console.log(`Polish views passed for ${role}.`);
     await send('Target.disposeBrowserContext', { browserContextId: context });
     contexts.delete(context); sessionId = null;
@@ -288,7 +442,7 @@ try {
   assert.deepEqual(failedAssets, [], 'all requested UI assets loaded');
   assert.deepEqual(exceptions, [], 'no browser exceptions');
   assert.deepEqual(app.ledger.getState(), before, 'appearance checks never change ledger values');
-  console.log(`Polish browser checks passed: ${checkedViews} tab/role/viewport/theme combinations, change and credit summaries, accessible collection panel on short screens and at 200% text, parent/auditor navigation, assets, and no exceptions. ${screenshots.length} screenshots saved to /tmp/casierul-polish-*.png.`);
+  console.log(`Polish browser checks passed: ${checkedViews} tab/role/viewport/theme combinations, tablet columns and laptop navigation, adaptive PDF rendering and cleanup, change and credit summaries, accessible collection panel on short screens and at 200% text, drafts retained across resizing, keyboard focus, parent/auditor navigation, assets, and no exceptions. ${screenshots.length} screenshots saved to /tmp/casierul-polish-*.png.`);
 } finally {
   if (socket?.readyState === WebSocket.OPEN) {
     for (const browserContextId of contexts) await send('Target.disposeBrowserContext', { browserContextId }).catch(() => {});

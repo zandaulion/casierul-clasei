@@ -25,6 +25,15 @@ Aceste ilustrații sunt desenate în cod: SVG local în `web/app.js`, respectiv 
 
 Cheltuielile din situația clasei, raportul individual al cheltuielii și antetul Tabelului contribuțiilor afișează acoperirea din contribuții: `collectedMinor / totalMinor`, cu bară vectorială și procent scris. Procentul folosește cel mult o zecimală, rotunjită în jos; 100% apare doar la acoperire integrală. O contribuție pozitivă sub 0,1% apare ca „<0,1%”. Pentru necesar zero se afișează „Fără sumă de acoperit” (în antetul tabelului: „—”). Plățile, finanțarea temporară și avansurile nealocate nu sunt contribuții încasate pentru cheltuială.
 
+## Aspect adaptiv
+
+- Sub 720 px, navigarea rămâne la baza ecranului și listele au o coloană. Spațiul rezervat navigării și încasării urmărește înălțimea reală a controalelor, inclusiv la text mărit.
+- De la 720 px, cadrul crește fluid până la 1360 px. Copiii, cheltuielile și tipurile de raport folosesc coloane în funcție de spațiul disponibil; căutarea păstrează o lățime confortabilă.
+- De la 1000 px, registrul separă sumarul și istoricul, iar situația copilului separă sumarul și contribuțiile. Încasarea are contribuțiile în stânga și un panou de confirmare în dreapta, cu derulare proprie când înălțimea ecranului este mică. Cadrul încasării se oprește la 1180 px.
+- De la 1120 px, aceleași patru destinații apar într-o navigare laterală care rămâne vizibilă la derulare. Ordinea în document este antet, navigare, conținut, pentru acces consecvent cu tastatura.
+- Formularele rămân la o lățime lizibilă. Dialogul PDF poate ajunge la 1180 px, cu pagina redată clar până la 1120 px; rotirea sau redimensionarea refolosește PDF-ul încărcat și păstrează poziția de derulare.
+- Schimbarea dimensiunii folosește CSS, fără reconstruirea formularelor. Sumele, repartizările, comentariile și câmpul activ rămân intacte. Invitația păstrează un cadru simplu de 620 px.
+
 ## Verificare
 
 `npm test` verifică regulile existente ale registrului. `node scripts/browser-check.mjs` verifică fluxurile complete; `node scripts/browser-polish-check.mjs` verifică aspectul și navigarea casierului, părintelui și auditorului, inclusiv telefoane înguste, ecrane mari, temă întunecată și text mărit. Verificările în browser folosesc date sintetice în baze temporare.

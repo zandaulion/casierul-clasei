@@ -2,7 +2,7 @@
 
 PWA pentru evidența fondurilor mai multor clase și școli. Interfață în română, sume în lei, date persistente pe server în SQLite.
 
-O atmosferă de comunitate școlară, cu ilustrații discrete, culori calde și situații de plată explicate pe înțelesul tuturor. Pe telefon, încasarea rămâne la îndemână; pe ecrane mari, registrul așază soldul și istoricul alături.
+O atmosferă de comunitate școlară, cu ilustrații discrete, culori calde și situații de plată explicate pe înțelesul tuturor. Pe telefon, încasarea rămâne la îndemână. Pe tabletă, listele folosesc coloane; pe laptop, navigarea se mută lateral, iar registrul așază soldul și istoricul alături. Încasarea și situația copilului folosesc spațiul disponibil pentru a afișa informațiile în paralel.
 
 Aplicația: https://casierul-clasei.zandaulion.com
 
@@ -27,6 +27,11 @@ Datele afișate în capturi sunt integral sintetice.
 <p align="center">
   <img src="docs/screenshots/05-registru-desktop-1440x900.png" alt="Registrul clasei pe desktop" width="900"><br>
   <strong>Registru · 1440×900</strong>
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/08-incasare-laptop-1366x768.png" alt="Contribuțiile și confirmarea încasării alături pe laptop" width="900"><br>
+  <strong>Încasare pe laptop · 1366×768</strong>
 </p>
 
 <table>
@@ -55,6 +60,8 @@ Atinge copilul din lista alfabetică, apoi alege totalul de achitat sau o singur
 
 Pentru diferență, alege **Dau rest** sau **Păstrez în avans**. Dacă ai selectat o singură cheltuială, diferența nu se repartizează automat către alte datorii. Poți introduce suma primită și repartizarea manual. Rezumatul de lângă salvare arată suma primită, restul și suma înregistrată. Verifică-l și salvează; aplicația revine la lista copiilor și confirmă încasarea pentru copilul ales.
 
+Pe tabletă în mod peisaj și pe laptop, contribuțiile și confirmarea încasării apar alături. Panoul de confirmare rămâne la îndemână în timpul derulării; pe telefon, el stă la baza ecranului. Rotirea sau redimensionarea ferestrei păstrează suma introdusă, contribuția selectată și repartizarea manuală.
+
 Avansul poate acoperi ulterior alte contribuții sau poate fi restituit. Folosirea avansului nu înregistrează încă o intrare de bani.
 
 ## Evidență
@@ -71,6 +78,8 @@ Avansul poate acoperi ulterior alte contribuții sau poate fi restituit. Folosir
 Rapoartele au mici accente de papetărie: caiet, avion de hârtie și culori pastelate pentru fiecare tip. PDF-urile nou emise folosesc aceleași motive discrete în antet și subsol, păstrând sumele și tabelele clare. PDF-urile deja arhivate rămân exact în forma în care au fost emise.
 
 În situația clasei, în raportul unei cheltuieli și în antetul Tabelului contribuțiilor, fiecare cheltuială are o bară și un procent de acoperire: contribuțiile încasate împărțite la necesarul total. Plățile către furnizori, sumele avansate temporar și avansurile nealocate ale copiilor nu intră în acest procent.
+
+Previzualizarea PDF folosește lățimea disponibilă și se redesenează clar la rotirea tabletei sau redimensionarea ferestrei, păstrând poziția de derulare și fără o nouă descărcare a documentului.
 
 Sumele sunt stocate în bani întregi; împărțirea unui total distribuie exact și ultimii bani. Contribuțiile confirmate nu se recalculează automat; modificările permise se fac explicit prin editarea cheltuielii. Numerarul disponibil include avansurile copiilor și sumele avansate temporar fondului, iar datoriile aferente sunt afișate separat. „Sold după restituirea sumelor avansate” arată ce ar rămâne după stingerea lor. Documentele sunt incluse în copiile de siguranță SQLite; exportul JSON conține numai metadatele lor.
 
@@ -93,7 +102,7 @@ Detalii: [mai multe clase și drepturi](docs/multiple-classrooms.md), [operare �
 
 Testele folosesc baze temporare și verifică registrul, autentificarea, calculele interfeței și integrarea HTTP. `scripts/browser-check.mjs` verifică fluxurile complete într-un context Chromium separat, cu server temporar pe portul 18018 și Chromium disponibil prin debugging pe portul 9222.
 
-`node scripts/browser-polish-check.mjs` verifică aspectul și navigarea casierului, părintelui și auditorului pe telefoane, tablete și desktop, în ambele teme și cu text mărit. Folosește date sintetice, un server temporar pe portul 18028 și același Chromium pe portul 9222. Paleta, ilustrația și regulile de prezentare sunt documentate în [identitatea vizuală a clasei](design/community-style.md).
+`node scripts/browser-polish-check.mjs` verifică 216 combinații de rol, ecran, dimensiune și temă, de la 320 la 1920 px, plus text mărit, ecrane joase, păstrarea schiței încasării la redimensionare și previzualizări PDF adaptive. Folosește date sintetice, un server temporar pe portul 18028 și același Chromium pe portul 9222. Paleta, ilustrația și regulile de prezentare sunt documentate în [identitatea vizuală a clasei](design/community-style.md).
 
 Schița interactivă inițială rămâne în `design/collection-flow.html`; `preview/` păstrează exportul ei pentru revenire la instalarea inițială. Aplicația funcțională este în `web/` și `server/`.
 
