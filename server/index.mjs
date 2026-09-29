@@ -148,6 +148,8 @@ const BUSINESS_ROUTES = [
   [/^\/api\/credit\/apply$/u, 'credit.apply', ['childId', 'allocations', 'occurredAt', 'comment']],
   [/^\/api\/refunds$/u, 'refund.create', ['childId', 'amountMinor', 'occurredAt', 'comment']],
   [/^\/api\/payments$/u, 'payment.create', ['amountMinor', 'destination', 'expenseId', 'occurredAt', 'comment']],
+  [/^\/api\/fund-advances$/u, 'fund_advance.create', ['amountMinor', 'person', 'expenseId', 'occurredAt', 'comment']],
+  [/^\/api\/fund-advances\/([A-Za-z0-9_-]{1,100})\/repayments$/u, 'fund_advance.repay', ['amountMinor', 'occurredAt', 'comment'], 'advanceId'],
   [/^\/api\/transactions\/([A-Za-z0-9_-]{1,100})\/reverse$/u, 'transaction.reverse', ['comment'], 'transactionId'],
 ];
 
@@ -155,7 +157,7 @@ function validateMutation(body, fields) {
   exactKeys(body, ['requestId', 'expectedRevision', ...fields], ['requestId', 'expectedRevision']);
   if (typeof body.requestId !== 'string' || !/^[A-Za-z0-9_.:-]{1,128}$/u.test(body.requestId)
     || !Number.isSafeInteger(body.expectedRevision) || body.expectedRevision < 0) throw httpError(400, 'Identificatorul cererii sau revizia nu este validă.');
-  for (const key of ['schoolName', 'className', 'schoolYear', 'firstName', 'lastName', 'title', 'type', 'childId', 'destination']) {
+  for (const key of ['schoolName', 'className', 'schoolYear', 'firstName', 'lastName', 'title', 'type', 'childId', 'destination', 'person']) {
     if (Object.hasOwn(body, key) && typeof body[key] !== 'string') throw httpError(400, `Câmpul ${key} trebuie să fie text.`);
   }
   for (const key of ['openingBalanceMinor', 'amountMinor', 'receivedMinor', 'changeMinor']) {
@@ -213,7 +215,7 @@ export function projectState(state, device) {
     contributions: expense.contributions.filter((contribution) => contribution.childId === device.child_id),
   }));
   const transactions = state.transactions.filter((transaction) =>
-    transaction.type === 'payment' || transaction.childId === device.child_id).map((transaction) => ({
+    ['payment', 'fund_advance', 'advance_repayment'].includes(transaction.type) || transaction.childId === device.child_id).map((transaction) => ({
     ...transaction,
     ...(transaction.childId === device.child_id ? {} : { comment: '' }),
   }));
@@ -221,6 +223,7 @@ export function projectState(state, device) {
     ...state,
     children: [ownChild],
     expenses,
+    advances: (state.advances || []).map((advance) => ({ ...advance, comment: '' })),
     transactions,
     reports: (state.reports || []).filter((report) => canReadReport(report, device)),
   };

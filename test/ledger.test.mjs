@@ -304,6 +304,107 @@ test('reversals append history and block consuming already applied or refunded c
   assert.throws(() => post('settings.update', { openingBalanceMinor: 10 }), status(409));
 });
 
+test('temporary fund advances reconcile cash, liability, vendor payment and partial repayment', t => {
+  const { ledger, post, child, expense } = fixture(t);
+  const pupil = child();
+  const equipment = expense([pupil], 10000, 'fixed', { title: 'Echipament sportiv' });
+  const advance = post('fund_advance.create', { amountMinor: 10000, person: 'Casier', expenseId: equipment,
+    occurredAt: '2026-09-27T18:00:00+03:00', comment: 'Achitat personal la Decathlon' }).transactionId;
+  let state = ledger.getState();
+  assert.deepEqual(state.summary, { balanceMinor: 10000, netBalanceMinor: 0, totalReceivedMinor: 0,
+    totalPaidMinor: 0, totalCreditMinor: 0, totalDueMinor: 10000, totalAdvancedMinor: 10000,
+    totalAdvanceRepaidMinor: 0, totalAdvanceOutstandingMinor: 10000 });
+  post('payment.create', { amountMinor: 10000, destination: 'Decathlon', expenseId: equipment,
+    occurredAt: '2026-09-27T18:00:00+03:00' });
+  state = ledger.getState();
+  assert.equal(state.summary.balanceMinor, 0);
+  assert.equal(state.summary.netBalanceMinor, -10000);
+  post('collection.create', { childId: pupil, receivedMinor: 10000, changeMinor: 0,
+    allocations: [{ expenseId: equipment, amountMinor: 10000 }] });
+  state = ledger.getState();
+  assert.equal(state.summary.balanceMinor, 10000);
+  assert.equal(state.summary.netBalanceMinor, 0);
+  const repayment = post('fund_advance.repay', { advanceId: advance, amountMinor: 4000, comment: 'Restituire parțială' }).transactionId;
+  state = ledger.getState();
+  assert.equal(state.summary.balanceMinor, 6000);
+  assert.equal(state.summary.totalAdvanceOutstandingMinor, 6000);
+  assert.equal(state.summary.netBalanceMinor, 0);
+  assert.deepEqual(state.advances.find(item => item.id === advance), {
+    id: advance, person: 'Casier', expenseId: equipment, occurredAt: '2026-09-27T15:00:00.000Z',
+    createdAt: state.advances.find(item => item.id === advance).createdAt, comment: 'Achitat personal la Decathlon',
+    amountMinor: 10000, repaidMinor: 4000, outstandingMinor: 6000, reversed: false,
+  });
+  assert.throws(() => post('fund_advance.repay', { advanceId: advance, amountMinor: 6001 }), status(400));
+  assert.throws(() => post('transaction.reverse', { transactionId: advance, comment: 'Greșit' }), status(409));
+  post('transaction.reverse', { transactionId: repayment, comment: 'Restituire greșită' });
+  assert.equal(ledger.getState().summary.totalAdvanceOutstandingMinor, 10000);
+  post('transaction.reverse', { transactionId: advance, comment: 'Avans greșit' });
+  state = ledger.getState();
+  assert.equal(state.summary.balanceMinor, 0);
+  assert.equal(state.summary.totalAdvanceOutstandingMinor, 0);
+  assert.equal(state.summary.netBalanceMinor, 0);
+});
+
+test('existing transaction tables migrate without changing financial history', t => {
+  const directory = mkdtempSync(join(tmpdir(), 'casierul-legacy-transactions-'));
+  const path = join(directory, 'ledger.sqlite');
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  const legacy = new DatabaseSync(path);
+  legacy.exec(`CREATE TABLE children (
+    id TEXT PRIMARY KEY, first_name TEXT NOT NULL, last_name TEXT NOT NULL,
+    active INTEGER NOT NULL CHECK(active IN (0, 1)), created_at TEXT NOT NULL
+  ) STRICT;
+  CREATE TABLE expenses (
+    id TEXT PRIMARY KEY, title TEXT NOT NULL,
+    type TEXT NOT NULL CHECK(type IN ('fixed', 'split', 'quantity')),
+    amount INTEGER NOT NULL CHECK(amount > 0), total INTEGER NOT NULL CHECK(total > 0),
+    occurred_at TEXT NOT NULL, due_date TEXT, comment TEXT NOT NULL,
+    cancelled INTEGER NOT NULL DEFAULT 0 CHECK(cancelled IN (0, 1)), cancel_comment TEXT NOT NULL DEFAULT ''
+  ) STRICT;
+  CREATE TABLE contributions (
+    expense_id TEXT NOT NULL REFERENCES expenses(id), child_id TEXT NOT NULL REFERENCES children(id),
+    amount INTEGER NOT NULL CHECK(amount >= 0), quantity INTEGER NOT NULL CHECK(quantity > 0),
+    PRIMARY KEY (expense_id, child_id)
+  ) STRICT;
+  CREATE TABLE transactions (
+    id TEXT PRIMARY KEY,
+    type TEXT NOT NULL CHECK(type IN ('collection', 'payment', 'credit_apply', 'refund', 'reversal')),
+    occurred_at TEXT NOT NULL, created_at TEXT NOT NULL,
+    child_id TEXT REFERENCES children(id), expense_id TEXT REFERENCES expenses(id),
+    destination TEXT NOT NULL, comment TEXT NOT NULL,
+    amount INTEGER NOT NULL CHECK(amount > 0), change INTEGER NOT NULL CHECK(change >= 0 AND change <= amount),
+    reverses_id TEXT UNIQUE REFERENCES transactions(id), actor_id TEXT NOT NULL, actor_label TEXT NOT NULL,
+    CHECK((type = 'reversal') = (reverses_id IS NOT NULL))
+  ) STRICT;
+  CREATE TABLE allocations (
+    transaction_id TEXT NOT NULL REFERENCES transactions(id), expense_id TEXT NOT NULL REFERENCES expenses(id),
+    amount INTEGER NOT NULL CHECK(amount > 0), PRIMARY KEY(transaction_id, expense_id)
+  ) STRICT;
+  INSERT INTO children VALUES ('legacy-child', 'Ana', 'Pop', 1, '2026-09-01T17:00:00.000Z');
+  INSERT INTO expenses VALUES ('legacy-expense', 'Caiete', 'fixed', 1000, 1000,
+    '2026-09-01T17:00:00.000Z', NULL, '', 0, '');
+  INSERT INTO contributions VALUES ('legacy-expense', 'legacy-child', 1000, 1);
+  INSERT INTO transactions VALUES ('legacy-payment', 'payment', '2026-09-01T17:00:00.000Z',
+    '2026-09-01T17:00:00.000Z', NULL, NULL, 'Profesor', '', 1200, 0, NULL, 'old-device', 'Telefon vechi');
+  INSERT INTO transactions VALUES ('legacy-collection', 'collection', '2026-09-01T18:00:00.000Z',
+    '2026-09-01T18:00:00.000Z', 'legacy-child', NULL, '', '', 1000, 0, NULL, 'old-device', 'Telefon vechi');
+  INSERT INTO allocations VALUES ('legacy-collection', 'legacy-expense', 1000);`);
+  legacy.close();
+  const ledger = new Ledger(path);
+  t.after(() => ledger.close());
+  assert.equal(ledger.getState().transactions.find(item => item.id === 'legacy-payment').amountMinor, 1200);
+  assert.equal(ledger.getState().children[0].dueMinor, 0);
+  assert.equal(ledger.getState().expenses[0].collectedMinor, 1000);
+  assert.equal(ledger.getState().summary.balanceMinor, -200);
+  const result = ledger.dispatch('fund_advance.create', { requestId: randomUUID(), expectedRevision: 0,
+    amountMinor: 1200, person: 'Casier' }, actor);
+  assert.equal(result.state.summary.balanceMinor, 1000);
+  const check = new DatabaseSync(path);
+  t.after(() => check.close());
+  assert.deepEqual(check.prepare('PRAGMA foreign_key_check').all(), []);
+  assert.match(check.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'transactions'").get().sql, /advance_id/u);
+});
+
 test('expense cancellation requires reversing allocations and linked payouts, then leaves history', t => {
   const { ledger, post, child, expense } = fixture(t);
   const id = child();

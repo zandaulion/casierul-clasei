@@ -184,12 +184,27 @@ export async function renderReportPdf(report, state, branding = {}) {
     section('Situația fondului');
     metric('Sold inițial', money(state.settings.openingBalanceMinor));
     metric('Bani primiți și păstrați în fond', money(state.summary.totalReceivedMinor));
+    metric('Sume avansate temporar fondului', money(state.summary.totalAdvancedMinor ?? 0));
     metric('Bani dați mai departe și restituiți', money(state.summary.totalPaidMinor));
-    metric('Sold curent', money(state.summary.balanceMinor), 'info');
+    metric('Numerar disponibil în fond', money(state.summary.balanceMinor), 'info');
+    metric('De restituit pentru sume avansate', money(state.summary.totalAdvanceOutstandingMinor ?? 0),
+      state.summary.totalAdvanceOutstandingMinor ? 'warning' : 'positive');
+    metric('Sold după restituirea sumelor avansate', money(state.summary.netBalanceMinor ?? state.summary.balanceMinor),
+      (state.summary.netBalanceMinor ?? state.summary.balanceMinor) < 0 ? 'negative' : 'info');
     metric('Din sold: avansuri nealocate', money(state.summary.totalCreditMinor));
     metric('Total de încasat', money(state.summary.totalDueMinor), state.summary.totalDueMinor ? 'negative' : 'positive');
     metric('Copii cu cel puțin o restanță', String(state.children.filter(child => child.dueMinor > 0).length), state.summary.totalDueMinor ? 'negative' : 'positive');
-    note('Reconciliere: sold inițial + bani primiți și păstrați − bani dați mai departe și restituiți = sold curent. Avansurile sunt incluse în soldul curent.');
+    note('Reconciliere: sold inițial + bani primiți de la copii + sume avansate temporar − bani dați și restituiți = numerar disponibil. Sumele avansate rămase apar separat ca datorie a clasei.');
+
+    const advances = (state.advances || []).filter(entry => !entry.reversed);
+    section('Sume avansate fondului');
+    if (!advances.length) note('Nu există sume avansate temporar fondului.');
+    for (const advance of advances) {
+      const expense = state.expenses.find(entry => entry.id === advance.expenseId);
+      item(advance.person, money(advance.amountMinor),
+        `${dateTimeFormat.format(new Date(advance.occurredAt))} · Restituit ${money(advance.repaidMinor)} · De restituit ${money(advance.outstandingMinor)}${expense ? ` · ${expense.title}` : ''}`,
+        advance.comment, advance.outstandingMinor ? 'warning' : 'positive');
+    }
 
     section('Cheltuieli');
     for (const expense of state.expenses.filter(entry => !entry.cancelled).reverse()) {
@@ -224,6 +239,8 @@ export async function renderReportPdf(report, state, branding = {}) {
     metric('Necesar total', money(expense.totalMinor));
     metric('Încasat', money(expense.collectedMinor), expense.collectedMinor >= expense.totalMinor ? 'positive' : expense.collectedMinor ? 'warning' : 'negative');
     metric('Bani dați mai departe', money(expense.paidOutMinor), expense.paidOutMinor ? 'info' : null);
+    const relatedAdvances = (state.advances || []).filter(entry => !entry.reversed && entry.expenseId === expense.id);
+    metric('Sume avansate temporar pentru cheltuială', money(sum(relatedAdvances.map(entry => entry.amountMinor))), relatedAdvances.length ? 'warning' : null);
     metric('Participanți', String(expense.contributions.length));
     metric('Contribuții achitate integral', String(fullyPaid), 'positive');
     metric('Contribuții achitate parțial', String(partiallyPaid), partiallyPaid ? 'warning' : null);
@@ -235,6 +252,12 @@ export async function renderReportPdf(report, state, branding = {}) {
     section('Bani dați mai departe');
     if (!payments.length) note('Nu ai înregistrat bani dați mai departe pentru această cheltuială.');
     for (const payment of payments) item(payment.destination || 'Plată', money(payment.amountMinor), dateTimeFormat.format(new Date(payment.occurredAt)), payment.comment, 'info');
+    if (relatedAdvances.length) {
+      section('Finanțare temporară');
+      for (const advance of relatedAdvances) item(advance.person, money(advance.amountMinor),
+        `${dateTimeFormat.format(new Date(advance.occurredAt))} · Restituit ${money(advance.repaidMinor)} · De restituit ${money(advance.outstandingMinor)}`,
+        advance.comment, advance.outstandingMinor ? 'warning' : 'positive');
+    }
   }
 
   if (report.type === 'child') {

@@ -228,6 +228,25 @@ try {
   assert.equal(snapshot().expenses.find(e => e.id === booksId).comment, 'Contribuțiile sunt deja protejate');
   assert.ok(snapshot().expenses.find(e => e.id === booksId).contributions.some(item => item.childId === davidId), 'new participant added after a collection');
   await click('[data-tab=ledger]');
+  await click('[data-action=fund-advance]');
+  await fill('#modal-form [name=amount]', '20');
+  await fill('#modal-form [name=person]', 'Casier test');
+  await fill('#modal-form [name=expenseId]', booksId);
+  await fill('#modal-form [name=comment]', 'Plată personală temporară');
+  await saveModal();
+  assert.equal(snapshot().summary.balanceMinor, 12000);
+  assert.equal(snapshot().summary.totalAdvanceOutstandingMinor, 2000);
+  assert.equal(snapshot().summary.netBalanceMinor, 10000);
+  await click('[data-action=repay-advance]');
+  await fill('#modal-form [name=amount]', '10');
+  await saveModal();
+  assert.equal(snapshot().summary.balanceMinor, 11000);
+  assert.equal(snapshot().summary.totalAdvanceOutstandingMinor, 1000);
+  await click('[data-action=repay-advance]');
+  await saveModal();
+  assert.equal(snapshot().summary.balanceMinor, 10000);
+  assert.equal(snapshot().summary.totalAdvanceOutstandingMinor, 0);
+  assert.equal(snapshot().transactions.filter(t => t.type === 'advance_repayment').length, 2);
   await click('[data-action=payment]');
   await fill('#modal-form [name=amount]', '60');
   await fill('#modal-form [name=destination]', 'Librărie');
@@ -323,7 +342,7 @@ try {
   assert.equal(snapshot().summary.balanceMinor, 15000);
   await until('navigator.serviceWorker.getRegistration().then(r => !!r?.active)', 'shared PWA worker installed');
   assert.equal(exceptions.length, 0, JSON.stringify(exceptions));
-  console.log('Browser checks passed: invitation/setup, logo upload, classroom creation/switching, navigation, roster, expense editing before and after linked money, manual allocation, quick collection, lost-response retry across reauthentication, payment/refund/credit/correction, PDF report generation, in-app viewing and sharing, stale-data protection, reload, offline protection, mobile/dark layout, and PWA worker.');
+  console.log('Browser checks passed: invitation/setup, logo upload, classroom creation/switching, navigation, roster, expense editing before and after linked money, manual allocation, quick collection, lost-response retry across reauthentication, temporary fund advances and repayments, payment/refund/credit/correction, PDF report generation, in-app viewing and sharing, stale-data protection, reload, offline protection, mobile/dark layout, and PWA worker.');
 } finally {
   if (contextId) await send('Target.disposeBrowserContext', { browserContextId: contextId });
   socket.close();

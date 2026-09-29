@@ -39,6 +39,8 @@ Business endpoints accept `?classroom=<id>`. Omitting it selects `default` when 
 | POST /api/credit/apply | credit.apply | childId, allocations: [{expenseId,amountMinor}], occurredAt?, comment? |
 | POST /api/refunds | refund.create | childId, amountMinor (from existing credit), occurredAt?, comment? |
 | POST /api/payments | payment.create | amountMinor, destination, expenseId?, occurredAt?, comment? |
+| POST /api/fund-advances | fund_advance.create | amountMinor, person, expenseId?, occurredAt?, comment?; adds cash and records an equal class liability |
+| POST /api/fund-advances/:id/repayments | fund_advance.repay | amountMinor, occurredAt?, comment?; partial or full repayment, never above the outstanding amount |
 | POST /api/transactions/:id/reverse | transaction.reverse | comment (required); server adds transactionId; append correction, never erase financial history |
 
 ## Ledger module interface
@@ -57,17 +59,19 @@ Business endpoints accept `?classroom=<id>`. Omitting it selects `default` when 
    occurredAt,dueDate,comment,cancelled,
    contributions:[{childId,amountMinor,quantity}]}],
  transactions: [{id,type,occurredAt,createdAt,childId,expenseId,destination,comment,
-   amountMinor,changeMinor,allocations:[{expenseId,amountMinor}],reversed,reversesId,actorLabel}],
- summary:{balanceMinor,totalReceivedMinor,totalPaidMinor,totalCreditMinor,totalDueMinor}
+   amountMinor,changeMinor,advanceId,allocations:[{expenseId,amountMinor}],reversed,reversesId,actorLabel}],
+ advances: [{id,person,expenseId,occurredAt,createdAt,comment,amountMinor,repaidMinor,outstandingMinor,reversed}],
+ summary:{balanceMinor,netBalanceMinor,totalReceivedMinor,totalPaidMinor,totalCreditMinor,totalDueMinor,
+   totalAdvancedMinor,totalAdvanceRepaidMinor,totalAdvanceOutstandingMinor}
 }
 ```
 
 `GET /api/branding/school` and `GET /api/branding/class` return configured PNG images to authenticated devices. Logo bytes stay in SQLite and out of `/api/state` and JSON export payloads. Issued PDFs embed the current images and remain immutable after branding changes.
 
-Types: collection, payment, credit_apply, refund, reversal. `amountMinor` is gross received for collections, spent for payments, applied for credit, refunded for refunds. Sum of retained collections minus allocations, credit applications, and refunds = child credit. Balance includes opening + collections less change − outgoing payments − refunds; applying credit is no cash movement. Reversal records negate the target's effects once. Reject reversals that would make a child's credit negative. Expenses with opted-out children simply omit them from participants; split expenses divide exactly in integer bani with deterministic remainder distribution. Child debts are not netted against credit until explicit application. Default occurredAt to now; validate dates and request sizes. Do not silently change confirmed contributions later.
+Types: collection, payment, credit_apply, refund, fund_advance, advance_repayment, reversal. `amountMinor` is gross received for collections, spent for payments, applied for credit, refunded for refunds, advanced into the fund for `fund_advance`, and repaid to the lender for `advance_repayment`. Sum of retained collections minus allocations, credit applications, and refunds = child credit. Cash balance includes opening + retained collections + temporary fund advances − outgoing payments − child refunds − advance repayments. `netBalanceMinor` subtracts outstanding temporary advances from cash. Applying child credit is no cash movement. A reversal records and negates the target's effects once. An advance with active repayments can only be reversed after those repayments are reversed. Reject operations that make child credit, contributions, or an advance balance negative. Expenses with opted-out children simply omit them from participants; split expenses divide exactly in integer bani with deterministic remainder distribution. Child debts are not netted against credit until explicit application. Default occurredAt to now; validate dates and request sizes. Do not silently change confirmed contributions later.
 
 ## Frontend
 
 Native web page and ES module, no visualization wrapper. Preserve approved large surname-sorted roster and quick collection flow, rounding selected total/expense upwards to 10/50/100 without changing exact multiples; never compound rounding or reallocate earmarked excess. Money input converts decimal Romanian strings to bani. Explicit change versus credit. Single submit with server confirmation, disable duplicate clicks, keep identical requestId on network retry. No offline writes in v1; show connection state and never claim unsaved money was recorded. Refresh on online/foreground when no dirty form. PWA update `isBusy` protects dirty forms and pending saves.
 
-Tabs: Copii, Cheltuieli, Registru, Rapoarte; settings via header. A compact header selector switches among authorized classes and resets class-local navigation state. Empty state guides school/class and adding children. Create fixed/split/quantity expenses with participant checkboxes/quantities and exact preview. Record outgoing payments with timestamp/destination/comments, optional expense. Allow use/refund of child credit and reversing posted transactions with reason. JSON export. Installable PWA manifest/icons, pwa-kit update scripts, invitation gate, no external fonts or CDNs.
+Tabs: Copii, Cheltuieli, Registru, Rapoarte; settings via header. A compact header selector switches among authorized classes and resets class-local navigation state. Empty state guides school/class and adding children. Create fixed/split/quantity expenses with participant checkboxes/quantities and exact preview. Record outgoing payments with timestamp/destination/comments, optional expense. Record a temporary fund advance with person, optional expense, timestamp and comment; show outstanding liabilities and allow partial repayments. Allow use/refund of child credit and reversing posted transactions with reason. JSON export. Installable PWA manifest/icons, pwa-kit update scripts, invitation gate, no external fonts or CDNs.
