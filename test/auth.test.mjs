@@ -28,6 +28,7 @@ test('invites are single use, expire, and erase plaintext when used or revoked',
   assert.match(invite.url, /^https:\/\/clasa.example\/\?invite=/u);
   const result = auth.redeemInvite(invite.code.toLowerCase());
   assert.equal(result.device.label, 'Telefon casier');
+  assert.equal(result.device.is_owner, true, 'first treasurer can create the initial set of classrooms');
   assert.equal(auth.getDevice(result.token).id, result.device.id);
   assert.throws(() => auth.redeemInvite(invite.code), { status: 404 });
   const used = auth.listInvites().invites.find((item) => item.id === invite.id);
@@ -282,7 +283,9 @@ test('mutations reject cross-origin and same-site requests; CLI with session and
 
 test('read-only devices can read state but cannot mutate, export or issue reports', async (t) => {
   const { adminRequest, publicRequest, ledger } = await fixture(t);
-  assert.deepEqual(await (await adminRequest('/api/admin/invite-options')).json(), { children: [] });
+  assert.deepEqual(await (await adminRequest('/api/admin/invite-options')).json(), {
+    children: [{ id: 'classroom:default', name: 'Clasă neconfigurată — întreaga clasă' }],
+  });
   const inviteResponse = await adminRequest('/api/admin/invites', { method: 'POST', body: {
     label: 'Auditor', role: 'auditor', accessExpiresAt: '2099-06-30',
   } });
@@ -301,6 +304,50 @@ test('read-only devices can read state but cannot mutate, export or issue report
     requestId: 'read-only-report', type: 'class',
   } })).status, 403);
   assert.equal(ledger.calls.length, 0);
+});
+
+test('classrooms keep ledgers and permissions isolated', async (t) => {
+  const { app, adminRequest, publicRequest, activate } = await fixture(t);
+  const owner = await activate();
+  assert.equal(owner.device.is_owner, true);
+  const ownerHeaders = { Cookie: owner.cookie };
+  const createdResponse = await publicRequest('/api/classrooms', { method: 'POST', headers: ownerHeaders, body: {
+    requestId: 'new-classroom-1', schoolName: 'Școala B', className: 'II B', schoolYear: '2026–2027',
+  } });
+  assert.equal(createdResponse.status, 201);
+  const created = await createdResponse.json();
+  assert.notEqual(created.classroom.id, 'default');
+  assert.equal(created.classrooms.length, 2);
+  const classroomQuery = `?classroom=${created.classroom.id}`;
+  const childResponse = await publicRequest(`/api/children${classroomQuery}`, { method: 'POST', headers: ownerHeaders, body: {
+    requestId: 'second-class-child', expectedRevision: 1, firstName: 'Ana', lastName: 'Banu',
+  } });
+  assert.equal(childResponse.status, 200, await childResponse.text());
+  assert.equal((await (await publicRequest(`/api/state${classroomQuery}`, { headers: ownerHeaders })).json()).children.length, 1);
+  assert.equal((await (await publicRequest('/api/state', { headers: ownerHeaders })).json()).children.length, 0);
+
+  const inviteResponse = await adminRequest('/api/admin/invites', { method: 'POST', body: {
+    label: 'Verificare II B', role: 'auditor', childId: `classroom:${created.classroom.id}`,
+  } });
+  assert.equal(inviteResponse.status, 201);
+  const invite = await inviteResponse.json();
+  const redemption = await publicRequest('/api/auth/redeem', { method: 'POST', body: { code: invite.code } });
+  const auditorCookie = redemption.headers.get('set-cookie').split(';')[0];
+  const auditorHeaders = { Cookie: auditorCookie };
+  const session = await (await publicRequest('/api/auth/me', { headers: auditorHeaders })).json();
+  assert.deepEqual(session.classrooms.map(item => [item.id, item.role]), [[created.classroom.id, 'auditor']]);
+  assert.equal((await publicRequest(`/api/state${classroomQuery}`, { headers: auditorHeaders })).status, 200);
+  assert.equal((await publicRequest('/api/state', { headers: auditorHeaders })).status, 200,
+    'an omitted classroom selects the only authorized classroom for backward compatibility');
+  assert.equal((await publicRequest('/api/state?classroom=default', { headers: auditorHeaders })).status, 403);
+  assert.equal((await publicRequest('/api/classrooms', { method: 'POST', headers: auditorHeaders, body: {
+    requestId: 'forbidden-class', schoolName: 'Nu', className: 'Nu', schoolYear: '2026–2027',
+  } })).status, 403);
+  assert.equal((await publicRequest(`/api/children${classroomQuery}`, { method: 'POST', headers: auditorHeaders, body: {
+    requestId: 'forbidden-child', expectedRevision: 2, firstName: 'Nu', lastName: 'Merge',
+  } })).status, 403);
+  assert.ok(app.auth.listDevices().devices.find(item => item.id === session.device.id).permissions
+    .some(permission => permission.classroom_id === created.classroom.id && permission.role === 'auditor'));
 });
 
 test('business routes enforce body types, size, ids, and method before dispatch', async (t) => {

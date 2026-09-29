@@ -5,6 +5,7 @@ export const COOKIE_NAME = '__Host-casierul';
 export const DEVELOPMENT_COOKIE_NAME = 'casierul-dev';
 export const SESSION_SECONDS = 400 * 86400;
 export const INVITE_TTL_DAYS = 7;
+export const DEFAULT_CLASSROOM_ID = 'default';
 const ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 export const DEVICE_ROLES = new Set(['treasurer', 'parent', 'auditor']);
 const hash = (value) => createHash('sha256').update(value).digest('hex');
@@ -75,22 +76,52 @@ export class AuthStore {
         revoked INTEGER NOT NULL DEFAULT 0 CHECK(revoked IN (0, 1)),
         device_id TEXT REFERENCES devices(id) ON DELETE SET NULL
       );
+      CREATE TABLE IF NOT EXISTS classrooms (
+        id TEXT PRIMARY KEY,
+        ledger_file TEXT NOT NULL UNIQUE,
+        created_at TEXT NOT NULL,
+        request_id TEXT UNIQUE,
+        request_fingerprint TEXT,
+        archived INTEGER NOT NULL DEFAULT 0 CHECK(archived IN (0, 1))
+      );
+      INSERT OR IGNORE INTO classrooms (id, ledger_file, created_at, request_id, archived)
+        VALUES ('${DEFAULT_CLASSROOM_ID}', 'ledger.sqlite', '1970-01-01T00:00:00.000Z', NULL, 0);
     `);
+    const ownerAdded = this.#addColumn('devices', 'is_owner', 'INTEGER NOT NULL DEFAULT 0');
     this.#addColumn('devices', 'role', "TEXT NOT NULL DEFAULT 'treasurer'");
     this.#addColumn('devices', 'child_id', 'TEXT');
     this.#addColumn('devices', 'access_expires_at', 'TEXT');
     this.#addColumn('invites', 'role', "TEXT NOT NULL DEFAULT 'treasurer'");
     this.#addColumn('invites', 'child_id', 'TEXT');
     this.#addColumn('invites', 'access_expires_at', 'TEXT');
+    this.#addColumn('invites', 'classroom_id', `TEXT NOT NULL DEFAULT '${DEFAULT_CLASSROOM_ID}'`);
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS device_permissions (
+        device_id TEXT NOT NULL REFERENCES devices(id) ON DELETE CASCADE,
+        classroom_id TEXT NOT NULL REFERENCES classrooms(id) ON DELETE CASCADE,
+        role TEXT NOT NULL CHECK(role IN ('treasurer', 'parent', 'auditor')),
+        child_id TEXT,
+        access_expires_at TEXT,
+        PRIMARY KEY (device_id, classroom_id),
+        CHECK((role = 'parent') = (child_id IS NOT NULL))
+      );
+      CREATE INDEX IF NOT EXISTS permissions_classroom ON device_permissions(classroom_id);
+      UPDATE invites SET classroom_id = '${DEFAULT_CLASSROOM_ID}' WHERE classroom_id IS NULL OR classroom_id = '';
+      INSERT OR IGNORE INTO device_permissions (device_id, classroom_id, role, child_id, access_expires_at)
+        SELECT id, '${DEFAULT_CLASSROOM_ID}', role, child_id, access_expires_at FROM devices;
+    `);
+    if (ownerAdded) this.db.exec("UPDATE devices SET is_owner = 1 WHERE role = 'treasurer'");
   }
 
   #addColumn(table, column, definition) {
     if (!this.db.prepare(`PRAGMA table_info(${table})`).all().some((entry) => entry.name === column)) {
       this.db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+      return true;
     }
+    return false;
   }
 
-  createInvite(label, { role = 'treasurer', childId = null, accessExpiresAt = null } = {}) {
+  createInvite(label, { role = 'treasurer', childId = null, accessExpiresAt = null, classroomId = DEFAULT_CLASSROOM_ID } = {}) {
     label = validLabel(label, '');
     if (!DEVICE_ROLES.has(role)) throw httpError(400, 'Tipul de acces nu este valid.');
     if (role === 'parent' && (typeof childId !== 'string' || !childId)) throw httpError(400, 'Alege copilul pentru accesul părintelui.');
@@ -98,22 +129,25 @@ export class AuthStore {
     if (accessExpiresAt != null && (typeof accessExpiresAt !== 'string' || Number.isNaN(Date.parse(accessExpiresAt)))) {
       throw httpError(400, 'Data expirării accesului nu este validă.');
     }
+    if (typeof classroomId !== 'string' || !this.db.prepare('SELECT 1 FROM classrooms WHERE id = ? AND archived = 0').get(classroomId)) {
+      throw httpError(400, 'Clasa selectată nu este validă.');
+    }
     const raw = Array.from({ length: 16 }, () => ALPHABET[randomInt(ALPHABET.length)]).join('');
     const code = raw.match(/.{4}/gu).join('-');
     const url = this.publicBaseUrl ? `${this.publicBaseUrl}/?invite=${encodeURIComponent(code)}` : null;
     const createdAt = new Date(this.now()).toISOString();
     const expiresAt = new Date(this.now() + INVITE_TTL_DAYS * 86400000).toISOString();
     const result = this.db.prepare(`INSERT INTO invites
-      (code_hash, code, url, label, created_at, expires_at, role, child_id, access_expires_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(hash(raw), code, url, label || null, createdAt, expiresAt,
-      role, childId, accessExpiresAt);
+      (code_hash, code, url, label, created_at, expires_at, role, child_id, access_expires_at, classroom_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(hash(raw), code, url, label || null, createdAt, expiresAt,
+      role, childId, accessExpiresAt, classroomId);
     return { id: Number(result.lastInsertRowid), code, url, expires_at: expiresAt, expires_in_days: INVITE_TTL_DAYS,
-      role, child_id: childId, access_expires_at: accessExpiresAt };
+      role, child_id: childId, access_expires_at: accessExpiresAt, classroom_id: classroomId };
   }
 
   listInvites() {
     const invites = this.db.prepare(`SELECT id, label, code, url, created_at, expires_at, used_at, revoked, device_id,
-      role, child_id, access_expires_at
+      role, child_id, access_expires_at, classroom_id
       FROM invites ORDER BY id DESC`).all().map((row) => ({ ...row, revoked: Boolean(row.revoked) }));
     return { invites, ttl_days: INVITE_TTL_DAYS };
   }
@@ -149,16 +183,22 @@ export class AuthStore {
       const sessionExpiry = new Date(now + SESSION_SECONDS * 1000).toISOString();
       const expiresAt = invite.access_expires_at && invite.access_expires_at < sessionExpiry
         ? invite.access_expires_at : sessionExpiry;
+      const isOwner = (invite.role || 'treasurer') === 'treasurer'
+        && !this.db.prepare('SELECT 1 FROM devices WHERE is_owner = 1 LIMIT 1').get();
       this.db.prepare(`INSERT INTO devices
-        (id, token_hash, label, created_at, last_seen, expires_at, role, child_id, access_expires_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(deviceId, hash(token), deviceLabel, nowIso, nowIso,
-        expiresAt, invite.role || 'treasurer', invite.child_id, invite.access_expires_at);
+        (id, token_hash, label, created_at, last_seen, expires_at, role, child_id, access_expires_at, is_owner)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(deviceId, hash(token), deviceLabel, nowIso, nowIso,
+        expiresAt, invite.role || 'treasurer', invite.child_id, invite.access_expires_at, Number(isOwner));
+      this.db.prepare(`INSERT INTO device_permissions
+        (device_id, classroom_id, role, child_id, access_expires_at) VALUES (?, ?, ?, ?, ?)`).run(
+        deviceId, invite.classroom_id || DEFAULT_CLASSROOM_ID, invite.role || 'treasurer', invite.child_id, invite.access_expires_at);
       const claimed = this.db.prepare(`UPDATE invites SET used_at = ?, device_id = ?, code = NULL, url = NULL
         WHERE id = ? AND used_at IS NULL AND revoked = 0 AND expires_at > ?`).run(nowIso, deviceId, invite.id, nowIso);
       if (claimed.changes !== 1) throw fail(409, 'Invitația a fost deja folosită.');
       this.db.exec('COMMIT');
       return { token, device: { id: deviceId, label: deviceLabel, created_at: nowIso, last_seen: nowIso,
-        role: invite.role || 'treasurer', child_id: invite.child_id, access_expires_at: invite.access_expires_at } };
+        role: invite.role || 'treasurer', child_id: invite.child_id, access_expires_at: invite.access_expires_at,
+        is_owner: isOwner } };
     } catch (error) {
       this.db.exec('ROLLBACK');
       throw error;
@@ -168,12 +208,12 @@ export class AuthStore {
   getDevice(token) {
     if (typeof token !== 'string' || !/^[A-Za-z0-9_-]{43}$/u.test(token)) return null;
     const nowIso = new Date(this.now()).toISOString();
-    const row = this.db.prepare(`SELECT id, label, created_at, last_seen, role, child_id, access_expires_at FROM devices
+    const row = this.db.prepare(`SELECT id, label, created_at, last_seen, role, child_id, access_expires_at, is_owner FROM devices
       WHERE token_hash = ? AND revoked = 0 AND expires_at > ?
         AND (access_expires_at IS NULL OR access_expires_at > ?)`).get(hash(token), nowIso, nowIso);
     if (!row) return null;
     this.db.prepare('UPDATE devices SET last_seen = ? WHERE id = ?').run(nowIso, row.id);
-    return { ...row, last_seen: nowIso };
+    return { ...row, is_owner: Boolean(row.is_owner), last_seen: nowIso };
   }
 
   logout(token) {
@@ -181,9 +221,55 @@ export class AuthStore {
   }
 
   listDevices() {
-    return { devices: this.db.prepare(`SELECT id, label, created_at, last_seen, revoked, role, child_id, access_expires_at
+    return { devices: this.db.prepare(`SELECT id, label, created_at, last_seen, revoked, role, child_id, access_expires_at, is_owner
       FROM devices ORDER BY created_at DESC`)
-      .all().map((row) => ({ ...row, revoked: Boolean(row.revoked), has_push: false })) };
+      .all().map((row) => ({ ...row, revoked: Boolean(row.revoked), is_owner: Boolean(row.is_owner), has_push: false,
+        permissions: this.listPermissions(row.id, { includeExpired: true }) })) };
+  }
+
+  listClassrooms() {
+    return this.db.prepare('SELECT id, ledger_file, created_at, archived FROM classrooms ORDER BY created_at, id')
+      .all().map(row => ({ ...row, archived: Boolean(row.archived) }));
+  }
+
+  getClassroom(id) {
+    return this.db.prepare('SELECT id, ledger_file, created_at, archived FROM classrooms WHERE id = ?').get(id) || null;
+  }
+
+  getClassroomByRequest(requestId) {
+    return this.db.prepare('SELECT id, ledger_file, created_at, archived, request_fingerprint FROM classrooms WHERE request_id = ?').get(requestId) || null;
+  }
+
+  createClassroom({ id, ledgerFile, requestId, requestFingerprint, ownerDeviceId }) {
+    const nowIso = new Date(this.now()).toISOString();
+    this.db.exec('BEGIN IMMEDIATE');
+    try {
+      this.db.prepare(`INSERT INTO classrooms (id, ledger_file, created_at, request_id, request_fingerprint, archived)
+        VALUES (?, ?, ?, ?, ?, 0)`).run(id, ledgerFile, nowIso, requestId, requestFingerprint);
+      this.db.prepare(`INSERT INTO device_permissions (device_id, classroom_id, role, child_id, access_expires_at)
+        VALUES (?, ?, 'treasurer', NULL, NULL)`).run(ownerDeviceId, id);
+      this.db.exec('COMMIT');
+      return this.getClassroom(id);
+    } catch (error) {
+      this.db.exec('ROLLBACK');
+      throw error;
+    }
+  }
+
+  listPermissions(deviceId, { includeExpired = false } = {}) {
+    const nowIso = new Date(this.now()).toISOString();
+    return this.db.prepare(`SELECT classroom_id, role, child_id, access_expires_at FROM device_permissions
+      WHERE device_id = ? ${includeExpired ? '' : 'AND (access_expires_at IS NULL OR access_expires_at > ?)'}
+      ORDER BY classroom_id`).all(...(includeExpired ? [deviceId] : [deviceId, nowIso]));
+  }
+
+  resolvePermission(deviceId, classroomId = null) {
+    const permissions = this.listPermissions(deviceId);
+    if (!permissions.length) throw httpError(403, 'Acest dispozitiv nu mai are acces la nicio clasă.');
+    const permission = classroomId ? permissions.find(item => item.classroom_id === classroomId)
+      : permissions.find(item => item.classroom_id === DEFAULT_CLASSROOM_ID) || permissions[0];
+    if (!permission) throw httpError(403, 'Acest dispozitiv nu are acces la clasa selectată.');
+    return permission;
   }
 
   setDeviceRevoked(id, revoked) {

@@ -3,6 +3,35 @@
   "name": "Casierul clasei",
   "api": "/casierul-clasei",
   "push": false,
-  "message": "Acces la Casierul clasei — evidența contribuțiilor și a banilor clasei.\n\nDeschide {link}, apoi apasă Activează.\n\nPoți instala aplicația pe ecranul principal. Codul este valabil {days} zile și înregistrează un singur dispozitiv al casierului.",
-  "invite_note": "Înregistrează un dispozitiv al casierului în aceeași clasă. Nu distribui părinților. Valabil {days} zile, o singură utilizare."
+  "message": "Acces la Casierul clasei — evidența contribuțiilor și a banilor clasei.\n\nDeschide {link}, apoi apasă Activează.\n\nPoți instala aplicația pe ecranul principal. Codul este valabil {days} zile și se folosește o singură dată.",
+  "invite_note": "Alege clasa pentru acest acces. Invitația este valabilă {days} zile și se folosește o singură dată.",
+  "invite_profiles": [
+    {
+      "value": "treasurer",
+      "label": "Casier — acces complet",
+      "description": "Poate vedea și modifica numai registrul clasei alese.",
+      "requires_child": true
+    },
+    {
+      "value": "parent",
+      "label": "Părinte — doar citire",
+      "description": "Vede situația generală și numai datele copilului ales.",
+      "requires_child": true
+    },
+    {
+      "value": "auditor",
+      "label": "Auditor — doar citire",
+      "description": "Vede registrul și rapoartele clasei alese, fără modificări.",
+      "requires_child": true
+    }
+  ],
+  "invite_messages": {
+    "parent": "Acces doar pentru citire la Casierul clasei. Vei vedea situația generală a fondului și numai contribuțiile copilului tău.\n\nDeschide {link}, apoi apasă Activează.\n\nPoți instala aplicația pe ecranul principal. Codul este valabil {days} zile și se folosește o singură dată.",
+    "auditor": "Acces doar pentru citire la Casierul clasei. Vei putea verifica registrul și rapoartele clasei alese, fără să modifici date.\n\nDeschide {link}, apoi apasă Activează.\n\nPoți instala aplicația pe ecranul principal. Codul este valabil {days} zile și se folosește o singură dată."
+  },
+  "invite_notes": {
+    "parent": "Alege copilul din clasa potrivită. Accesul este doar pentru citire, limitat la acel copil.",
+    "auditor": "Alege opțiunea «întreaga clasă» pentru clasa dorită. Accesul este doar pentru citire.",
+    "treasurer": "Alege opțiunea «întreaga clasă» pentru clasa dorită. Accesul permite modificarea registrului."
+  }
 }

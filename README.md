@@ -1,6 +1,6 @@
 # Casierul clasei
 
-PWA pentru evidența fondului unei clase, folosită de casier. Interfață în română, sume în lei, date persistente pe server în SQLite.
+PWA pentru evidența fondurilor mai multor clase și școli. Interfață în română, sume în lei, date persistente pe server în SQLite.
 
 Aplicația: https://casierul-clasei.zandaulion.com
 
@@ -36,6 +36,8 @@ Datele afișate în capturi sunt integral sintetice.
 
 Invitațiile pot acorda trei tipuri de acces. **Casierul** vede și modifică întregul registru. **Părintele** are acces doar pentru citire la situația generală și la datele copilului asociat, fără numele sau tranzacțiile celorlalți copii. **Auditorul** vede registrul complet și rapoartele, dar nu poate modifica sau exporta datele brute. Accesul doar pentru citire poate expira automat la data aleasă în consola PWA.
 
+Proprietarul poate adăuga alte clase din setări. Fiecare clasă are bază de date, copii, cheltuieli, rapoarte, sigle și drepturi proprii. Selectorul din antet apare când dispozitivul are acces la mai multe clase. Invitațiile se emit pentru o singură clasă și un singur rol; pentru părinte se alege și copilul.
+
 ## Încasare rapidă
 
 Atinge copilul din lista alfabetică, apoi alege totalul restant sau o singură cheltuială. Butoanele mari rotunjesc în sus la multiplu de 10, 50 sau 100 lei, pornind mereu de la suma selectată. Un multiplu exact rămâne neschimbat.
@@ -69,7 +71,7 @@ npm test
 
 Cloudflare Tunnel folosește `http://127.0.0.1:8018`. API-ul privat de administrare ascultă separat pe `127.0.0.1:8118`. Publicarea instalează serviciul systemd, integrarea consolei și copii de siguranță locale zilnice.
 
-Detalii: [operare și backup](docs/operations.md), [contract API](docs/api.md).
+Detalii: [operare și backup](docs/operations.md), [contract API](docs/api.md), [planul de criptare](docs/encryption.md).
 
 Testele folosesc baze temporare și verifică registrul, autentificarea, calculele interfeței și integrarea HTTP. `scripts/browser-check.mjs` verifică fluxurile complete într-un context Chromium separat, cu server temporar pe portul 18018 și Chromium disponibil prin debugging pe portul 9222.
 

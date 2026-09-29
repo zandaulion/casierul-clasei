@@ -21,10 +21,12 @@ Fișierele din `web/` sunt încărcate de server la pornire. După orice modific
 ## Date și acces
 
 - Configurație: `~/.config/casierul-clasei/app.env` (permisiuni 0600).
-- Registru: `~/.local/share/casierul-clasei/ledger.sqlite`.
-- Invitații și dispozitive: `~/.local/share/casierul-clasei/auth.sqlite`.
+- Clasa migrată/inițială: `~/.local/share/casierul-clasei/ledger.sqlite`.
+- Clasele adăugate: câte un `~/.local/share/casierul-clasei/classroom-<uuid>.sqlite`.
+- Invitații, dispozitive, catalogul claselor și drepturile: `~/.local/share/casierul-clasei/auth.sqlite`.
 - Directorul de date este privat (0700); nu se află în directorul public.
-- Toate dispozitivele invitate aparțin aceluiași casier și aceleiași clase.
+- Fiecare invitație acordă un rol numai pentru clasa aleasă. Rolurile sunt casier, părinte sau auditor; părintele este limitat și la copilul ales.
+- Dispozitivele de casier existente la migrare devin proprietari și pot crea clase. Pe o instalare nouă, primul casier activat devine proprietar.
 
 Invitațiile se generează din consola PWA existentă sau local:
 
@@ -37,7 +39,7 @@ Codurile de invitație sunt de unică folosință și expiră în șapte zile. D
 
 ## Copii de siguranță
 
-`casierul-clasei-backup.timer` produce zilnic copii SQLite consistente, inclusiv datele aflate în WAL, folosind API-ul de backup din Node 24 (`scripts/backup.mjs`). Fiecare bază este verificată cu `PRAGMA integrity_check` și `PRAGMA foreign_key_check`; perechea completă apare apoi într-un subdirector datat din `~/.local/share/casierul-clasei/backups/`. Fișierele salvate nu necesită WAL/SHM pentru restaurare, iar copiile incomplete sunt eliminate. Copiile sunt locale, pe același server; nu există transfer extern automat.
+`casierul-clasei-backup.timer` produce zilnic copii SQLite consistente, inclusiv datele aflate în WAL, folosind API-ul de backup din Node 24 (`scripts/backup.mjs`). Mai întâi salvează catalogul din `auth.sqlite`, apoi toate bazele claselor active din acel catalog. Fiecare bază este verificată cu `PRAGMA integrity_check` și `PRAGMA foreign_key_check`; setul complet apare apoi într-un subdirector datat din `~/.local/share/casierul-clasei/backups/`. Fișierele salvate nu necesită WAL/SHM pentru restaurare, iar copiile incomplete sunt eliminate. Copiile sunt locale, pe același server; nu există transfer extern automat.
 
 Backup manual:
 
@@ -45,7 +47,7 @@ Backup manual:
 systemctl --user start casierul-clasei-backup.service
 ```
 
-Pentru restaurare, oprește aplicația, păstrează o copie a întregului director curent de date, apoi înlocuiește ambele baze cu cele din aceeași copie datată. Fișierele WAL și SHM vechi nu trebuie păstrate lângă bazele restaurate. Păstrează proprietarul `opc` și permisiunile private, pornește aplicația și verifică soldurile. Nu restaura peste o bază deschisă de un proces activ.
+Pentru restaurare, oprește aplicația, păstrează o copie a întregului director curent de date, apoi înlocuiește `auth.sqlite` și toate bazele claselor cu fișierele din aceeași copie datată. Fișierele WAL și SHM vechi nu trebuie păstrate lângă bazele restaurate. Păstrează proprietarul `opc` și permisiunile private, pornește aplicația și verifică soldurile fiecărei clase. Nu restaura peste o bază deschisă de un proces activ.
 
 Exportul JSON din aplicație conține datele registrului și istoricul, fără credentiale. Este util pentru verificare și păstrarea unei copii lizibile; restaurarea automată din JSON nu este implementată.
 

@@ -3,8 +3,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
-import { Ledger } from './ledger.mjs';
 import { AuthStore, adminTokenMatches, clearSessionCookie, httpError, readSessionCookie, sessionCookie } from './auth.mjs';
+import { ClassroomLedgers } from './classrooms.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const MAX_BODY_BYTES = 1024 * 1024;
@@ -100,6 +100,15 @@ function pathnameOf(req) {
     throw httpError(404, 'Nu a fost găsit.');
   }
   return name;
+}
+
+function classroomIdOf(req) {
+  let value;
+  try { value = new URL(req.url || '/', 'http://localhost').searchParams.get('classroom'); }
+  catch { throw httpError(400, 'Adresă invalidă.'); }
+  if (value == null || value === '') return null;
+  if (!/^(?:default|[a-f0-9-]{36})$/u.test(value)) throw httpError(400, 'Clasa selectată nu este validă.');
+  return value;
 }
 
 function loadAssets(webDir) {
@@ -217,15 +226,6 @@ export function projectState(state, device) {
   };
 }
 
-function accessLabels(state) {
-  return new Map((state.children || []).map((child) => [child.id, `${child.lastName} ${child.firstName}`]));
-}
-
-function decorateAccess(records, state) {
-  const labels = accessLabels(state);
-  return records.map((record) => ({ ...record, child_label: record.child_id ? labels.get(record.child_id) || null : null }));
-}
-
 export function createApp(options = {}) {
   const config = { ...loadConfig(), ...options };
   const base = new URL(config.publicBaseUrl);
@@ -235,8 +235,27 @@ export function createApp(options = {}) {
   config.publicBaseUrl = base.origin;
   fs.mkdirSync(config.dataDir, { recursive: true, mode: 0o700 });
   const auth = options.auth || new AuthStore(path.join(config.dataDir, 'auth.sqlite'), { publicBaseUrl: config.publicBaseUrl });
-  const ledger = options.ledger || new Ledger(path.join(config.dataDir, 'ledger.sqlite'));
+  const ledgers = options.ledgers || new ClassroomLedgers(config.dataDir, auth, { defaultLedger: options.ledger || null });
+  const ledger = ledgers.get();
   const { assets, buildVersion } = loadAssets(config.webDir);
+
+  const accessContext = (req, device) => {
+    const permission = auth.resolvePermission(device.id, classroomIdOf(req));
+    return { permission, ledger: ledgers.get(permission.classroom_id), scopedDevice: { ...device, ...permission } };
+  };
+  const classroomsFor = device => ledgers.listForDevice(device.id);
+  const decorateRecord = record => {
+    const classroomId = record.classroom_id || 'default';
+    const classroom = ledgers.summary(classroomId);
+    const state = classroom ? ledgers.get(classroomId).getState() : { children: [] };
+    const child = record.child_id ? state.children.find(item => item.id === record.child_id) : null;
+    const classroomLabel = classroom ? [classroom.schoolName, classroom.className, classroom.schoolYear].filter(Boolean).join(' · ') || 'Clasă neconfigurată' : null;
+    const permissions = record.permissions?.map(permission => decorateRecord(permission));
+    const accessLabel = permissions
+      ? permissions.map(permission => permission.child_label).filter(Boolean).join(' · ')
+      : classroomLabel && child ? `${classroomLabel} — ${child.lastName} ${child.firstName}` : classroomLabel;
+    return { ...record, classroom_label: classroomLabel, child_label: accessLabel, ...(permissions ? { permissions } : {}) };
+  };
 
   async function handlePublic(req, res, pathname) {
     if (pathname === '/api/admin' || pathname.startsWith('/api/admin/')) throw httpError(404, 'Nu a fost găsit.');
@@ -258,13 +277,13 @@ export function createApp(options = {}) {
       const route = BUSINESS_ROUTES.find(([pattern]) => pattern.test(pathname));
       const reportPdf = pathname.match(/^\/api\/reports\/([A-Za-z0-9_-]{1,100})\/pdf$/u);
       const brandingImage = pathname.match(/^\/api\/branding\/(school|class)$/u);
-      if (!route && !reportPdf && !brandingImage && !['/api/auth/me', '/api/auth/logout', '/api/state', '/api/export', '/api/reports'].includes(pathname)) throw httpError(404, 'Nu a fost găsit.');
+      if (!route && !reportPdf && !brandingImage && !['/api/auth/me', '/api/auth/logout', '/api/state', '/api/export', '/api/reports', '/api/classrooms'].includes(pathname)) throw httpError(404, 'Nu a fost găsit.');
       const token = readSessionCookie(req.headers.cookie, config.cookieSecure);
       const device = auth.getDevice(token);
       if (!device) throw httpError(401, 'Activează acest dispozitiv cu o invitație.');
       if (pathname === '/api/auth/me') {
         requireMethod(req, 'GET');
-        return sendJson(res, 200, { device });
+        return sendJson(res, 200, { device, classrooms: classroomsFor(device) });
       }
       if (pathname === '/api/auth/logout') {
         requireMethod(req, 'POST');
@@ -274,32 +293,40 @@ export function createApp(options = {}) {
         res.setHeader('Set-Cookie', clearSessionCookie(config.cookieSecure));
         return sendJson(res, 200, { ok: true });
       }
+      if (pathname === '/api/classrooms') {
+        if (req.method === 'GET') return sendJson(res, 200, { classrooms: classroomsFor(device) });
+        requireMethod(req, 'POST');
+        checkOrigin(req, config.publicBaseUrl);
+        const classroom = ledgers.create(await readJson(req), device);
+        return sendJson(res, 201, { classroom, classrooms: classroomsFor(device), state: ledgers.get(classroom.id).getState() });
+      }
+      const context = accessContext(req, device);
       if (pathname === '/api/state') {
         requireMethod(req, 'GET');
-        return sendJson(res, 200, projectState(ledger.getState(), device));
+        return sendJson(res, 200, projectState(context.ledger.getState(), context.scopedDevice));
       }
       if (brandingImage) {
         requireMethod(req, 'GET');
-        const image = ledger.getBrandingImage(brandingImage[1]);
+        const image = context.ledger.getBrandingImage(brandingImage[1]);
         if (!image) throw httpError(404, 'Sigla nu a fost configurată.');
         return sendImage(res, image);
       }
       if (pathname === '/api/export') {
         requireMethod(req, 'GET');
-        requireTreasurer(device);
-        return sendJson(res, 200, ledger.exportData(), {
+        requireTreasurer(context.scopedDevice);
+        return sendJson(res, 200, context.ledger.exportData(), {
           'Content-Disposition': `attachment; filename="casierul-clasei-${new Date().toISOString().slice(0, 10)}.json"`,
         });
       }
       if (reportPdf) {
         requireMethod(req, 'GET');
-        const report = (ledger.getState().reports || []).find((entry) => entry.id === reportPdf[1]);
-        if (!report || !canReadReport(report, device)) throw httpError(404, 'Raportul nu a fost găsit.');
-        return sendPdf(res, ledger.getReportPdf(reportPdf[1]));
+        const report = (context.ledger.getState().reports || []).find((entry) => entry.id === reportPdf[1]);
+        if (!report || !canReadReport(report, context.scopedDevice)) throw httpError(404, 'Raportul nu a fost găsit.');
+        return sendPdf(res, context.ledger.getReportPdf(reportPdf[1]));
       }
       if (pathname === '/api/reports') {
         requireMethod(req, 'POST');
-        requireTreasurer(device);
+        requireTreasurer(context.scopedDevice);
         checkOrigin(req, config.publicBaseUrl);
         const body = await readJson(req);
         exactKeys(body, ['requestId', 'type', 'subjectId', 'replacesId'], ['requestId', 'type']);
@@ -307,16 +334,16 @@ export function createApp(options = {}) {
           if (Object.hasOwn(body, key) && body[key] !== null && typeof body[key] !== 'string') throw httpError(400, `Câmpul ${key} trebuie să fie text.`);
         }
         if (!/^[A-Za-z0-9_.:-]{1,128}$/u.test(body.requestId)) throw httpError(400, 'Identificatorul cererii nu este valid.');
-        return sendJson(res, 201, await ledger.createReport(body, { id: device.id, label: device.label }));
+        return sendJson(res, 201, await context.ledger.createReport(body, { id: device.id, label: device.label }));
       }
-      requireTreasurer(device);
+      requireTreasurer(context.scopedDevice);
       requireMethod(req, 'POST');
       checkOrigin(req, config.publicBaseUrl);
       const body = await readJson(req);
       const [pattern, operation, fields, idField] = route;
       validateMutation(body, fields);
       if (idField) body[idField] = pathname.match(pattern)[1];
-      return sendJson(res, 200, ledger.dispatch(operation, body, { id: device.id, label: device.label }));
+      return sendJson(res, 200, context.ledger.dispatch(operation, body, { id: device.id, label: device.label }));
     }
     if (!['GET', 'HEAD'].includes(req.method)) throw Object.assign(httpError(405, 'Metodă nepermisă.'), { allow: 'GET, HEAD' });
     const asset = assets.get(pathname === '/' ? '/index.html' : pathname === '/bust' ? '/bust.html' : pathname);
@@ -334,27 +361,43 @@ export function createApp(options = {}) {
     if (pathname === '/api/admin/devices') {
       requireMethod(req, 'GET');
       const result = auth.listDevices();
-      return sendJson(res, 200, { ...result, devices: decorateAccess(result.devices, ledger.getState()) });
+      return sendJson(res, 200, { ...result, devices: result.devices.map(decorateRecord) });
     }
     if (pathname === '/api/admin/invite-options') {
       requireMethod(req, 'GET');
-      return sendJson(res, 200, { children: ledger.getState().children.filter((child) => child.active)
-        .map((child) => ({ id: child.id, name: `${child.lastName} ${child.firstName}` })) });
+      const children = [];
+      for (const classroom of auth.listClassrooms().filter(item => !item.archived)) {
+        const summary = ledgers.summary(classroom.id);
+        if (!summary) continue;
+        const label = [summary.schoolName, summary.className, summary.schoolYear].filter(Boolean).join(' · ') || 'Clasă neconfigurată';
+        children.push({ id: `classroom:${classroom.id}`, name: `${label} — întreaga clasă` });
+        for (const child of ledgers.get(classroom.id).getState().children.filter(item => item.active)) {
+          children.push({ id: `child:${classroom.id}:${child.id}`, name: `${label} — ${child.lastName} ${child.firstName}` });
+        }
+      }
+      return sendJson(res, 200, { children });
     }
     if (pathname === '/api/admin/invites') {
       if (req.method === 'GET') {
         const result = auth.listInvites();
-        return sendJson(res, 200, { ...result, invites: decorateAccess(result.invites, ledger.getState()) });
+        return sendJson(res, 200, { ...result, invites: result.invites.map(decorateRecord) });
       }
       requireMethod(req, 'POST');
       const body = await readJson(req);
-      exactKeys(body, ['label', 'role', 'childId', 'accessExpiresAt']);
+      exactKeys(body, ['label', 'role', 'childId', 'accessExpiresAt', 'classroomId']);
       const role = body.role ?? 'treasurer';
       if (!['treasurer', 'parent', 'auditor'].includes(role)) throw httpError(400, 'Tipul de acces nu este valid.');
-      if (role !== 'parent' && body.childId != null) throw httpError(400, 'Copilul poate fi ales doar pentru accesul unui părinte.');
-      if (role === 'parent' && !ledger.getState().children.some((child) => child.active && child.id === body.childId)) {
+      let classroomId = body.classroomId || null, childId = body.childId || null;
+      const classScope = typeof childId === 'string' ? childId.match(/^classroom:(default|[a-f0-9-]{36})$/u) : null;
+      const childScope = typeof childId === 'string' ? childId.match(/^child:(default|[a-f0-9-]{36}):([A-Za-z0-9_-]{1,100})$/u) : null;
+      if (classScope) { classroomId = classScope[1]; childId = null; }
+      else if (childScope) { classroomId = childScope[1]; childId = childScope[2]; }
+      classroomId ||= 'default';
+      const selectedLedger = ledgers.get(classroomId);
+      if (role === 'parent' && !selectedLedger.getState().children.some((child) => child.active && child.id === childId)) {
         throw httpError(400, 'Copilul ales nu este activ în clasă.');
       }
+      if (role !== 'parent') childId = null;
       let accessExpiresAt = null;
       if (body.accessExpiresAt != null) {
         if (typeof body.accessExpiresAt !== 'string' || !/^\d{4}-\d{2}-\d{2}$/u.test(body.accessExpiresAt)) {
@@ -364,7 +407,7 @@ export function createApp(options = {}) {
         if (accessExpiresAt <= new Date().toISOString()) throw httpError(400, 'Data expirării trebuie să fie în viitor.');
       }
       return sendJson(res, 201, auth.createInvite(body.label, {
-        role, childId: role === 'parent' ? body.childId : null, accessExpiresAt,
+        role, childId, accessExpiresAt, classroomId,
       }));
     }
     const device = pathname.match(/^\/api\/admin\/devices\/([A-Za-z0-9_-]{1,100})(?:\/(revoke|label))?$/u);
@@ -414,14 +457,14 @@ export function createApp(options = {}) {
   const adminServer = http.createServer({ maxHeaderSize: 16384, requestTimeout: 30000, headersTimeout: 15000 }, handler(handleAdmin));
   let closed = false;
   return {
-    config, publicServer, adminServer, auth, ledger, buildVersion,
+    config, publicServer, adminServer, auth, ledger, ledgers, buildVersion,
     async close() {
       if (closed) return;
       closed = true;
       await Promise.all([publicServer, adminServer].map((server) => server.listening
         ? new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve())) : undefined));
+      ledgers.close();
       auth.close();
-      ledger.close();
     },
   };
 }
