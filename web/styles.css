@@ -86,7 +86,7 @@ svg { width: 20px; height: 20px; flex: none; vertical-align: middle; }
 .app {
   max-width: 620px;
   margin: 0 auto;
-  padding-bottom: calc(110px + env(safe-area-inset-bottom));
+  padding-bottom: calc(var(--navigation-height, 86px) + 24px + env(safe-area-inset-bottom));
 }
 .top {
   display: flex;
@@ -147,7 +147,7 @@ svg { width: 20px; height: 20px; flex: none; vertical-align: middle; }
   line-height: 1;
 }
 .icon-button svg { width: 23px; height: 23px; }
-main { padding: 24px 20px; outline: none; }
+main { min-width: 0; padding: 24px 20px; outline: none; }
 .tabs {
   position: fixed;
   z-index: 4;
@@ -179,12 +179,13 @@ main { padding: 24px 20px; outline: none; }
   color: var(--brand);
   font-weight: 650;
 }
+.tabs button span { min-width: 0; overflow-wrap: anywhere; }
 .tabs [data-tab=expenses][aria-current=page] { background: var(--peach); color: var(--text); }
 .tabs [data-tab=ledger][aria-current=page] { background: var(--sky); color: var(--text); }
 .tabs [data-tab=reports][aria-current=page] { background: var(--lavender); color: var(--text); }
 
 /* Shared composition and friendly section markers. */
-.toolbar, .row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.toolbar, .row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; }
 .row > :first-child { min-width: 0; }
 .toolbar { margin: 16px 0; flex-wrap: wrap; }
 .toolbar button { flex: 1; }
@@ -317,6 +318,8 @@ main { padding: 24px 20px; outline: none; }
 .paid-status svg { width: 14px; height: 14px; }
 .due-status { font-weight: 600; font-variant-numeric: tabular-nums; }
 .parent-summary { margin: 16px 0; }
+.child-layout { display: grid; gap: 12px; }
+.child-overview, .child-contributions, .collection-options, .collection-confirmation { min-width: 0; }
 .access-indicator {
   display: flex;
   align-items: center;
@@ -444,7 +447,7 @@ dd { margin: 0 0 0 auto; text-align: right; }
 .expense-progress { height: 7px; margin: 14px 0 10px; border-radius: 10px; background: var(--soft); overflow: hidden; }
 .expense-progress-fill { display: block; height: 100%; border-radius: inherit; background: var(--brand); }
 .expense-totals { margin-top: 12px; font-size: 14px; }
-.expense-totals .row, .expense-totals > div { display: flex; justify-content: space-between; gap: 8px; }
+.expense-totals .row, .expense-totals > div { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; }
 .expense-totals strong { font-weight: 600; }
 .balance {
   margin: 0 0 20px;
@@ -613,7 +616,7 @@ summary { min-height: 44px; padding: 10px 0; color: var(--muted); cursor: pointe
 .toast {
   position: fixed;
   z-index: 20;
-  bottom: calc(100px + env(safe-area-inset-bottom));
+  bottom: calc(var(--navigation-height, 86px) + 12px + env(safe-area-inset-bottom));
   left: 50%;
   transform: translateX(-50%);
   width: max-content;
@@ -723,23 +726,99 @@ dialog::backdrop { background: #13271e88; }
   .logo-grid { grid-template-columns: 1fr; }
 }
 
-/* Wide screens gain useful columns; collecting retains its focused width. */
-@media (min-width: 1000px) {
-  .app { max-width: 980px; }
-  .top { padding-inline: 28px; }
-  main { padding: 28px; }
-  .tabs { width: min(100%, 980px); }
+/* Tablet layouts grow with the viewport and make room for readable cards. */
+@media (min-width: 720px) {
+  .app:not([data-screen=welcome]) { max-width: 1360px; }
+  .top { padding-inline: 24px; }
+  main { padding: 28px 24px; }
+  .tabs { width: min(100%, 1360px); padding-inline: 24px; }
   .tabs button { flex-direction: row; gap: 9px; min-height: 52px; font-size: 14px; }
-  .welcome-banner { min-height: 156px; padding: 24px 30px; }
+  .welcome-banner { min-height: 150px; padding: 24px 28px; }
   .welcome-copy h1, .welcome-copy h2 { font-size: 31px; }
   .welcome-copy p { font-size: 15px; }
-  .welcome-banner img { width: 172px; height: 132px; flex-basis: 172px; margin-right: 20px; }
-  .app[data-screen=children]:not(.child-detail) .children { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .expense-grid, .report-types { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .ledger-layout { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: start; gap: 24px; }
+  .welcome-banner img { width: 160px; height: 126px; flex-basis: 160px; }
+  .children { gap: 14px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 17.5em), 1fr)); }
+  .expense-grid, .report-types {
+    gap: 16px;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, max(19em, (100% - 16px) / 2)), 1fr));
+    align-items: start;
+  }
+  .expense-card { height: 100%; }
+  .report-type { height: 100%; }
+  .report-archive-list { grid-template-columns: repeat(auto-fit, minmax(min(100%, 26em), 1fr)); align-items: start; gap: 16px; }
+  .roster-search { max-width: 38rem; }
+  .collection-dock { width: min(calc(100% - 48px), 720px); }
+  dialog { width: min(680px, calc(100vw - 48px)); padding: 26px; }
+  .pdf-dialog { width: min(1180px, calc(100vw - 48px)); padding: 14px; }
+}
+
+/* Landscape tablets and laptops keep related information side by side. */
+@media (min-width: 1000px) {
+  .ledger-layout { grid-template-columns: minmax(0, .95fr) minmax(0, 1.05fr); align-items: start; gap: 24px; }
   .ledger-history { padding-left: 24px; border-left: 1px solid var(--line); }
-  .app.child-detail, .app.collecting { max-width: 620px; }
-  .app.child-detail .tabs, .app.collecting .tabs { width: min(100%, 620px); }
-  .app.child-detail main, .app.collecting main { padding-inline: 20px; }
-  .app.child-detail .top, .app.collecting .top { padding-inline: 20px; }
+  .child-layout { grid-template-columns: minmax(0, .85fr) minmax(0, 1.15fr); align-items: start; gap: 28px; }
+  .child-contributions { border-left: 1px solid var(--line); padding-left: 28px; }
+  .app.collecting { max-width: 1180px; padding-bottom: 24px; }
+  #collection-form { display: grid; grid-template-columns: minmax(0, 1fr) minmax(330px, .68fr); align-items: start; gap: 28px; margin-top: 24px; }
+  .total-choice { margin-top: 0; }
+  .collection-confirmation { position: sticky; top: 24px; }
+  .collection-dock {
+    position: static;
+    transform: none;
+    width: 100%;
+    max-height: calc(100dvh - 48px);
+    padding: 22px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+  }
+  .collection-dock-amount { align-items: stretch; flex-direction: column; }
+  .collection-dock .money-input { flex: none; }
+  .collection-dock .money-input input { font-size: 32px; }
+  .collection-dock .excess { margin: 20px 0; }
+  .collection-dock .switch { grid-template-columns: 1fr; }
+  .collection-dock .switch button { padding: 12px; }
+  .collection-dock-summary { margin: 16px 0; }
+  .app.collecting .history { max-width: 720px; }
+}
+
+/* A laptop navigation rail stays available while the document scrolls. */
+@media (min-width: 1120px) {
+  .app:not([data-screen=welcome]):not(.collecting) {
+    display: grid;
+    grid-template-columns: minmax(190px, 11em) minmax(0, 1fr);
+    grid-template-rows: auto auto auto minmax(0, 1fr);
+  }
+  .app > .top { grid-column: 1 / -1; grid-row: 1; padding-inline: 28px; }
+  .app > #connection { grid-column: 2; grid-row: 2; }
+  .app > #pending-notice { grid-column: 2; grid-row: 3; }
+  .app > main { grid-column: 2; grid-row: 4; padding: 28px; }
+  .tabs {
+    grid-column: 1;
+    grid-row: 2 / 5;
+    align-self: start;
+    position: sticky;
+    top: 24px;
+    bottom: auto;
+    left: auto;
+    transform: none;
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+    width: auto;
+    max-height: calc(100dvh - 48px);
+    overflow-y: auto;
+    margin: 28px 0 0 20px;
+    padding: 9px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+  }
+  .tabs button { justify-content: flex-start; gap: 12px; min-height: 54px; padding: 12px; }
+}
+
+/* Text can grow without squeezing the collection fields into narrow columns. */
+@media (min-width: 1000px) and (max-height: 600px) {
+  .collection-confirmation { top: 12px; }
+  .collection-dock { max-height: calc(100dvh - 24px); }
 }

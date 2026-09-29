@@ -15,7 +15,7 @@
 </head>
 <body>
   <a class="skip" href="#main">Mergi la conținut</a>
-  <div class="app">
+  <div class="app" data-screen="welcome">
     <header class="top">
       <div class="top-main">
         <span class="brand-mark" aria-hidden="true">
@@ -37,9 +37,6 @@
     </header>
     <div id="connection" class="notice" role="status" hidden></div>
     <div id="pending-notice" class="notice warning" role="alert" hidden></div>
-    <main id="main" tabindex="-1">
-      <div class="empty"><h1>Se încarcă…</h1><p>Conectăm registrul clasei.</p></div>
-    </main>
     <nav id="tabs" class="tabs" aria-label="Ecrane principale" hidden>
       <button data-tab="children" aria-current="page">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3"/><path d="M3 21v-3a6 6 0 0 1 12 0v3M16 5a3 3 0 0 1 0 6M21 21v-3a6 6 0 0 0-3-5.2"/></svg>
@@ -58,6 +55,9 @@
         <span>Rapoarte</span>
       </button>
     </nav>
+    <main id="main" tabindex="-1">
+      <div class="empty"><h1>Se încarcă…</h1><p>Conectăm registrul clasei.</p></div>
+    </main>
   </div>
   <dialog id="dialog" aria-labelledby="dialog-title">
     <form id="modal-form">

@@ -47,18 +47,22 @@ const accessBanner = () => canWrite() ? '' : `<div class="access-indicator"><spa
 const welcomeBanner = (title = 'Lucruri frumoase, împreună.', subtitle = 'Fondul clasei, cu grijă pentru fiecare.') => `<section class="welcome-banner" aria-label="Clasa noastră"><div class="welcome-copy"><h2>${esc(title)}</h2><p>${esc(subtitle)}</p></div><img src="/illustrations/school-community.webp" width="384" height="256" alt="" decoding="async"></section>`;
 const pageHeading = (title, subtitle, type) => `<div class="page-heading"><span class="section-icon tone-${type}">${icon(type)}</span><div><h1>${esc(title)}</h1><p class="caption">${esc(subtitle)}</p></div></div>`;
 
-// Reserve the actual dock height, including large text and connection errors.
-// The toast is outside .app, so it shares this value through the root element.
+// Reserve only fixed controls; wide-screen rails and panels stay in the layout.
+// The toast is outside .app, so it shares these values through the root element.
 function updateDockHeight() {
   const dock = $('.collection-dock');
   const height = dock && getComputedStyle(dock).position === 'fixed' ? Math.ceil(dock.getBoundingClientRect().height) : 0;
   document.documentElement.style.setProperty('--collection-dock-height', `${height}px`);
+  const tabs = $('#tabs');
+  const navigationHeight = tabs && !tabs.hidden && getComputedStyle(tabs).position === 'fixed' ? Math.ceil(tabs.getBoundingClientRect().height) : 0;
+  document.documentElement.style.setProperty('--navigation-height', `${navigationHeight}px`);
 }
 const dockObserver = typeof ResizeObserver === 'function' ? new ResizeObserver(updateDockHeight) : null;
 function observeCollectionDock() {
   dockObserver?.disconnect();
   const dock = $('.collection-dock');
   if (dock) dockObserver?.observe(dock);
+  dockObserver?.observe($('#tabs'));
   updateDockHeight();
 }
 window.addEventListener('resize', updateDockHeight);
@@ -155,10 +159,7 @@ function closeModal(force = false, fromHistory = false) {
   if (!force && (saving || pending)) { toast('Verifică mai întâi salvarea în așteptare.'); return false; }
   if (!force && modalDirty && !confirm('Renunți la modificările din formular?')) return false;
   if (modal?.type === 'report-preview') {
-    modal.pdfAbort?.abort();
-    try { modal.pdfRenderTask?.cancel(); } catch { /* The page may already be rendered. */ }
-    Promise.resolve(modal.pdfLoadingTask?.destroy()).catch(() => {});
-    Promise.resolve(modal.pdfDocument?.destroy()).catch(() => {});
+    modal.pdfCleanup?.();
   }
   if ($('#dialog').open) $('#dialog').close();
   modal = null; modalDirty = false;
@@ -262,19 +263,19 @@ function renderChild() {
     const parent = classroomAccess()?.role === 'parent';
     const nextContribution = unpaid(c).find(item => item.dueDate);
     const contributionRows = c.contributions.map(item => `<div class="card"><div class="row"><h3>${esc(item.title)}</h3><span class="amount">${money(item.paidMinor)} din ${money(item.amountMinor)}</span></div><div class="caption">${item.remainingMinor ? `De achitat ${money(item.remainingMinor)}` : `<span class="paid-status">${icon('check')}Achitat</span>`}${item.dueDate ? ` · termen ${dateText(item.dueDate)}` : ''}</div></div>`).join('');
-    $('#main').innerHTML = `${parent ? welcomeBanner('Aproape de clasa ta', 'Contribuțiile și noutățile din registru, la îndemână.') : '<button class="back" data-action="back">‹ Copii</button>'}<h1>${esc(name(c))}</h1><p class="caption">Situația contribuțiilor</p><div class="summary parent-summary"><dl><div><dt>De achitat</dt><dd><strong>${money(c.dueMinor)}</strong></dd></div><div><dt>Avans disponibil</dt><dd>${money(c.creditMinor)}</dd></div></dl>${nextContribution ? `<p class="caption">Primul termen de achitat: ${dateText(nextContribution.dueDate)} · ${esc(nextContribution.title)}</p>` : c.dueMinor ? '' : '<p class="caption">Toate contribuțiile înregistrate sunt achitate.</p>'}</div><h2>Contribuții</h2><div class="stack">${contributionRows || '<p class="caption">Contribuțiile vor apărea aici după ce sunt adăugate de casier.</p>'}</div><details class="history"><summary>Istoricul copilului</summary><div class="stack">${transactionRows(state.transactions.filter(t => t.childId === c.id))}</div></details>`;
+    $('#main').innerHTML = `${parent ? welcomeBanner('Aproape de clasa ta', 'Contribuțiile și noutățile din registru, la îndemână.') : '<button class="back" data-action="back">‹ Copii</button>'}<div class="child-layout"><section class="child-overview" aria-labelledby="child-title"><h1 id="child-title">${esc(name(c))}</h1><p class="caption">Situația contribuțiilor</p><div class="summary parent-summary"><dl><div><dt>De achitat</dt><dd><strong>${money(c.dueMinor)}</strong></dd></div><div><dt>Avans disponibil</dt><dd>${money(c.creditMinor)}</dd></div></dl>${nextContribution ? `<p class="caption">Primul termen de achitat: ${dateText(nextContribution.dueDate)} · ${esc(nextContribution.title)}</p>` : c.dueMinor ? '' : '<p class="caption">Toate contribuțiile înregistrate sunt achitate.</p>'}</div></section><section class="child-contributions" aria-labelledby="contributions-title"><h2 id="contributions-title">Contribuții</h2><div class="stack">${contributionRows || '<p class="caption">Contribuțiile vor apărea aici după ce sunt adăugate de casier.</p>'}</div><details class="history"><summary>Istoricul copilului</summary><div class="stack">${transactionRows(state.transactions.filter(t => t.childId === c.id))}</div></details></section></div>`;
     return;
   }
   const contributions = unpaid(c);
   $('#main').innerHTML = `<button class="back" data-action="back">‹ Copii</button><div class="row"><h1>${esc(name(c))}</h1><button data-action="edit-child" aria-label="Editează copilul">Editează</button></div><div class="caption">Încasare rapidă${c.active ? '' : ' · Copil arhivat'}</div>${c.creditMinor ? `<div class="summary"><div class="row"><span>Avans disponibil</span><strong>${money(c.creditMinor)}</strong></div><div class="toolbar"><button data-action="apply-credit" ${c.dueMinor ? '' : 'disabled'}>Folosește avansul</button><button data-action="refund">Restituie</button></div></div>` : ''}
-  <form id="collection-form">
+  <form id="collection-form"><div class="collection-options">
   ${c.dueMinor ? `<button type="button" class="choice total-choice" data-target="all" aria-pressed="true"><span>Total de achitat</span><span class="total-number">${money(c.dueMinor)}</span></button><div class="section-label">Sau alege o singură contribuție</div><div class="stack">${contributions.map(e => `<button type="button" class="choice" data-target="${esc(e.expenseId)}" aria-pressed="false"><span>${esc(e.title)}<span class="caption" style="display:block">${e.dueDate ? `Termen ${dateText(e.dueDate)}` : 'Fără termen'}</span></span><span class="choice-money">${money(e.remainingMinor)}</span></button>`).join('')}</div><div class="section-label" id="round-label">Alege rapid suma primită</div><div class="rounds" id="rounds">${[10, 50, 100].map(unit => `<button type="button" class="round" data-round="${unit}" aria-pressed="false"><span class="round-value"></span><span class="caption">multiplu de ${unit}</span></button>`).join('')}</div>` : '<div class="empty"><h2>Contribuțiile sunt achitate.</h2><p>Poți primi bani în avans. Introdu suma și alege „Păstrez în avans”.</p></div>'}
-  <section class="collection-dock" aria-label="Confirmarea încasării"><div class="collection-dock-amount"><label for="received">Primesc</label><div class="money-input"><input id="received" inputmode="decimal" autocomplete="off" spellcheck="false" value="${esc(draft.amount)}" aria-label="Suma primită în lei" data-write-control><span>lei</span></div></div>
-  <fieldset class="excess" id="excess" hidden><legend id="excess-label"></legend><div class="switch"><button type="button" data-excess="change" aria-pressed="true">Dau rest</button><button type="button" data-excess="credit" aria-pressed="false">Păstrez în avans</button></div></fieldset>
-  <div id="collection-dock-summary" class="collection-dock-summary"></div><p class="error" id="collection-error" role="alert" hidden></p><button type="submit" class="primary wide" id="collection-save">Înregistrează încasarea</button></section>
   <div class="summary" id="collection-summary" aria-live="polite" aria-atomic="true"></div>
   <details id="allocation-details" ${draft.manual ? 'open' : ''}><summary>Ajustează repartizarea</summary><label class="check"><input type="checkbox" id="manual" ${draft.manual ? 'checked' : ''} data-write-control>Aleg manual sumele pentru cheltuieli</label>${contributions.map(e => `<label class="allocation"><span>${esc(e.title)}<small style="display:block">De achitat ${money(e.remainingMinor)}</small></span><input inputmode="decimal" aria-label="${esc(e.title)}: repartizare în lei" data-allocation="${esc(e.expenseId)}" value="0" data-write-control></label>`).join('')}<p class="caption">Repartizarea automată acoperă mai întâi termenele cele mai apropiate. O cheltuială selectată primește doar suma datorată; diferența rămâne rest sau avans.</p></details>
-  <details><summary>Data, ora și comentarii</summary><label>Data și ora<input id="collection-date" type="datetime-local" value="${esc(draft.occurredAt)}" required data-write-control></label><label>Comentarii<textarea id="collection-comment" maxlength="2000" data-write-control>${esc(draft.comment)}</textarea></label></details></form>
+  <details><summary>Data, ora și comentarii</summary><label>Data și ora<input id="collection-date" type="datetime-local" value="${esc(draft.occurredAt)}" required data-write-control></label><label>Comentarii<textarea id="collection-comment" maxlength="2000" data-write-control>${esc(draft.comment)}</textarea></label></details></div>
+  <div class="collection-confirmation"><section class="collection-dock" aria-label="Confirmarea încasării"><div class="collection-dock-amount"><label for="received">Primesc</label><div class="money-input"><input id="received" inputmode="decimal" autocomplete="off" spellcheck="false" value="${esc(draft.amount)}" aria-label="Suma primită în lei" data-write-control><span>lei</span></div></div>
+  <fieldset class="excess" id="excess" hidden><legend id="excess-label"></legend><div class="switch"><button type="button" data-excess="change" aria-pressed="true">Dau rest</button><button type="button" data-excess="credit" aria-pressed="false">Păstrez în avans</button></div></fieldset>
+  <div id="collection-dock-summary" class="collection-dock-summary"></div><p class="error" id="collection-error" role="alert" hidden></p><button type="submit" class="primary wide" id="collection-save">Înregistrează încasarea</button></section></div></form>
   <details class="history"><summary>Istoricul copilului</summary><div class="stack">${transactionRows(state.transactions.filter(t => t.childId === c.id))}</div></details>`;
   updateCollection();
 }
@@ -440,50 +441,109 @@ async function shareReport(reportId) {
   finally { saving = false; updateNotices(); }
 }
 async function loadReportPreview(currentModal, report) {
-  const status = $('#pdf-preview-status'), pages = $('#pdf-preview-pages');
+  const status = $('#pdf-preview-status'), pages = $('#pdf-preview-pages'), dialog = $('#dialog');
   const abort = new AbortController(); currentModal.pdfAbort = abort;
   const timeout = setTimeout(() => abort.abort(), 20000);
+  const pageEntries = [];
+  let disposed = false, observer = null, resizeTimer = null;
+  let rendering = false, renderAgain = false, renderedSize = '', scheduledSize = '';
+  const active = () => modal === currentModal && !disposed;
+  const dimensions = () => {
+    const width = Math.max(1, Math.min(1120, pages.clientWidth));
+    const ratio = Math.min(window.devicePixelRatio || 1, 2);
+    return { width, ratio, key: `${width}:${ratio}` };
+  };
+  const queueResize = () => {
+    if (!active()) return;
+    const { key } = dimensions();
+    if (key === scheduledSize) return;
+    scheduledSize = key;
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => { if (active()) void renderPages(); }, 120);
+  };
+  currentModal.pdfCleanup = () => {
+    if (disposed) return;
+    disposed = true;
+    abort.abort(); clearTimeout(timeout); clearTimeout(resizeTimer);
+    observer?.disconnect();
+    window.removeEventListener('resize', queueResize);
+    try { currentModal.pdfRenderTask?.cancel(); } catch { /* The page may already be rendered. */ }
+    // Destroying the loading task also releases its document and worker.
+    const loadingTask = currentModal.pdfLoadingTask;
+    currentModal.pdfRenderTask = null; currentModal.pdfLoadingTask = null; currentModal.pdfDocument = null;
+    Promise.resolve().then(() => loadingTask?.destroy()).catch(() => {});
+  };
+  const showError = error => {
+    if (!active()) return;
+    currentModal.pdfCleanup();
+    status.hidden = false; status.classList.add('error');
+    status.textContent = error.name === 'AbortError' ? 'Încărcarea raportului a durat prea mult. Încearcă din nou.' : (error.message || 'Raportul nu a putut fi afișat.');
+  };
+  async function renderPages() {
+    if (!active()) return;
+    if (rendering) { renderAgain = true; return; }
+    rendering = true;
+    try {
+      do {
+        renderAgain = false;
+        const size = dimensions(); scheduledSize = size.key;
+        if (size.key === renderedSize) continue;
+        for (const { page, natural, wrapper, pageNumber } of pageEntries) {
+          if (!active()) return;
+          if (!renderedSize) status.textContent = `Se afișează pagina ${pageNumber} din ${pageEntries.length}…`;
+          const viewport = page.getViewport({ scale: (size.width / natural.width) * size.ratio });
+          const canvas = document.createElement('canvas');
+          canvas.width = Math.ceil(viewport.width); canvas.height = Math.ceil(viewport.height);
+          canvas.style.width = '100%';
+          canvas.setAttribute('aria-label', `Pagina ${pageNumber} din ${pageEntries.length}`);
+          const renderTask = page.render({ canvasContext: canvas.getContext('2d'), viewport });
+          currentModal.pdfRenderTask = renderTask;
+          await renderTask.promise;
+          currentModal.pdfRenderTask = null;
+          if (!active()) return;
+          if (renderAgain) break;
+          // Keep the previous canvas visible while repainting. The figure's
+          // aspect ratio keeps its place in the document throughout a resize.
+          const scrollTop = dialog.scrollTop;
+          wrapper.replaceChildren(canvas); wrapper.dataset.rendered = 'true';
+          dialog.scrollTop = scrollTop;
+        }
+        if (!renderAgain) renderedSize = size.key;
+      } while (renderAgain && active());
+      if (active()) status.hidden = true;
+    } catch (error) { showError(error); }
+    finally { currentModal.pdfRenderTask = null; rendering = false; }
+  }
   try {
-    const library = pdfModulePromise ||= import('/vendor/pdfjs/pdf.min.mjs');
     status.textContent = 'Se încarcă fișierul PDF…';
     const response = await fetch(scopedUrl(`/api/reports/${encodeURIComponent(report.id)}/pdf`), { credentials: 'same-origin', cache: 'no-store', signal: abort.signal });
-    clearTimeout(timeout);
     if (!response.ok) throw new Error('PDF-ul nu a putut fi încărcat.');
     status.textContent = 'Se pregătește afișarea…';
-    const pdfjs = await library;
+    const [pdfjs, data] = await Promise.all([pdfModulePromise ||= import('/vendor/pdfjs/pdf.min.mjs'), response.arrayBuffer()]);
+    clearTimeout(timeout);
+    if (!active()) return;
     pdfjs.GlobalWorkerOptions.workerSrc = '/vendor/pdfjs/pdf.worker.min.mjs';
-    const loadingTask = pdfjs.getDocument({ data: await response.arrayBuffer() });
+    const loadingTask = pdfjs.getDocument({ data });
     currentModal.pdfLoadingTask = loadingTask;
     const pdfDocument = await loadingTask.promise;
-    if (modal !== currentModal) { await pdfDocument.destroy(); return; }
+    if (!active()) return;
     currentModal.pdfDocument = pdfDocument;
     for (let pageNumber = 1; pageNumber <= pdfDocument.numPages; pageNumber += 1) {
-      if (modal !== currentModal) return;
-      status.textContent = `Se afișează pagina ${pageNumber} din ${pdfDocument.numPages}…`;
       const page = await pdfDocument.getPage(pageNumber);
+      if (!active()) return;
       const natural = page.getViewport({ scale: 1 });
-      const cssWidth = Math.max(1, Math.min(natural.width, pages.clientWidth));
-      const pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
-      const viewport = page.getViewport({ scale: (cssWidth / natural.width) * pixelRatio });
       const wrapper = document.createElement('figure');
-      const canvas = document.createElement('canvas');
-      canvas.width = Math.ceil(viewport.width); canvas.height = Math.ceil(viewport.height);
-      canvas.style.width = `${Math.round(viewport.width / pixelRatio)}px`;
-      canvas.style.height = `${Math.round(viewport.height / pixelRatio)}px`;
-      canvas.setAttribute('aria-label', `Pagina ${pageNumber} din ${pdfDocument.numPages}`);
-      wrapper.append(canvas); pages.append(wrapper);
-      const renderTask = page.render({ canvasContext: canvas.getContext('2d'), viewport });
-      currentModal.pdfRenderTask = renderTask;
-      await renderTask.promise;
-      wrapper.dataset.rendered = 'true';
+      wrapper.style.maxWidth = '1120px';
+      wrapper.style.aspectRatio = `${natural.width} / ${natural.height}`;
+      pages.append(wrapper);
+      pageEntries.push({ page, natural, wrapper, pageNumber });
     }
-    currentModal.pdfRenderTask = null; status.hidden = true;
-  } catch (error) {
-    clearTimeout(timeout);
-    if (modal !== currentModal) return;
-    status.classList.add('error');
-    status.textContent = error.name === 'AbortError' ? 'Încărcarea raportului a durat prea mult. Încearcă din nou.' : (error.message || 'Raportul nu a putut fi afișat.');
-  }
+    scheduledSize = dimensions().key;
+    observer = typeof ResizeObserver === 'function' ? new ResizeObserver(queueResize) : null;
+    observer?.observe(pages);
+    window.addEventListener('resize', queueResize);
+    await renderPages();
+  } catch (error) { showError(error); }
 }
 function viewReport(reportId) {
   const report = (state.reports || []).find(item => item.id === reportId);
