@@ -255,6 +255,31 @@ try {
   await saveModal();
   assert.equal(snapshot().summary.balanceMinor, 4000);
   const paymentId = snapshot().transactions.find(t => t.type === 'payment').id;
+  await click('[data-transaction="' + paymentId + '"]');
+  await click('[data-action=attach-document]');
+  await evaluate(`(() => {
+    const file = new File(['%PDF-1.4\\n%%EOF'], 'bon-librarie.pdf', { type: 'application/pdf' });
+    const transfer = new DataTransfer(); transfer.items.add(file);
+    const input = document.querySelector('#modal-form [name=files]'); input.files = transfer.files;
+    input.dispatchEvent(new Event('input', { bubbles: true })); input.dispatchEvent(new Event('change', { bubbles: true }));
+  })()`);
+  await fill('#modal-form [name=visibility]', 'class');
+  await saveModal();
+  assert.equal(snapshot().attachments.length, 1);
+  assert.equal(snapshot().attachments[0].entityType, 'payment');
+  assert.equal(snapshot().attachments[0].filename, 'bon-librarie.pdf');
+  await click('[data-tab=expenses]');
+  await click('[data-expense="' + booksId + '"]');
+  await click('[data-action=attach-document]');
+  await evaluate(`(() => {
+    const bytes = Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='), character => character.charCodeAt(0));
+    const transfer = new DataTransfer(); transfer.items.add(new File([bytes], 'comanda.png', { type: 'image/png' }));
+    const input = document.querySelector('#modal-form [name=files]'); input.files = transfer.files;
+    input.dispatchEvent(new Event('input', { bubbles: true })); input.dispatchEvent(new Event('change', { bubbles: true }));
+  })()`);
+  await saveModal();
+  assert.equal(snapshot().attachments.length, 2);
+  assert.equal(snapshot().attachments.find(item => item.entityType === 'expense').visibility, 'internal');
   await click('[data-tab=children]'); await click('[data-child="' + anaId + '"]');
   await click('[data-action=refund]'); await fill('#modal-form [name=amount]', '10'); await saveModal();
   assert.equal(snapshot().summary.balanceMinor, 3000);
@@ -342,7 +367,7 @@ try {
   assert.equal(snapshot().summary.balanceMinor, 15000);
   await until('navigator.serviceWorker.getRegistration().then(r => !!r?.active)', 'shared PWA worker installed');
   assert.equal(exceptions.length, 0, JSON.stringify(exceptions));
-  console.log('Browser checks passed: invitation/setup, logo upload, classroom creation/switching, navigation, roster, expense editing before and after linked money, manual allocation, quick collection, lost-response retry across reauthentication, temporary fund advances and repayments, payment/refund/credit/correction, PDF report generation, in-app viewing and sharing, stale-data protection, reload, offline protection, mobile/dark layout, and PWA worker.');
+  console.log('Browser checks passed: invitation/setup, logo upload, classroom creation/switching, navigation, roster, expense editing before and after linked money, manual allocation, quick collection, lost-response retry across reauthentication, temporary fund advances and repayments, expense/payment document attachments, payment/refund/credit/correction, PDF report generation, in-app viewing and sharing, stale-data protection, reload, offline protection, mobile/dark layout, and PWA worker.');
 } finally {
   if (contextId) await send('Target.disposeBrowserContext', { browserContextId: contextId });
   socket.close();

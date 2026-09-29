@@ -15,7 +15,7 @@ const labels = { collection: 'Încasare', payment: 'Bani dați', credit_apply: '
   fund_advance: 'Sumă avansată fondului', advance_repayment: 'Restituire sumă avansată', reversal: 'Corecție' };
 const typeLabels = { fixed: 'Sumă fixă / copil', split: 'Total împărțit', quantity: 'Cantitate × preț' };
 const reportTypeLabels = { class: 'Situația clasei', matrix: 'Raport exhaustiv', expense: 'Situația unei cheltuieli', child: 'Fișa individuală' };
-const writeActions = new Set(['add-child', 'edit-child', 'bulk-children', 'add-expense', 'edit-expense', 'payment', 'fund-advance', 'repay-advance',
+const writeActions = new Set(['add-child', 'edit-child', 'bulk-children', 'add-expense', 'edit-expense', 'payment', 'fund-advance', 'repay-advance', 'attach-document',
   'expense-payment', 'apply-credit', 'refund', 'report-class', 'report-matrix', 'report-expense', 'report-child',
   'replace-report', 'reverse', 'cancel-expense', 'remove-logo', 'add-classroom']);
 const pendingKey = 'casierul.pending.v1';
@@ -40,6 +40,8 @@ const activeChildren = () => sortChildren(state.children.filter(c => c.active));
 const classroomAccess = () => classrooms.find(item => item.id === classroomId);
 const canWrite = () => classroomAccess()?.role === 'treasurer';
 const accessLabel = () => ({ parent: 'Părinte · doar citire', auditor: 'Auditor · doar citire' }[classroomAccess()?.role] || 'Casier');
+const fileSize = bytes => bytes < 1024 ? `${bytes} B` : bytes < 1024 * 1024 ? `${new Intl.NumberFormat('ro-RO', { maximumFractionDigits: 0 }).format(bytes / 1024)} KB`
+  : `${new Intl.NumberFormat('ro-RO', { maximumFractionDigits: 1 }).format(bytes / 1024 / 1024)} MB`;
 const accessBanner = () => canWrite() ? '' : `<div class="notice access-notice"><strong>${accessLabel()}</strong><span>Poți consulta situația și rapoartele, fără să modifici registrul.</span></div>`;
 
 function navigationState(overlay = navigationOverlay) {
@@ -524,12 +526,28 @@ function updateExpensePreview() {
     $('#expense-preview').innerHTML = `<strong>${amounts.length} participanți · Total ${money(amounts.reduce((sum, p) => sum + p.amountMinor, 0))}</strong><details><summary>Verifică fiecare contribuție</summary><div class="preview-list">${sortChildren(state.children.filter(c => amounts.some(p => p.childId === c.id))).map(c => `<div class="row"><span>${esc(name(c))}</span><span class="amount">${money(amounts.find(p => p.childId === c.id).amountMinor)}</span></div>`).join('')}</div></details>`;
   } catch (error) { $('#expense-preview').textContent = error.message; }
 }
+function attachmentSection(entityType, entityId) {
+  const entries = (state.attachments || []).filter(item => item.entityType === entityType && item.entityId === entityId);
+  const list = entries.length ? `<div class="document-list">${entries.map(item => {
+    const url = scopedUrl(`/api/attachments/${encodeURIComponent(item.id)}`);
+    const download = scopedUrl(`/api/attachments/${encodeURIComponent(item.id)}?download=1`);
+    const visibility = item.visibility === 'class' ? 'Vizibil părinților' : 'Doar casier și auditor';
+    return `<article class="document"><div><strong>${esc(item.filename)}</strong><span class="caption">${fileSize(item.size)} · ${visibility}<br>${dateText(item.createdAt)} · ${esc(item.createdByLabel)}</span></div><div class="document-actions"><a href="${esc(url)}" target="_blank" rel="noopener">Deschide</a><a href="${esc(download)}" download="${esc(item.filename)}">Descarcă</a></div></article>`;
+  }).join('')}</div>` : '<p class="caption">Nu există documente atașate.</p>';
+  return `<section class="attachments"><h3>Documente justificative</h3>${list}${canWrite() ? `<button type="button" class="wide" data-action="attach-document" data-entity-type="${entityType}" data-id="${esc(entityId)}">+ Atașează documente</button>` : ''}</section>`;
+}
+function attachmentModal(entityType, entityId) {
+  const label = entityType === 'expense' ? state.expenses.find(item => item.id === entityId)?.title
+    : state.transactions.find(item => item.id === entityId)?.destination;
+  if (!label) return;
+  openModal('attachment', 'Atașează documente', `<p><strong>${esc(label)}</strong></p><label>Fișiere<input type="file" name="files" accept="application/pdf,image/jpeg,image/png,image/webp" multiple required></label><p class="caption">PDF, JPG, PNG sau WebP, maximum 10 MB pentru fiecare fișier și 25 de documente per înregistrare. După încărcare, documentele devin parte imuabilă a evidenței.</p><label>Cine poate vedea documentele<select name="visibility"><option value="internal">Doar casierul și auditorii</option><option value="class">Și părinții cu acces la clasă</option></select></label><p class="caption">Documentele pot conține date personale. Alege accesul părinților numai pentru acte potrivite transparenței clasei.</p>`, 'Încarcă documentele', { entityType, entityId, requestIds: new Map(), completed: new Set() });
+}
 function expenseDetails(id) {
   const e = state.expenses.find(e => e.id === id);
   const financing = (state.advances || []).filter(item => !item.reversed && item.expenseId === e.id);
   const financedMinor = financing.reduce((total, item) => total + item.amountMinor, 0);
   const outstandingMinor = financing.reduce((total, item) => total + item.outstandingMinor, 0);
-  openModal('expense-detail', e.title, `<p class="caption">${typeLabels[e.type]} · ${e.cancelled ? 'Anulată' : `${e.participantCount ?? e.contributions.length} participanți`}</p><div class="summary"><dl><div><dt>Total contribuții</dt><dd>${money(e.totalMinor)}</dd></div><div><dt>Încasat</dt><dd>${money(e.collectedMinor)}</dd></div><div><dt>Bani dați mai departe</dt><dd>${money(e.paidOutMinor)}</dd></div>${financing.length ? `<div><dt>Avansat temporar fondului</dt><dd>${money(financedMinor)}</dd></div><div><dt>De restituit</dt><dd>${money(outstandingMinor)}</dd></div>` : ''}</dl></div><p>${e.dueDate ? `Termen: ${dateText(e.dueDate)}` : 'Fără termen de plată'}</p><p class="caption">Data cheltuielii: ${dateText(e.occurredAt)}</p>${e.comment ? `<p>${esc(e.comment)}</p>` : ''}<div class="preview-list">${sortChildren(state.children.filter(c => e.contributions.some(p => p.childId === c.id))).map(c => { const p = e.contributions.find(p => p.childId === c.id); const contribution = c.contributions.find(p => p.expenseId === e.id); return `<div class="row"><span>${esc(name(c))}${e.type === 'quantity' ? ` × ${p.quantity}` : ''}<small style="display:block">Restant ${money(contribution?.remainingMinor || 0)}</small></span><span class="amount">${money(p.amountMinor)}</span></div>`; }).join('')}</div>${e.cancelled || !canWrite() ? '' : `<div class="toolbar"><button type="button" data-action="edit-expense" data-id="${esc(e.id)}">Editează</button><button type="button" data-action="expense-payment" data-id="${esc(e.id)}">Înregistrează bani dați</button></div>${!e.collectedMinor && !e.paidOutMinor && !financing.length ? `<button type="button" class="danger" data-action="cancel-expense" data-id="${esc(e.id)}">Anulează cheltuiala</button><p class="caption">Anularea este posibilă doar dacă nu mai există încasări sau plăți legate de cheltuială.</p>` : ''}`}`, null);
+  openModal('expense-detail', e.title, `<p class="caption">${typeLabels[e.type]} · ${e.cancelled ? 'Anulată' : `${e.participantCount ?? e.contributions.length} participanți`}</p><div class="summary"><dl><div><dt>Total contribuții</dt><dd>${money(e.totalMinor)}</dd></div><div><dt>Încasat</dt><dd>${money(e.collectedMinor)}</dd></div><div><dt>Bani dați mai departe</dt><dd>${money(e.paidOutMinor)}</dd></div>${financing.length ? `<div><dt>Avansat temporar fondului</dt><dd>${money(financedMinor)}</dd></div><div><dt>De restituit</dt><dd>${money(outstandingMinor)}</dd></div>` : ''}</dl></div><p>${e.dueDate ? `Termen: ${dateText(e.dueDate)}` : 'Fără termen de plată'}</p><p class="caption">Data cheltuielii: ${dateText(e.occurredAt)}</p>${e.comment ? `<p>${esc(e.comment)}</p>` : ''}<div class="preview-list">${sortChildren(state.children.filter(c => e.contributions.some(p => p.childId === c.id))).map(c => { const p = e.contributions.find(p => p.childId === c.id); const contribution = c.contributions.find(p => p.expenseId === e.id); return `<div class="row"><span>${esc(name(c))}${e.type === 'quantity' ? ` × ${p.quantity}` : ''}<small style="display:block">Restant ${money(contribution?.remainingMinor || 0)}</small></span><span class="amount">${money(p.amountMinor)}</span></div>`; }).join('')}</div>${attachmentSection('expense', e.id)}${e.cancelled || !canWrite() ? '' : `<div class="toolbar"><button type="button" data-action="edit-expense" data-id="${esc(e.id)}">Editează</button><button type="button" data-action="expense-payment" data-id="${esc(e.id)}">Înregistrează bani dați</button></div>${!e.collectedMinor && !e.paidOutMinor && !financing.length ? `<button type="button" class="danger" data-action="cancel-expense" data-id="${esc(e.id)}">Anulează cheltuiala</button><p class="caption">Anularea este posibilă doar dacă nu mai există încasări sau plăți legate de cheltuială.</p>` : ''}`}`, null);
 }
 function paymentModal(expenseId = '') {
   openModal('payment', 'Bani dați mai departe', `${moneyField('Suma dată (lei)', 'amount')}${field('Cui ai dat banii', 'destination', '', 'required maxlength="200" placeholder="De exemplu: dirigintă, profesoară, fotograf"')}<label>Cheltuială asociată (opțional)<select name="expenseId"><option value="">Fără asociere</option>${state.expenses.filter(e => !e.cancelled).map(e => `<option value="${esc(e.id)}" ${e.id === expenseId ? 'selected' : ''}>${esc(e.title)}</option>`).join('')}</select></label>${timestampField()}${comments()}<p class="caption">Suma scade din soldul fondului. Contribuțiile copiilor rămân neschimbate.</p>`, 'Înregistrează');
@@ -562,7 +580,8 @@ function refundModal() {
 function transactionDetails(id) {
   const t = state.transactions.find(t => t.id === id), c = state.children.find(c => c.id === t.childId);
   const partyLabel = ['fund_advance', 'advance_repayment'].includes(t.type) ? 'Persoană' : 'Destinație';
-  openModal('transaction-detail', labels[t.type], `<div class="summary"><strong class="total-number">${money(t.amountMinor)}</strong>${t.changeMinor ? `<p>Rest restituit: ${money(t.changeMinor)}</p>` : ''}</div>${c ? `<p>${esc(name(c))}</p>` : ''}${t.destination ? `<p>${partyLabel}: ${esc(t.destination)}</p>` : ''}${t.expenseId ? `<p>Cheltuială: ${esc(state.expenses.find(e => e.id === t.expenseId)?.title || '')}</p>` : ''}<p>Data și ora: ${dateText(t.occurredAt)}</p><p class="caption">Înregistrat: ${dateText(t.createdAt)}${t.actorLabel ? ` · ${esc(t.actorLabel)}` : ''}</p>${t.comment ? `<p>${esc(t.comment)}</p>` : ''}${t.allocations?.length ? `<h3>Repartizare</h3><div class="preview-list">${t.allocations.map(a => `<div class="row"><span>${esc(state.expenses.find(e => e.id === a.expenseId)?.title || 'Cheltuială')}</span><span>${money(a.amountMinor)}</span></div>`).join('')}</div>` : ''}${t.reversed ? '<p class="caption">Operațiune corectată. Înregistrarea originală rămâne în istoric.</p>' : t.type === 'reversal' ? '<p class="caption">Această înregistrare inversează efectele operațiunii corectate.</p>' : canWrite() ? `<button type="button" class="danger wide" style="margin-top:18px" data-action="reverse" data-id="${esc(t.id)}">Corectează prin anularea operațiunii</button>` : ''}`, null);
+  const documents = t.type === 'payment' ? attachmentSection('payment', t.id) : '';
+  openModal('transaction-detail', labels[t.type], `<div class="summary"><strong class="total-number">${money(t.amountMinor)}</strong>${t.changeMinor ? `<p>Rest restituit: ${money(t.changeMinor)}</p>` : ''}</div>${c ? `<p>${esc(name(c))}</p>` : ''}${t.destination ? `<p>${partyLabel}: ${esc(t.destination)}</p>` : ''}${t.expenseId ? `<p>Cheltuială: ${esc(state.expenses.find(e => e.id === t.expenseId)?.title || '')}</p>` : ''}<p>Data și ora: ${dateText(t.occurredAt)}</p><p class="caption">Înregistrat: ${dateText(t.createdAt)}${t.actorLabel ? ` · ${esc(t.actorLabel)}` : ''}</p>${t.comment ? `<p>${esc(t.comment)}</p>` : ''}${t.allocations?.length ? `<h3>Repartizare</h3><div class="preview-list">${t.allocations.map(a => `<div class="row"><span>${esc(state.expenses.find(e => e.id === a.expenseId)?.title || 'Cheltuială')}</span><span>${money(a.amountMinor)}</span></div>`).join('')}</div>` : ''}${documents}${t.reversed ? '<p class="caption">Operațiune corectată. Înregistrarea originală rămâne în istoric.</p>' : t.type === 'reversal' ? '<p class="caption">Această înregistrare inversează efectele operațiunii corectate.</p>' : canWrite() ? `<button type="button" class="danger wide" style="margin-top:18px" data-action="reverse" data-id="${esc(t.id)}">Corectează prin anularea operațiunii</button>` : ''}`, null);
 }
 function positiveMoney(value) { const amount = parseMoney(value); if (amount === null || amount <= 0) throw new Error('Introdu o sumă mai mare decât zero, cu cel mult două zecimale.'); return amount; }
 function metadata(form) {
@@ -571,6 +590,43 @@ function metadata(form) {
   const occurredAt = input ? new Date(input) : null;
   if (occurredAt && Number.isNaN(occurredAt.getTime())) throw new Error('Data și ora nu sunt valide.');
   return { ...(occurredAt ? { occurredAt: occurredAt.toISOString() } : {}), comment: form.elements.comment?.value.trim() || '' };
+}
+async function uploadAttachments(form) {
+  const currentModal = modal;
+  const files = [...(form.elements.files.files || [])];
+  if (!files.length) { form.elements.files.reportValidity(); return; }
+  if (files.length > 25) { $('#modal-error').textContent = 'Poți încărca cel mult 25 de documente odată.'; $('#modal-error').hidden = false; return; }
+  const types = { pdf: 'application/pdf', jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp' };
+  for (const file of files) {
+    if (!file.size || file.size > 10 * 1024 * 1024) { $('#modal-error').textContent = `${file.name}: fișierul trebuie să aibă maximum 10 MB.`; $('#modal-error').hidden = false; return; }
+    const mimeType = file.type || types[file.name.split('.').pop()?.toLowerCase()];
+    if (!Object.values(types).includes(mimeType)) { $('#modal-error').textContent = `${file.name}: folosește PDF, JPG, PNG sau WebP.`; $('#modal-error').hidden = false; return; }
+  }
+  saving = true; updateNotices(); $('#modal-error').hidden = true;
+  try {
+    for (const [index, file] of files.entries()) {
+      const key = `${index}:${file.name}:${file.size}:${file.lastModified}`;
+      if (currentModal.completed.has(key)) continue;
+      if (!currentModal.requestIds.has(key)) currentModal.requestIds.set(key, crypto.randomUUID());
+      const mimeType = file.type || types[file.name.split('.').pop()?.toLowerCase()];
+      const collection = currentModal.entityType === 'expense' ? 'expenses' : 'payments';
+      const response = await fetch(scopedUrl(`/api/${collection}/${encodeURIComponent(currentModal.entityId)}/attachments`), { method: 'POST', credentials: 'same-origin',
+        cache: 'no-store', headers: { 'Content-Type': mimeType, 'X-Request-Id': currentModal.requestIds.get(key),
+          'X-Expected-Revision': String(state.revision), 'X-Filename': encodeURIComponent(file.name),
+          'X-Visibility': form.elements.visibility.value }, body: file, signal: AbortSignal.timeout(60000) });
+      let result;
+      try { result = await response.json(); } catch { throw new Error('Răspunsul serverului nu a putut fi citit.'); }
+      if (!response.ok) { const error = new Error(result.error || 'Documentul nu a putut fi încărcat.'); error.status = response.status; throw error; }
+      state = result.state;
+      currentModal.completed.add(key);
+    }
+    modalDirty = false; closeModal(true); render(); toast(files.length === 1 ? 'Documentul a fost atașat.' : `${files.length} documente au fost atașate.`);
+  } catch (error) {
+    if (modal === currentModal) {
+      $('#modal-error').textContent = error.name === 'TimeoutError' ? 'Încărcarea a durat prea mult. Încearcă din nou; documentele deja confirmate nu vor fi duplicate.' : error.message;
+      $('#modal-error').hidden = false;
+    }
+  } finally { saving = false; updateNotices(); }
 }
 async function submitModal() {
   if (!modal || saving || pending || conflict) return;
@@ -590,6 +646,7 @@ async function submitModal() {
   }
   if (!canWrite()) return;
   if (modal.type === 'report') { await createReport(form); return; }
+  if (modal.type === 'attachment') { await uploadAttachments(form); return; }
   if (modal.type === 'add-classroom') {
     const currentModal = modal;
     saving = true; updateNotices();
@@ -749,6 +806,7 @@ document.addEventListener('click', async event => {
     case 'edit-expense': expenseModal(state.expenses.find(expense => expense.id === button.dataset.id)); break;
     case 'payment': paymentModal(); break;
     case 'expense-payment': paymentModal(button.dataset.id); break;
+    case 'attach-document': attachmentModal(button.dataset.entityType, button.dataset.id); break;
     case 'fund-advance': fundAdvanceModal(); break;
     case 'repay-advance': repayAdvanceModal(button.dataset.id); break;
     case 'apply-credit': creditModal(); break;

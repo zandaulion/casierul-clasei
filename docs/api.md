@@ -43,6 +43,8 @@ Business endpoints accept `?classroom=<id>`. Omitting it selects `default` when 
 | POST /api/fund-advances/:id/repayments | fund_advance.repay | amountMinor, occurredAt?, comment?; partial or full repayment, never above the outstanding amount |
 | POST /api/transactions/:id/reverse | transaction.reverse | comment (required); server adds transactionId; append correction, never erase financial history |
 
+`POST /api/expenses/:id/attachments` and `POST /api/payments/:id/attachments` upload the raw PDF/JPG/PNG/WebP body. They require treasurer access, `X-Request-Id`, `X-Expected-Revision`, URI-encoded `X-Filename`, `X-Visibility: internal|class`, the file MIME type in `Content-Type`, and accept at most 10 MB. Uploads are idempotent and immutable. `GET /api/attachments/:id` opens the document; `?download=1` downloads it. Parents can retrieve only documents marked `class`; auditors and treasurers can retrieve both visibility levels.
+
 ## Ledger module interface
 
 `server/ledger.mjs` exports `class Ledger` with `constructor(dbPath)`, `getState()`, `dispatch(operation, body, actor)` -> `{state,transactionId?}`, `exportData()` -> JSON snapshot, `close()`. Actor is `{id,label}`. Errors expose `status`. `ClassroomLedgers` opens one ledger file per class; auth, the classroom catalog and permissions use a separate SQLite file.
@@ -61,6 +63,7 @@ Business endpoints accept `?classroom=<id>`. Omitting it selects `default` when 
  transactions: [{id,type,occurredAt,createdAt,childId,expenseId,destination,comment,
    amountMinor,changeMinor,advanceId,allocations:[{expenseId,amountMinor}],reversed,reversesId,actorLabel}],
  advances: [{id,person,expenseId,occurredAt,createdAt,comment,amountMinor,repaidMinor,outstandingMinor,reversed}],
+ attachments: [{id,entityType,entityId,filename,mimeType,size,sha256,visibility,createdAt,createdByLabel}],
  summary:{balanceMinor,netBalanceMinor,totalReceivedMinor,totalPaidMinor,totalCreditMinor,totalDueMinor,
    totalAdvancedMinor,totalAdvanceRepaidMinor,totalAdvanceOutstandingMinor}
 }
@@ -74,4 +77,4 @@ Types: collection, payment, credit_apply, refund, fund_advance, advance_repaymen
 
 Native web page and ES module, no visualization wrapper. Preserve approved large surname-sorted roster and quick collection flow, rounding selected total/expense upwards to 10/50/100 without changing exact multiples; never compound rounding or reallocate earmarked excess. Money input converts decimal Romanian strings to bani. Explicit change versus credit. Single submit with server confirmation, disable duplicate clicks, keep identical requestId on network retry. No offline writes in v1; show connection state and never claim unsaved money was recorded. Refresh on online/foreground when no dirty form. PWA update `isBusy` protects dirty forms and pending saves.
 
-Tabs: Copii, Cheltuieli, Registru, Rapoarte; settings via header. A compact header selector switches among authorized classes and resets class-local navigation state. Empty state guides school/class and adding children. Create fixed/split/quantity expenses with participant checkboxes/quantities and exact preview. Record outgoing payments with timestamp/destination/comments, optional expense. Record a temporary fund advance with person, optional expense, timestamp and comment; show outstanding liabilities and allow partial repayments. Allow use/refund of child credit and reversing posted transactions with reason. JSON export. Installable PWA manifest/icons, pwa-kit update scripts, invitation gate, no external fonts or CDNs.
+Tabs: Copii, Cheltuieli, Registru, Rapoarte; settings via header. A compact header selector switches among authorized classes and resets class-local navigation state. Empty state guides school/class and adding children. Create fixed/split/quantity expenses with participant checkboxes/quantities and exact preview. Record outgoing payments with timestamp/destination/comments, optional expense. Record a temporary fund advance with person, optional expense, timestamp and comment; show outstanding liabilities and allow partial repayments. Attach multiple immutable supporting documents to expenses and payments, with explicit internal/class visibility. Allow use/refund of child credit and reversing posted transactions with reason. JSON export. Installable PWA manifest/icons, pwa-kit update scripts, invitation gate, no external fonts or CDNs.

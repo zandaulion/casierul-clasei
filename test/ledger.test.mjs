@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
 import { Ledger } from '../server/ledger.mjs';
 
@@ -343,6 +343,46 @@ test('temporary fund advances reconcile cash, liability, vendor payment and part
   assert.equal(state.summary.balanceMinor, 0);
   assert.equal(state.summary.totalAdvanceOutstandingMinor, 0);
   assert.equal(state.summary.netBalanceMinor, 0);
+});
+
+test('documents attach immutably to expenses and payments with scoped metadata and idempotency', t => {
+  const { ledger, path, post, child, expense } = fixture(t, true);
+  const pupil = child();
+  const books = expense([pupil], 2500);
+  const payment = post('payment.create', { amountMinor: 2500, destination: 'Librărie', expenseId: books }).transactionId;
+  const pdf = Buffer.from('%PDF-1.4\n1 0 obj\n<<>>\nendobj\n%%EOF');
+  const requestId = randomUUID();
+  const first = ledger.createAttachment({ requestId, expectedRevision: ledger.getState().revision,
+    entityType: 'expense', entityId: books, filename: 'Factură cărți.pdf', mimeType: 'application/pdf',
+    visibility: 'internal', data: pdf }, actor);
+  assert.equal(first.state.attachments.length, 1);
+  assert.deepEqual(first.state.attachments[0], {
+    id: first.attachmentId, entityType: 'expense', entityId: books, filename: 'Factură cărți.pdf',
+    mimeType: 'application/pdf', size: pdf.length, sha256: createHash('sha256').update(pdf).digest('hex'),
+    visibility: 'internal', createdAt: first.state.attachments[0].createdAt, createdByLabel: actor.label,
+  });
+  assert.deepEqual(ledger.getAttachment(first.attachmentId).data, pdf);
+  post('child.update', { childId: pupil, firstName: 'Ana' });
+  const replay = ledger.createAttachment({ requestId, expectedRevision: first.state.revision,
+    entityType: 'expense', entityId: books, filename: 'Factură cărți.pdf', mimeType: 'application/pdf',
+    visibility: 'internal', data: pdf }, actor);
+  assert.equal(replay.attachmentId, first.attachmentId);
+  assert.equal(replay.state.revision, ledger.getState().revision);
+  const jpg = Buffer.from([0xff, 0xd8, 0xff, 0xd9]);
+  const receipt = ledger.createAttachment({ requestId: randomUUID(), expectedRevision: ledger.getState().revision,
+    entityType: 'payment', entityId: payment, filename: 'bon.jpg', mimeType: 'image/jpeg',
+    visibility: 'class', data: jpg }, actor);
+  assert.equal(receipt.state.attachments[1].entityType, 'payment');
+  assert.throws(() => ledger.createAttachment({ requestId: randomUUID(), expectedRevision: ledger.getState().revision,
+    entityType: 'payment', entityId: payment, filename: 'fals.pdf', mimeType: 'application/pdf',
+    visibility: 'class', data: Buffer.from('not a pdf') }, actor), status(415));
+  assert.throws(() => ledger.createAttachment({ requestId: randomUUID(), expectedRevision: ledger.getState().revision,
+    entityType: 'expense', entityId: books, filename: '../secret.pdf', mimeType: 'application/pdf',
+    visibility: 'class', data: pdf }, actor), status(400));
+  const db = new DatabaseSync(path);
+  t.after(() => db.close());
+  assert.throws(() => db.exec('UPDATE attachments SET filename = \'changed.pdf\''), /immutable/u);
+  assert.throws(() => db.exec('DELETE FROM attachments'), /immutable/u);
 });
 
 test('existing transaction tables migrate without changing financial history', t => {

@@ -53,9 +53,45 @@ test('invited device manages a persisted class ledger without exposing admin or 
   const collection = await mutate('/api/collections', { childId: anaId, receivedMinor: 10000, changeMinor: 1500, allocations: [{ expenseId: booksId, amountMinor: 6000 }], comment: 'Păstrează diferența rămasă în avans.' });
   assert.equal(state.children.find(child => child.id === anaId).creditMinor, 2500);
   assert.equal(state.summary.balanceMinor, 13500);
-  await mutate('/api/payments', { amountMinor: 4000, destination: 'Librărie', expenseId: booksId, comment: 'Prima tranșă', occurredAt: '2026-09-28T10:30:00.000Z' });
+  const vendorPayment = await mutate('/api/payments', { amountMinor: 4000, destination: 'Librărie', expenseId: booksId, comment: 'Prima tranșă', occurredAt: '2026-09-28T10:30:00.000Z' });
   assert.equal(state.summary.balanceMinor, 9500);
   assert.equal(state.expenses.find(expense => expense.id === booksId).paidOutMinor, 4000);
+  async function attach(entityType, entityId, filename, visibility) {
+    const pdf = Buffer.from('%PDF-1.4\n%%EOF');
+    const requestId = randomUUID(), revision = state.revision;
+    const collection = entityType === 'expense' ? 'expenses' : 'payments';
+    const endpoint = `/api/${collection}/${entityId}/attachments`;
+    const response = await json(origin() + endpoint, { method: 'POST',
+      headers: { Cookie: cookie, Origin: options.publicBaseUrl, 'Content-Type': 'application/pdf',
+        'X-Request-Id': requestId, 'X-Expected-Revision': String(revision),
+        'X-Filename': encodeURIComponent(filename), 'X-Visibility': visibility }, body: pdf });
+    assert.equal(response.status, 201, JSON.stringify(response.data));
+    state = response.data.state;
+    const retry = await json(origin() + endpoint, { method: 'POST',
+      headers: { Cookie: cookie, Origin: options.publicBaseUrl, 'Content-Type': 'application/pdf',
+        'X-Request-Id': requestId, 'X-Expected-Revision': String(revision),
+        'X-Filename': encodeURIComponent(filename), 'X-Visibility': visibility }, body: pdf });
+    assert.equal(retry.status, 201);
+    assert.equal(retry.data.attachmentId, response.data.attachmentId);
+    assert.equal(retry.data.state.revision, state.revision);
+    return response.data.attachmentId;
+  }
+  const internalDocument = await attach('payment', vendorPayment.transactionId, 'factura-interna.pdf', 'internal');
+  const classDocument = await attach('expense', booksId, 'factura-clasei.pdf', 'class');
+  assert.equal(state.attachments.length, 2);
+  const openedDocument = await fetch(origin() + `/api/attachments/${classDocument}`, { headers: { Cookie: cookie } });
+  assert.equal(openedDocument.status, 200);
+  assert.equal(openedDocument.headers.get('content-type'), 'application/pdf');
+  assert.match(openedDocument.headers.get('content-disposition'), /^inline;/u);
+  assert.equal(Buffer.from(await openedDocument.arrayBuffer()).subarray(0, 5).toString(), '%PDF-');
+  const parentInvite = app.auth.createInvite('Părinte', { role: 'parent', childId: anaId, classroomId: 'default' });
+  const parentRedemption = await json(origin() + '/api/auth/redeem', { method: 'POST',
+    headers: { 'Content-Type': 'application/json', Origin: options.publicBaseUrl }, body: JSON.stringify({ code: parentInvite.code }) });
+  const parentCookie = parentRedemption.headers.get('set-cookie').split(';')[0];
+  const parentState = await json(origin() + '/api/state', { headers: { Cookie: parentCookie } });
+  assert.deepEqual(parentState.data.attachments.map(item => item.id), [classDocument]);
+  assert.equal((await fetch(origin() + `/api/attachments/${internalDocument}`, { headers: { Cookie: parentCookie } })).status, 404);
+  assert.equal((await fetch(origin() + `/api/attachments/${classDocument}`, { headers: { Cookie: parentCookie } })).status, 200);
   const applied = await mutate('/api/credit/apply', { childId: anaId, allocations: [{ expenseId: split.id, amountMinor: 2000 }] });
   assert.equal(state.summary.balanceMinor, 9500, 'applying credit must not change cash');
   assert.equal(state.children.find(child => child.id === anaId).creditMinor, 500);
