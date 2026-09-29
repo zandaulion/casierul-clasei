@@ -603,7 +603,6 @@ export class Ledger {
       const existingChildren = new Set(expense.contributions.map(item => item.childId));
       const safeContributionCorrection = body.type === expense.type
         && ['fixed', 'quantity'].includes(body.type) && expense.amountMinor === amount
-        && contributions.every(next => existingChildren.has(next.childId))
         && contributions.every(next => {
           const child = state.children.find(item => item.id === next.childId);
           const paid = child?.contributions.find(item => item.expenseId === expense.id)?.paidMinor ?? 0;
@@ -615,7 +614,7 @@ export class Ledger {
         })
         && total >= expense.paidOutMinor;
       if (formulaChanged && hasActiveLinks && !safeContributionCorrection) {
-        fail('După încasări sau plăți, puteți elimina doar participanții fără sume achitate și puteți corecta cantitățile fără a coborî contribuția sub suma deja achitată.', 409);
+        fail('După încasări sau plăți, puteți adăuga participanți, elimina doar participanții fără sume achitate și corecta cantitățile fără a coborî contribuția sub suma deja achitată.', 409);
       }
       const dueDate = body.dueDate === undefined || body.dueDate === null || body.dueDate === '' ? null : dateOnly(body.dueDate, 'Termenul');
       this.#run(`UPDATE expenses SET title = ?, type = ?, amount = ?, total = ?, occurred_at = ?, due_date = ?, comment = ?
