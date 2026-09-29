@@ -105,23 +105,25 @@ test('expenses can be edited while active financial links protect established co
   assert.equal(ledger.getState().expenses.find(item => item.id === id).totalMinor, 2000);
 });
 
-test('an unpaid participant can be removed after other participants paid', t => {
+test('participants can be added and unpaid participants removed after others paid', t => {
   const { ledger, post, child, expense } = fixture(t);
   const paid = child('Ana', 'Avram');
   const removed = child('Bogdan', 'Bălan');
   const stays = child('Carmen', 'Cernat');
+  const added = child('Dan', 'Dobre');
   const id = expense([paid, removed, stays], 3000);
   post('collection.create', { childId: paid, receivedMinor: 3000, changeMinor: 0,
     allocations: [{ expenseId: id, amountMinor: 3000 }] });
   const current = ledger.getState().expenses.find(item => item.id === id);
   post('expense.update', { expenseId: id, title: current.title, type: current.type,
-    amountMinor: current.amountMinor, participants: [{ childId: paid }, { childId: stays }],
+    amountMinor: current.amountMinor, participants: [{ childId: paid }, { childId: stays }, { childId: added }],
     occurredAt: current.occurredAt, dueDate: current.dueDate, comment: current.comment });
   const changed = ledger.getState().expenses.find(item => item.id === id);
-  assert.equal(changed.totalMinor, 6000);
+  assert.equal(changed.totalMinor, 9000);
   assert.equal(ledger.getState().children.find(item => item.id === removed).dueMinor, 0);
+  assert.equal(ledger.getState().children.find(item => item.id === added).dueMinor, 3000);
   assert.throws(() => post('expense.update', { expenseId: id, title: changed.title, type: changed.type,
-    amountMinor: changed.amountMinor, participants: [{ childId: stays }], occurredAt: changed.occurredAt,
+    amountMinor: changed.amountMinor, participants: [{ childId: stays }, { childId: added }], occurredAt: changed.occurredAt,
     dueDate: changed.dueDate, comment: changed.comment }), status(409));
 });
 

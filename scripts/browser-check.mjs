@@ -124,6 +124,7 @@ try {
     assert.equal(await evaluate('document.querySelectorAll("[data-participant]:checked").length'), 0);
     await click('#all-participants');
     assert.equal(await evaluate('document.querySelectorAll("[data-participant]:checked").length'), 3);
+    await click('[data-participant="' + davidId + '"]');
   });
   const tripId = await expense('Excursie', 'split', '75', () => click('[data-participant="' + ioanaId + '"]'));
   await expense('Bilete', 'quantity', '15', async () => {
@@ -210,9 +211,11 @@ try {
   assert.equal(await evaluate('document.querySelector("#modal-form [name=amount]").disabled'), true);
   assert.equal(await evaluate(`document.querySelector('[data-participant="${anaId}"]').disabled`), true);
   assert.equal(await evaluate(`document.querySelector('[data-participant="${davidId}"]').disabled`), false);
+  await click('[data-participant="' + davidId + '"]');
   await fill('#modal-form [name=comment]', 'Contribuțiile sunt deja protejate');
   await saveModal();
   assert.equal(snapshot().expenses.find(e => e.id === booksId).comment, 'Contribuțiile sunt deja protejate');
+  assert.ok(snapshot().expenses.find(e => e.id === booksId).contributions.some(item => item.childId === davidId), 'new participant added after a collection');
   await click('[data-tab=ledger]');
   await click('[data-action=payment]');
   await fill('#modal-form [name=amount]', '60');
