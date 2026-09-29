@@ -365,6 +365,53 @@ try {
   await page('Page.reload', { ignoreCache: true });
   await until('document.getElementById("collection-form") && document.querySelector("h1")?.textContent.includes("Bălan David")', 'session, data and current screen persist on reload');
   assert.equal(snapshot().summary.balanceMinor, 15000);
+
+  // A supplier payment may already exist while families still decide who participates.
+  // Split shares remain editable until the first child contribution is allocated.
+  const optOutParticipants = [anaId, davidId, ioanaId];
+  let result = app.ledger.dispatch('expense.create', {
+    requestId: randomUUID(), expectedRevision: snapshot().revision, title: 'Atelier opțional', type: 'split', amountMinor: 10000,
+    participants: optOutParticipants.map(childId => ({ childId })),
+  }, { id: 'second-test-device', label: 'Second test device' });
+  const optOutExpenseId = result.state.expenses.find(expense => expense.title === 'Atelier opțional').id;
+  result = app.ledger.dispatch('fund_advance.create', {
+    requestId: randomUUID(), expectedRevision: result.state.revision, amountMinor: 10000,
+    person: 'Părinte test', expenseId: optOutExpenseId,
+  }, { id: 'second-test-device', label: 'Second test device' });
+  result = app.ledger.dispatch('payment.create', {
+    requestId: randomUUID(), expectedRevision: result.state.revision, amountMinor: 10000,
+    destination: 'Furnizor test', expenseId: optOutExpenseId,
+  }, { id: 'second-test-device', label: 'Second test device' });
+  await page('Page.reload', { ignoreCache: true });
+  await until('document.getElementById("collection-form")', 'reload after linked split expense');
+  await evaluate('history.back()');
+  await until('document.querySelector(".children")', 'return to roster for opt-out check');
+  await click('[data-tab=expenses]');
+  await click('[data-expense="' + optOutExpenseId + '"]');
+  await click('[data-action=edit-expense]');
+  assert.equal(await evaluate('document.querySelector("#modal-form [name=type]").disabled && document.querySelector("#modal-form [name=amount]").disabled'), true, 'linked split formula stays fixed');
+  assert.equal(await evaluate('[...document.querySelectorAll("[data-participant]")].every(input => !input.disabled)'), true, 'split participants remain editable before contributions');
+  await click('[data-participant="' + ioanaId + '"]');
+  assert.match(await evaluate('document.getElementById("expense-preview").textContent'), /2 participanți · Total 100 lei/u);
+  await saveModal();
+  assert.deepEqual(snapshot().expenses.find(expense => expense.id === optOutExpenseId).contributions.map(item => item.amountMinor), [5000, 5000]);
+
+  const collectionResult = app.ledger.dispatch('collection.create', {
+    requestId: randomUUID(), expectedRevision: snapshot().revision, childId: anaId, receivedMinor: 100, changeMinor: 0,
+    allocations: [{ expenseId: optOutExpenseId, amountMinor: 100 }],
+  }, { id: 'second-test-device', label: 'Second test device' });
+  const optOutCollectionId = collectionResult.transactionId;
+  await page('Page.reload', { ignoreCache: true });
+  await until('document.querySelector("[data-expense=\\"' + optOutExpenseId + '\\"]")', 'split expense after first contribution');
+  await click('[data-expense="' + optOutExpenseId + '"]');
+  await click('[data-action=edit-expense]');
+  assert.equal(await evaluate('[...document.querySelectorAll("[data-participant]")].every(input => input.disabled)'), true, 'first allocated contribution locks split participants');
+  app.ledger.dispatch('transaction.reverse', {
+    requestId: randomUUID(), expectedRevision: snapshot().revision, transactionId: optOutCollectionId, comment: 'Curățare verificare browser',
+  }, { id: 'second-test-device', label: 'Second test device' });
+  await page('Page.reload', { ignoreCache: true });
+  await until('document.querySelector("[data-expense=\\"' + optOutExpenseId + '\\"]")', 'cleanup after opt-out check');
+  assert.equal(snapshot().summary.balanceMinor, 15000);
   await until('navigator.serviceWorker.getRegistration().then(r => !!r?.active)', 'shared PWA worker installed');
 
   // Separate browser contexts model a phone and laptop with independent cookies.
@@ -401,7 +448,7 @@ try {
     assert.equal(await evaluate('fetch("/api/auth/me").then(r => r.status)'), 200, 'phone remains signed in independently');
   }
   assert.equal(exceptions.length, 0, JSON.stringify(exceptions));
-  console.log('Browser checks passed: invitation/setup, two-device activation with independent sessions and third-device rejection, logo upload, classroom creation/switching, navigation, roster, expense editing before and after linked money, manual allocation, quick collection, lost-response retry across reauthentication, temporary fund advances and repayments, expense/payment document attachments, payment/refund/credit/correction, PDF report generation, in-app viewing and sharing, stale-data protection, reload, offline protection, mobile/dark layout, and PWA worker.');
+  console.log('Browser checks passed: invitation/setup, two-device activation with independent sessions and third-device rejection, logo upload, classroom creation/switching, navigation, roster, split opt-out recalculation before the first contribution, expense editing before and after linked money, manual allocation, quick collection, lost-response retry across reauthentication, temporary fund advances and repayments, expense/payment document attachments, payment/refund/credit/correction, PDF report generation, in-app viewing and sharing, stale-data protection, reload, offline protection, mobile/dark layout, and PWA worker.');
 } finally {
   if (contextId) await send('Target.disposeBrowserContext', { browserContextId: contextId });
   socket.close();
