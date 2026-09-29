@@ -27,6 +27,13 @@ Datele afișate în capturi sunt integral sintetice.
   <strong>Registru · 1440×900</strong>
 </p>
 
+<table>
+  <tr>
+    <td align="center"><img src="docs/screenshots/06-documente-tableta-768x1024.png" alt="Document justificativ atașat unei plăți" width="440"><br><strong>Documente justificative · 768×1024</strong></td>
+    <td align="center"><img src="docs/screenshots/07-raport-pdf-tableta-1024x768.png" alt="Previzualizarea unui raport PDF exhaustiv" width="440"><br><strong>Raport PDF în aplicație · 1024×768</strong></td>
+  </tr>
+</table>
+
 ## Începe
 
 1. Generează o invitație în consola PWA privată și activează telefonul.
