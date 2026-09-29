@@ -23,6 +23,8 @@ PDF-urile nou emise au un antet pastelat cu un caiet, creion și avion de hârti
 
 Aceste ilustrații sunt desenate în cod: SVG local în `web/app.js`, respectiv primitive vectoriale PDFKit în `server/report-art.mjs`. Rămân clare la imprimare și nu adaugă dependențe, imagini raster sau servicii externe. Prezentarea nouă se aplică la emitere; PDF-urile deja arhivate păstrează conținutul și aspectul original.
 
+Cheltuielile din situația clasei, raportul individual al cheltuielii și antetul Tabelului contribuțiilor afișează acoperirea din contribuții: `collectedMinor / totalMinor`, cu bară vectorială și procent scris. Procentul folosește cel mult o zecimală, rotunjită în jos; 100% apare doar la acoperire integrală. O contribuție pozitivă sub 0,1% apare ca „<0,1%”. Pentru necesar zero se afișează „Fără sumă de acoperit” (în antetul tabelului: „—”). Plățile, finanțarea temporară și avansurile nealocate nu sunt contribuții încasate pentru cheltuială.
+
 ## Verificare
 
 `npm test` verifică regulile existente ale registrului. `node scripts/browser-check.mjs` verifică fluxurile complete; `node scripts/browser-polish-check.mjs` verifică aspectul și navigarea casierului, părintelui și auditorului, inclusiv telefoane înguste, ecrane mari, temă întunecată și text mărit. Verificările în browser folosesc date sintetice în baze temporare.

@@ -70,6 +70,8 @@ Avansul poate acoperi ulterior alte contribuții sau poate fi restituit. Folosir
 
 Rapoartele au mici accente de papetărie: caiet, avion de hârtie și culori pastelate pentru fiecare tip. PDF-urile nou emise folosesc aceleași motive discrete în antet și subsol, păstrând sumele și tabelele clare. PDF-urile deja arhivate rămân exact în forma în care au fost emise.
 
+În situația clasei, în raportul unei cheltuieli și în antetul Tabelului contribuțiilor, fiecare cheltuială are o bară și un procent de acoperire: contribuțiile încasate împărțite la necesarul total. Plățile către furnizori, sumele avansate temporar și avansurile nealocate ale copiilor nu intră în acest procent.
+
 Sumele sunt stocate în bani întregi; împărțirea unui total distribuie exact și ultimii bani. Contribuțiile confirmate nu se recalculează automat; modificările permise se fac explicit prin editarea cheltuielii. Numerarul disponibil include avansurile copiilor și sumele avansate temporar fondului, iar datoriile aferente sunt afișate separat. „Sold după restituirea sumelor avansate” arată ce ar rămâne după stingerea lor. Documentele sunt incluse în copiile de siguranță SQLite; exportul JSON conține numai metadatele lor.
 
 Salvarea necesită internet. La pierderea răspunsului, **Verifică / reîncearcă** confirmă aceeași cerere fără dublarea încasării. Modificările făcute pe alt dispozitiv cer verificarea sumelor înainte de salvare. Nu există coadă de operațiuni offline.

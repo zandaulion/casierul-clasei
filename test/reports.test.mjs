@@ -7,6 +7,7 @@ import { promisify } from 'node:util';
 import path from 'node:path';
 import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs';
 import { Ledger } from '../server/ledger.mjs';
+import { renderReportPdf } from '../server/reports.mjs';
 
 const execute = promisify(execFile);
 const previewDirectory = process.env.CASIERUL_REPORT_PREVIEW_DIR;
@@ -78,7 +79,7 @@ async function fixture(t, stress = false) {
         comment: `Tranșă ${index}. ${'Materialele sunt primite și verificate. '.repeat(5)}${index === 22 ? paymentEnd : ''}` });
     }
   }
-  return { ledger, own, other, primary, title, paymentId: payment.transactionId };
+  return { ledger, post, own, other, primary, title, paymentId: payment.transactionId };
 }
 
 async function inspectPdf(fixture, type, prefix, { replacesId } = {}) {
@@ -87,6 +88,10 @@ async function inspectPdf(fixture, type, prefix, { replacesId } = {}) {
   if (type === 'expense') request.subjectId = fixture.primary;
   const { report } = await fixture.ledger.createReport(request, actor);
   const { pdf, filename } = fixture.ledger.getReportPdf(report.id);
+  return inspectBytes(pdf, report, filename, type, prefix);
+}
+
+async function inspectBytes(pdf, report, filename, type, prefix) {
   const document = await getDocument({ data: new Uint8Array(pdf), useSystemFonts: false, isEvalSupported: false }).promise;
   try {
     const pages = [];
@@ -120,6 +125,7 @@ function assertLayout(result, type) {
   assert.ok(result.pages.length > 0);
   for (const page of result.pages) {
     assert.equal(page.width > page.height, type === 'matrix', `${type}: orientation`);
+    if (type === 'matrix') assert.ok(page.text.includes('Acoperire din contribuții'), 'matrix pages keep a table header instead of an isolated closing note');
     assert.ok(page.text.includes(`${result.report.code} · pagina ${page.number}/${result.pages.length}`), `${type}: numbered footer on page ${page.number}`);
     const offPage = page.items.filter(item => item.transform[4] < -1 || item.transform[4] + item.width > page.width + 1
       || item.transform[5] < 1 || item.transform[5] + item.height > page.height + 1);
@@ -181,11 +187,13 @@ test('all four PDF reports preserve financial values, privacy, branding and read
       assertMetric(result, 'De restituit pentru sume avansate', money(3000));
       assertMetric(result, 'Sold după restituirea sumelor avansate', money(27845));
       assertMetric(result, 'Total de încasat', money(35750));
+      assertMetric(result, 'Acoperire din contribuții', '45,8%');
     } else if (type === 'expense') {
       assertMetric(result, 'Necesar total', money(12000));
       assertMetric(result, 'Încasat', money(5500));
       assertMetric(result, 'Bani dați mai departe', money(2000));
       assertMetric(result, 'De achitat', `3 copii · ${money(6500)}`);
+      assertMetric(result, 'Acoperire din contribuții', '45,8%');
     } else if (type === 'child') {
       assertMetric(result, 'Total de achitat', money(10250));
       assertMetric(result, 'Avans disponibil', money(0));
@@ -194,6 +202,7 @@ test('all four PDF reports preserve financial values, privacy, branding and read
       assertText(result, '25 / 30', 'partial matrix contribution');
       assertText(result, '30 / 30', 'paid matrix contribution');
       assertText(result, '0 / 30', 'unpaid matrix contribution');
+      assertText(result, '45,8%', 'expense collection percentage in matrix header');
       assert.match(result.filename, /^raport-exhaustiv-/u, 'published matrix filename convention remains unchanged');
     }
   }
@@ -217,6 +226,9 @@ test('multipage PDFs keep long titles, comments and histories without clipping o
       assertText(result, 'Familie36 Copil36', 'last child appears in multipage matrix');
       assertText(result, 'Atelier 10:', 'last expense group appears in multipage matrix');
     }
+    if (type === 'class' || type === 'matrix') assert.ok((result.text.match(/(?:<)?\d+(?:,\d+)?%/gu) || []).length >= data.ledger.getState().expenses.length,
+      `${type}: coverage remains present across expense rows or repeated matrix headers`);
+    if (type === 'expense') assertText(result, 'Acoperire din contribuții', 'coverage remains present with long titles and comments');
   }
 });
 
@@ -228,4 +240,74 @@ test('a corrective PDF visibly identifies its predecessor and preserves its amou
   assertText(correction, `Raport corectiv: înlocuiește ${original.report.code}.`, 'visible correction reference');
   assertMetric(correction, 'Numerar disponibil în fond', money(30845));
   assert.equal(correction.report.replacesId, original.report.id);
+});
+
+test('expense coverage counts allocated contributions, with honest zero, tiny, near-complete and complete percentages', async t => {
+  const data = await fixture(t);
+  const createExpense = (title, totalMinor) => {
+    data.post('expense.create', { title, type: 'fixed', amountMinor: totalMinor,
+      participants: [{ childId: data.own.id }] });
+    return data.ledger.getState().expenses.find(expense => expense.title === title).id;
+  };
+  const uncovered = createExpense('Plătită furnizorului din finanțare temporară', 12000);
+  data.post('fund_advance.create', { amountMinor: 12000, person: 'Finanțator demonstrativ', expenseId: uncovered });
+  data.post('payment.create', { amountMinor: 12000, destination: 'Furnizor demonstrativ', expenseId: uncovered });
+  // Cash held in advance is deliberately larger than all test expenses. It must
+  // never make an unallocated expense look funded by children’s contributions.
+  data.post('collection.create', { childId: data.own.id, receivedMinor: 50000, changeMinor: 0, allocations: [] });
+  const cases = [{ id: uncovered, expected: '0%' }];
+  for (const [title, collectedMinor, expected] of [
+    ['Contribuție completă', 10000, '100%'],
+    ['Un ban rămas de achitat', 9999, '99,9%'],
+    ['Primul ban încasat', 1, '<0,1%'],
+  ]) {
+    const id = createExpense(title, 10000);
+    data.post('collection.create', { childId: data.own.id, receivedMinor: collectedMinor, changeMinor: 0,
+      allocations: [{ expenseId: id, amountMinor: collectedMinor }] });
+    cases.push({ id, expected });
+  }
+  const state = data.ledger.getState();
+  assert.equal(state.expenses.find(expense => expense.id === uncovered).paidOutMinor, 12000);
+  assert.equal(state.expenses.find(expense => expense.id === uncovered).collectedMinor, 0);
+  assert.ok(state.summary.totalCreditMinor >= 50000);
+  for (const [index, { id, expected }] of cases.entries()) {
+    const result = await inspectPdf({ ...data, primary: id }, 'expense', `coverage-edge-${index}`);
+    assertLayout(result, 'expense');
+    assertMetric(result, 'Acoperire din contribuții', expected);
+    if (expected !== '100%') assert.equal(result.text.includes('100%'), false, `${expected}: incomplete coverage never says 100%`);
+  }
+  for (const type of ['class', 'matrix']) {
+    const result = await inspectPdf(data, type, 'coverage-edges');
+    assertLayout(result, type);
+    const percentages = result.text.match(/(?:<)?\d+(?:,\d+)?%/gu) || [];
+    assert.deepEqual(percentages.toSorted(), ['45,8%', '25%', '25%', ...cases.map(item => item.expected)].toSorted(),
+      `${type}: every expense uses its own allocated contribution total`);
+    if (type === 'matrix') assert.match(result.text, /acoperire.*contribuții/iu, 'matrix legend explains what the percentages measure');
+  }
+});
+
+test('a zero-total expense has no misleading percentage or non-finite financial text', async t => {
+  const data = await fixture(t);
+  // The ledger disallows creating a zero-valued expense. Exercise the renderer
+  // directly so imported/legacy snapshots still have a defined empty state.
+  const state = data.ledger.getState();
+  const expense = state.expenses.find(item => item.id === data.primary);
+  state.expenses = [{ ...expense, totalMinor: 0, collectedMinor: 0, paidOutMinor: 0,
+    contributions: expense.contributions.map(item => ({ ...item, amountMinor: 0 })) }];
+  state.children = state.children.map(child => ({ ...child, dueMinor: 0, creditMinor: 0,
+    contributions: [{ expenseId: expense.id, title: expense.title, amountMinor: 0, paidMinor: 0, remainingMinor: 0 }] }));
+  state.summary = { ...state.summary, totalDueMinor: 0, totalCreditMinor: 0 };
+  state.transactions = []; state.advances = []; state.attachments = [];
+  const branding = Object.fromEntries(['school', 'class'].map(kind => [kind, data.ledger.getBrandingImage(kind).data]));
+  for (const type of ['class', 'expense', 'matrix']) {
+    const report = { id: randomUUID(), serial: 1, code: 'R-0001', type, subjectId: type === 'expense' ? expense.id : null,
+      subjectLabel: type === 'expense' ? expense.title : state.settings.className,
+      createdAt: '2026-09-29T10:00:00.000Z', stateRevision: state.revision };
+    const pdf = await renderReportPdf(report, state, branding);
+    const result = await inspectBytes(pdf, report, `${type}-zero.pdf`, type, 'coverage-zero');
+    assertLayout(result, type);
+    assert.doesNotMatch(result.text, /(?:NaN|Infinity|\d+(?:,\d+)?%)/u, `${type}: zero total has no invented percentage`);
+    if (type === 'matrix') assertText(result, '—', 'zero-total matrix header uses a dash');
+    else assertText(result, 'Fără sumă de acoperit', `${type}: zero-total expense is explicitly described`);
+  }
 });

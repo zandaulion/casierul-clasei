@@ -12,6 +12,7 @@ const moneyFormat = new Intl.NumberFormat(locale, { minimumFractionDigits: 2, ma
 const dateFormat = new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeZone: zone });
 const dateTimeFormat = new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short', timeZone: zone });
 const compactMoneyFormat = new Intl.NumberFormat(locale, { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+const coverageFormat = new Intl.NumberFormat(locale, { maximumFractionDigits: 1 });
 
 export const REPORT_TYPES = new Set(['class', 'expense', 'child', 'matrix']);
 export const reportCode = serial => `R-${String(serial).padStart(4, '0')}`;
@@ -21,6 +22,16 @@ const activeTransactions = state => state.transactions.filter(tx => tx.type !== 
 const sum = values => values.reduce((total, value) => total + value, 0);
 const sharedAttachments = (state, entityType, entityId) => (state.attachments || [])
   .filter(item => item.visibility === 'class' && item.entityType === entityType && item.entityId === entityId);
+
+function expenseCoverage(expense) {
+  if (expense.totalMinor <= 0) return { ratio: 0, label: 'Fără sumă de acoperit', shortLabel: '—' };
+  const collected = Math.max(0, Math.min(expense.totalMinor, expense.collectedMinor));
+  const ratio = collected / expense.totalMinor;
+  // Keep 100% reserved for a fully covered expense, even with just one ban due.
+  const percent = Number(BigInt(collected) * 1000n / BigInt(expense.totalMinor)) / 10;
+  const label = ratio > 0 && percent === 0 ? '<0,1%' : `${coverageFormat.format(percent)}%`;
+  return { ratio, label, shortLabel: label };
+}
 
 function expenseStatus(state, expense) {
   const contributions = state.children.map(child => child.contributions.find(item => item.expenseId === expense.id)).filter(Boolean);
@@ -106,7 +117,26 @@ export async function renderReportPdf(report, state, branding = {}) {
     doc.font('Bold').fontSize(10).fillColor(color?.ink || dark).text(value, doc.page.margins.left + width * .58, y, { width: width * .40, align: 'right' });
     doc.y = y + height; doc.x = doc.page.margins.left;
   };
-  const item = (title, amount, details, comment = '', tone = null) => {
+  const coverageHeight = 33;
+  const coverage = (expense, left = doc.page.margins.left, availableWidth = width) => {
+    ensure(coverageHeight); const y = doc.y;
+    const { ratio, label } = expenseCoverage(expense);
+    doc.font('Regular').fontSize(8).fillColor(muted).text('Acoperire din contribuții', left, y, { width: availableWidth * .55 });
+    doc.font('Bold').fontSize(8.5).fillColor(ratio === 1 ? green : dark).text(label, left + availableWidth * .55, y,
+      { width: availableWidth * .45, align: 'right' });
+    drawCoverageBar(left, y + 15, availableWidth, 6, ratio);
+    doc.y = y + coverageHeight; doc.x = doc.page.margins.left;
+  };
+  const drawCoverageBar = (left, top, barWidth, height, ratio) => {
+    doc.save();
+    doc.roundedRect(left, top, barWidth, height, height / 2).fill('#e7ece5');
+    if (ratio > 0) {
+      doc.roundedRect(left, top, barWidth, height, height / 2).clip();
+      doc.rect(left, top, barWidth * ratio, height).fill(ratio === 1 ? green : '#bd8a32');
+    }
+    doc.restore();
+  };
+  const item = (title, amount, details, comment = '', tone = null, expense = null) => {
     const color = tones[tone];
     const inset = color ? 9 : 0;
     const titleWidth = width * .72 - inset - 8, textWidth = width - inset;
@@ -116,12 +146,15 @@ export async function renderReportPdf(report, state, branding = {}) {
     const detailsHeight = doc.heightOfString(details, { width: textWidth, lineGap: 2 });
     const commentHeight = comment ? doc.heightOfString(comment, { width: textWidth, lineGap: 2 }) : 0;
     // Keep ordinary entries together; very long comments may flow over a page.
-    ensure(Math.min(titleHeight + detailsHeight + commentHeight + 19, doc.page.height - doc.page.margins.top - doc.page.margins.bottom));
+    const progressHeight = expense ? coverageHeight : 0;
+    ensure(Math.min(titleHeight + progressHeight + detailsHeight + commentHeight + 19, doc.page.height - doc.page.margins.top - doc.page.margins.bottom));
     const y = doc.y;
-    if (color) doc.roundedRect(doc.page.margins.left, y, 3, Math.min(titleHeight + detailsHeight, doc.page.height - y - doc.page.margins.bottom), 1).fill(color.ink);
+    if (color) doc.roundedRect(doc.page.margins.left, y, 3, Math.min(titleHeight + progressHeight + detailsHeight, doc.page.height - y - doc.page.margins.bottom), 1).fill(color.ink);
     doc.font('Bold').fontSize(10).fillColor(color?.ink || dark).text(title, doc.page.margins.left + inset, y, { width: titleWidth });
     doc.font('Bold').fontSize(10).fillColor(color?.ink || dark).text(amount, doc.page.margins.left + width * .72, y, { width: width * .28, align: 'right' });
-    doc.font('Regular').fontSize(8.5).fillColor(muted).text(details, doc.page.margins.left + inset, y + titleHeight + 3, { width: textWidth, lineGap: 2 });
+    doc.y = y + titleHeight + 3;
+    if (expense) coverage(expense, doc.page.margins.left + inset, textWidth);
+    doc.font('Regular').fontSize(8.5).fillColor(muted).text(details, doc.page.margins.left + inset, doc.y, { width: textWidth, lineGap: 2 });
     if (comment) doc.font('Regular').fontSize(8.5).fillColor(dark).text(comment, doc.page.margins.left + inset, doc.y, { width: textWidth, lineGap: 2 });
     doc.moveDown(.4); doc.strokeColor(line).lineWidth(.4).moveTo(doc.page.margins.left, doc.y).lineTo(doc.page.width - doc.page.margins.right, doc.y).stroke().moveDown(.45);
   };
@@ -133,7 +166,10 @@ export async function renderReportPdf(report, state, branding = {}) {
     const columnsPerGroup = Math.max(1, Math.floor((width - nameWidth) / minimumCellWidth));
     const groups = Array.from({ length: Math.ceil(expenses.length / columnsPerGroup) }, (_, index) => expenses.slice(index * columnsPerGroup, (index + 1) * columnsPerGroup));
     const colors = { paid: '#d9f0e1', partial: '#fff0bf', unpaid: '#f7d6d2', none: '#eeeeea' };
-    const rowHeight = 23, headerHeight = 48;
+    const rowHeight = 23, headerHeight = 68;
+    const closingNote = `Raport nominal pentru verificare internă, generat din registrul „Casierul clasei”. Sumele sunt în lei. Culorile și procentele reflectă situația la emitere; barele arată contribuțiile încasate / necesarul cheltuielii.${expenses.some(expense => expense.totalMinor === 0) ? ' „—” în antet: fără sumă de acoperit.' : ''}`;
+    doc.font('Regular').fontSize(8.5);
+    const closingHeight = doc.heightOfString(closingNote, { width, lineGap: 2 }) + 16;
     const compactMoney = minor => compactMoneyFormat.format(minor / 100);
     const legend = () => {
       const entries = [['Achitat', colors.paid], ['Parțial', colors.partial], ['Neachitat', colors.unpaid], ['Nu participă', colors.none]];
@@ -156,10 +192,14 @@ export async function renderReportPdf(report, state, branding = {}) {
       let x = left, y = doc.y;
       doc.rect(x, y, nameWidth, headerHeight).fillAndStroke(paper.fill, line);
       doc.font('Bold').fontSize(8).fillColor(dark).text('Copil', x + 5, y + 18, { width: nameWidth - 10, ellipsis: true, lineBreak: false });
+      doc.font('Regular').fontSize(7).fillColor(muted).text('Acoperire din contribuții', x + 5, y + 48, { width: nameWidth - 10 });
       x += nameWidth;
       for (const expense of group) {
         doc.rect(x, y, cellWidth, headerHeight).fillAndStroke(paper.fill, line);
-        doc.font('Bold').fontSize(7.2).fillColor(dark).text(expense.title, x + 4, y + 6, { width: cellWidth - 8, height: headerHeight - 12, align: 'center', ellipsis: true });
+        doc.font('Bold').fontSize(7.2).fillColor(dark).text(expense.title, x + 4, y + 6, { width: cellWidth - 8, height: 36, align: 'center', ellipsis: true });
+        const { ratio, shortLabel } = expenseCoverage(expense);
+        doc.font('Bold').fontSize(7.5).fillColor(ratio === 1 ? green : dark).text(shortLabel, x + 4, y + 47, { width: cellWidth - 8, align: 'center' });
+        drawCoverageBar(x + 10, y + 60, cellWidth - 20, 5, ratio);
         x += cellWidth;
       }
       doc.y = y + headerHeight; doc.x = left;
@@ -174,8 +214,10 @@ export async function renderReportPdf(report, state, branding = {}) {
       if (groupIndex) doc.addPage();
       groupHeading(groupIndex, groupIndex > 0);
       let geometry = tableHeader(group);
-      for (const child of children) {
-        if (doc.y + rowHeight > doc.page.height - doc.page.margins.bottom - 4) geometry = newMatrixPage(group, groupIndex);
+      for (const [childIndex, child] of children.entries()) {
+        const isLastRow = groupIndex === groups.length - 1 && childIndex === children.length - 1;
+        // Keep the explanation with the final row instead of creating a note-only page.
+        if (doc.y + rowHeight + (isLastRow ? closingHeight : 0) > doc.page.height - doc.page.margins.bottom - 4) geometry = newMatrixPage(group, groupIndex);
         const y = doc.y;
         doc.rect(left, y, nameWidth, rowHeight).fillAndStroke('#fffdf7', line);
         doc.font('Regular').fontSize(7.5).fillColor(dark).text(`${personName(child)}${child.active ? '' : ' · arhivat'}`, left + 5, y + 7, { width: nameWidth - 10, height: rowHeight - 8, ellipsis: true, lineBreak: false });
@@ -191,7 +233,7 @@ export async function renderReportPdf(report, state, branding = {}) {
       }
       doc.moveDown(.6);
     });
-    note('Raport nominal destinat verificării interne. Culorile indică situația fiecărei contribuții la momentul emiterii.');
+    note(closingNote);
   };
 
   const headerY = doc.y, logoSize = 42, centerInset = logoSize + 14;
@@ -257,7 +299,7 @@ export async function renderReportPdf(report, state, branding = {}) {
       const tone = due.amountMinor === 0 ? 'positive' : expense.collectedMinor > 0 ? 'warning' : 'negative';
       item(expense.title, money(expense.totalMinor),
         `Încasat ${money(expense.collectedMinor)} · Dat mai departe ${money(expense.paidOutMinor)} · De achitat: ${due.count} copii · ${money(due.amountMinor)} · Documente partajate: ${sharedAttachments(state, 'expense', expense.id).length}`,
-        expense.comment, tone);
+        expense.comment, tone, expense);
     }
     const payments = transactions.filter(tx => tx.type === 'payment');
     section('Bani dați mai departe');
@@ -283,6 +325,7 @@ export async function renderReportPdf(report, state, branding = {}) {
     section('Rezumat');
     metric('Necesar total', money(expense.totalMinor));
     metric('Încasat', money(expense.collectedMinor), expense.collectedMinor >= expense.totalMinor ? 'positive' : expense.collectedMinor ? 'warning' : 'negative');
+    coverage(expense);
     metric('Bani dați mai departe', money(expense.paidOutMinor), expense.paidOutMinor ? 'info' : null);
     const relatedAdvances = (state.advances || []).filter(entry => !entry.reversed && entry.expenseId === expense.id);
     metric('Sume avansate temporar pentru cheltuială', money(sum(relatedAdvances.map(entry => entry.amountMinor))), relatedAdvances.length ? 'warning' : null);
@@ -337,7 +380,7 @@ export async function renderReportPdf(report, state, branding = {}) {
     }
   }
 
-  note('Document generat din registrul „Casierul clasei”. Sumele sunt exprimate în lei și reflectă datele existente la momentul emiterii.');
+  if (report.type !== 'matrix') note('Document generat din registrul „Casierul clasei”. Sumele sunt exprimate în lei și reflectă datele existente la momentul emiterii.');
   const pages = doc.bufferedPageRange();
   for (let index = 0; index < pages.count; index += 1) {
     doc.switchToPage(index);
