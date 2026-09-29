@@ -43,7 +43,9 @@ Business endpoints accept `?classroom=<id>`. Omitting it selects `default` when 
 | POST /api/fund-advances/:id/repayments | fund_advance.repay | amountMinor, occurredAt?, comment?; partial or full repayment, never above the outstanding amount |
 | POST /api/transactions/:id/reverse | transaction.reverse | comment (required); server adds transactionId; append correction, never erase financial history |
 
-`POST /api/expenses/:id/attachments` and `POST /api/payments/:id/attachments` upload the raw PDF/JPG/PNG/WebP body. They require treasurer access, `X-Request-Id`, `X-Expected-Revision`, URI-encoded `X-Filename`, `X-Visibility: internal|class`, the file MIME type in `Content-Type`, and accept at most 10 MB. Uploads are idempotent and immutable. `GET /api/attachments/:id` opens the document; `?download=1` downloads it. Parents can retrieve only documents marked `class`; auditors and treasurers can retrieve both visibility levels.
+`POST /api/expenses/:id/attachments` and `POST /api/payments/:id/attachments` upload one raw PDF/JPG/PNG/WebP body per request. They require treasurer access, `X-Request-Id`, `X-Expected-Revision`, URI-encoded `X-Filename`, `X-Visibility: internal|class`, and the file MIME type in `Content-Type`. A file must be non-empty and at most 10 MB; each expense or payment accepts at most 25 documents, with 200 MB total attachment storage per class. The declared MIME type and file signature must agree. Uploads are idempotent and immutable. `GET /api/attachments/:id` opens the document; `?download=1` downloads it. Parents can retrieve only documents marked `class`; auditors and treasurers can retrieve both visibility levels.
+
+`POST /api/reports` requires treasurer access and accepts `requestId`, `type: class|matrix|expense|child`, the required `subjectId` for expense/child reports, and optional `replacesId` for a corrective report. The generated PDF and its data snapshot are immutable. `GET /api/reports/:id/pdf` returns an authorized report: auditors and treasurers may read every report, while parents may read aggregate class/expense reports and the individual report associated with their child. `GET /api/branding/school` and `GET /api/branding/class` return the configured logos to authenticated devices.
 
 ## Ledger module interface
 
@@ -64,6 +66,8 @@ Business endpoints accept `?classroom=<id>`. Omitting it selects `default` when 
    amountMinor,changeMinor,advanceId,allocations:[{expenseId,amountMinor}],reversed,reversesId,actorLabel}],
  advances: [{id,person,expenseId,occurredAt,createdAt,comment,amountMinor,repaidMinor,outstandingMinor,reversed}],
  attachments: [{id,entityType,entityId,filename,mimeType,size,sha256,visibility,createdAt,createdByLabel}],
+ reports: [{id,serial,code,type,subjectId,subjectLabel,createdAt,stateRevision,createdByLabel,
+   replacesId,replacedById,filename,sha256,size}],
  summary:{balanceMinor,netBalanceMinor,totalReceivedMinor,totalPaidMinor,totalCreditMinor,totalDueMinor,
    totalAdvancedMinor,totalAdvanceRepaidMinor,totalAdvanceOutstandingMinor}
 }
