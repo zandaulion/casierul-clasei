@@ -111,7 +111,7 @@ function updateNotices() {
   notice.hidden = !pending && !conflict;
   if (pending) notice.innerHTML = `<strong>${saving ? 'Se confirmă salvarea…' : 'Salvarea așteaptă confirmarea serverului.'}</strong><div>Nu înregistra încă o dată aceeași operațiune. Reîncercarea verifică aceeași înregistrare.</div><button data-action="retry" ${saving ? 'disabled' : ''}>Verifică / reîncearcă</button>`;
   else if (conflict) notice.innerHTML = '<strong>Registrul s-a schimbat pe alt dispozitiv.</strong><div>Încarcă datele actuale și verifică sumele înainte să salvezi din nou.</div><button data-action="review">Actualizează și verifică</button>';
-  $('#modal-submit').disabled = !canWrite() || saving || !!pending || conflict || !!modal?.logoProcessing || !navigator.onLine || disconnected;
+  $('#modal-submit').disabled = (!canWrite() && modal?.type !== 'add-access') || saving || !!pending || conflict || !!modal?.logoProcessing || !navigator.onLine || disconnected;
   if ($('#collection-save')) $('#collection-save').disabled = saving || !!pending || conflict || !navigator.onLine || disconnected || !!collectionResult(child(), draft).error || collectionResult(child(), draft).netMinor <= 0;
   if ($('#dialog').open && (pending || conflict)) {
     const error = $('#modal-error'); error.hidden = false;
@@ -407,12 +407,15 @@ function settingsModal() {
   const s = state.settings;
   if (!canWrite()) {
     const access = classroomAccess();
-    openModal('access', 'Accesul acestui dispozitiv', `<div class="summary"><strong>${accessLabel()}</strong><p class="caption">${access?.role === 'parent' ? 'Vezi datele generale ale clasei și situația copilului asociat.' : 'Vezi registrul complet și rapoartele, fără drept de modificare.'}</p>${access?.access_expires_at ? `<p class="caption">Acces până la ${dateText(access.access_expires_at)}</p>` : ''}</div><button type="button" class="wide" data-action="logout">Deconectează dispozitivul</button>`, null);
+    openModal('access', 'Accesul acestui dispozitiv', `<div class="summary"><strong>${accessLabel()}</strong><p class="caption">${access?.role === 'parent' ? 'Vezi datele generale ale clasei și situația copilului asociat.' : 'Vezi registrul complet și rapoartele, fără drept de modificare.'}</p>${access?.access_expires_at ? `<p class="caption">Acces până la ${dateText(access.access_expires_at)}</p>` : ''}</div><button type="button" class="wide" data-action="add-access">+ Adaugă acces din invitație</button><button type="button" class="wide" data-action="logout">Deconectează dispozitivul</button>`, null);
     return;
   }
   const year = new Date().getFullYear() - (new Date().getMonth() < 8 ? 1 : 0);
   const logoPicker = (kind, label, exists) => `<div class="logo-picker"><div class="logo-preview"><img id="${kind}-logo-preview" ${exists ? `src="${esc(scopedUrl(`/api/branding/${kind}?v=${encodeURIComponent(s[`${kind}LogoVersion`] || '')}`))}"` : 'hidden'} alt="${esc(label)}"><span id="${kind}-logo-empty" ${exists ? 'hidden' : ''}>Fără siglă</span></div><strong>${esc(label)}</strong><label class="file-button">Alege imaginea<input type="file" accept="image/png,image/jpeg,image/webp" data-logo-input="${kind}" hidden></label><button type="button" data-action="remove-logo" data-logo-kind="${kind}" ${exists ? '' : 'hidden'}>Elimină</button></div>`;
-  openModal('settings', s.className ? 'Setările clasei' : 'Configurează clasa', `${field('Școala', 'schoolName', s.schoolName, 'required maxlength="160"')}${field('Clasa', 'className', s.className, 'required maxlength="80"')}${field('An școlar', 'schoolYear', s.schoolYear || `${year}–${year + 1}`, 'required maxlength="40"')}<div class="section-label">Sigle pentru rapoarte</div><div class="logo-grid">${logoPicker('school', 'Sigla școlii', s.hasSchoolLogo)}${logoPicker('class', 'Sigla clasei', s.hasClassLogo)}</div><p class="caption">Poți alege PNG, JPG sau WebP. Imaginea este redimensionată pe dispozitiv și apare în antetul PDF-urilor emise de acum înainte.</p>${field('Sold inițial (lei)', 'openingBalance', decimal(s.openingBalanceMinor), `inputmode="decimal" required ${state.transactions.length ? 'readonly' : ''}`)}<p class="caption">Banii deja existenți în fond înainte să începi evidența. ${state.transactions.length ? 'Soldul inițial nu mai poate fi schimbat după înregistrarea operațiunilor.' : 'Avansurile individuale se înregistrează separat, prin încasări.'}</p>${state.settings.className ? `<div class="toolbar"><a href="${esc(scopedUrl('/api/export'))}" download="casierul-clasei.json">Exportă datele JSON</a><button type="button" data-action="logout">Deconectează dispozitivul</button></div>` : ''}${device?.is_owner ? '<div class="section-label">Mai multe clase</div><button type="button" class="wide" data-action="add-classroom">+ Adaugă altă clasă</button><p class="caption">Fiecare clasă are registru, rapoarte și drepturi de acces separate.</p>' : ''}`, 'Salvează', { logoChanges: {} });
+  openModal('settings', s.className ? 'Setările clasei' : 'Configurează clasa', `${field('Școala', 'schoolName', s.schoolName, 'required maxlength="160"')}${field('Clasa', 'className', s.className, 'required maxlength="80"')}${field('An școlar', 'schoolYear', s.schoolYear || `${year}–${year + 1}`, 'required maxlength="40"')}<div class="section-label">Sigle pentru rapoarte</div><div class="logo-grid">${logoPicker('school', 'Sigla școlii', s.hasSchoolLogo)}${logoPicker('class', 'Sigla clasei', s.hasClassLogo)}</div><p class="caption">Poți alege PNG, JPG sau WebP. Imaginea este redimensionată pe dispozitiv și apare în antetul PDF-urilor emise de acum înainte.</p>${field('Sold inițial (lei)', 'openingBalance', decimal(s.openingBalanceMinor), `inputmode="decimal" required ${state.transactions.length ? 'readonly' : ''}`)}<p class="caption">Banii deja existenți în fond înainte să începi evidența. ${state.transactions.length ? 'Soldul inițial nu mai poate fi schimbat după înregistrarea operațiunilor.' : 'Avansurile individuale se înregistrează separat, prin încasări.'}</p>${state.settings.className ? `<div class="toolbar"><a href="${esc(scopedUrl('/api/export'))}" download="casierul-clasei.json">Exportă datele JSON</a><button type="button" data-action="logout">Deconectează dispozitivul</button></div>` : ''}<div class="section-label">Drepturi pe alte clase</div><button type="button" class="wide" data-action="add-access">+ Adaugă acces din invitație</button>${device?.is_owner ? '<div class="section-label">Mai multe clase</div><button type="button" class="wide" data-action="add-classroom">+ Adaugă altă clasă</button><p class="caption">Fiecare clasă are registru, rapoarte și drepturi de acces separate.</p>' : ''}`, 'Salvează', { logoChanges: {} });
+}
+function accessModal() {
+  openModal('add-access', 'Adaugă acces la o clasă', `${field('Cod de invitație', 'code', '', 'required autocomplete="off" autocapitalize="none" spellcheck="false"')}<p class="caption">Folosește invitația emisă pentru clasa și rolul dorite. Accesul existent pe acest dispozitiv rămâne activ.</p>`, 'Adaugă accesul');
 }
 function classroomModal() {
   const year = new Date().getFullYear() - (new Date().getMonth() < 8 ? 1 : 0);
@@ -551,10 +554,22 @@ function metadata(form) {
   return { ...(occurredAt ? { occurredAt: occurredAt.toISOString() } : {}), comment: form.elements.comment?.value.trim() || '' };
 }
 async function submitModal() {
-  if (!canWrite()) return;
   if (!modal || saving || pending || conflict) return;
   const form = $('#modal-form');
   if (!form.reportValidity()) return;
+  if (modal.type === 'add-access') {
+    saving = true; updateNotices();
+    try {
+      const result = await api('/api/auth/access', { method: 'POST', body: JSON.stringify({ code: form.elements.code.value.trim() }) });
+      applySession(result); classroomId = result.classroomId;
+      try { localStorage.setItem(classroomKey, classroomId); } catch { /* Selection remains in memory. */ }
+      state = await api('/api/state'); tab = 'children'; childId = null; draft = null; search = ''; rosterScrollY = 0;
+      closeModal(true, true); replaceNavigation(false); render(); toast('Accesul la clasă a fost adăugat.');
+    } catch (error) { $('#modal-error').textContent = error.message; $('#modal-error').hidden = false; }
+    finally { saving = false; updateNotices(); }
+    return;
+  }
+  if (!canWrite()) return;
   if (modal.type === 'report') { await createReport(form); return; }
   if (modal.type === 'add-classroom') {
     const currentModal = modal;
@@ -699,6 +714,7 @@ document.addEventListener('click', async event => {
       else showScreen('children', null, { push: false });
       break;
     case 'settings': settingsModal(); break;
+    case 'add-access': accessModal(); break;
     case 'add-classroom': classroomModal(); break;
     case 'add-child': childModal(); break;
     case 'edit-child': childModal(true); break;

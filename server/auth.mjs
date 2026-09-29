@@ -205,12 +205,48 @@ export class AuthStore {
     }
   }
 
+  addAccess(rawCode, deviceId) {
+    const now = this.now();
+    this.failures = this.failures.filter((at) => at > now - 10 * 60000);
+    if (this.failures.length >= 25) throw httpError(429, 'Prea multe încercări. Încearcă din nou peste câteva minute.');
+    const fail = (status, message) => {
+      this.failures.push(now);
+      return httpError(status, message);
+    };
+    if (typeof rawCode !== 'string' || rawCode.length > 64) throw fail(400, 'Codul invitației nu este valid.');
+    const code = rawCode.toUpperCase().replace(/[-\s]/gu, '');
+    if (!/^[A-Z2-9]{16}$/u.test(code)) throw fail(400, 'Codul invitației nu este valid.');
+    const nowIso = new Date(now).toISOString();
+    this.db.exec('BEGIN IMMEDIATE');
+    try {
+      const invite = this.db.prepare('SELECT * FROM invites WHERE code_hash = ?').get(hash(code));
+      if (!invite || invite.revoked || invite.used_at) throw fail(404, 'Invitația nu există sau a fost deja folosită.');
+      if (invite.expires_at <= nowIso) throw fail(410, 'Invitația a expirat.');
+      const classroomId = invite.classroom_id || DEFAULT_CLASSROOM_ID;
+      if (this.db.prepare('SELECT 1 FROM device_permissions WHERE device_id = ? AND classroom_id = ?').get(deviceId, classroomId)) {
+        throw httpError(409, 'Acest dispozitiv are deja acces la clasa aleasă.');
+      }
+      this.db.prepare(`INSERT INTO device_permissions
+        (device_id, classroom_id, role, child_id, access_expires_at) VALUES (?, ?, ?, ?, ?)`).run(
+        deviceId, classroomId, invite.role || 'treasurer', invite.child_id, invite.access_expires_at);
+      const claimed = this.db.prepare(`UPDATE invites SET used_at = ?, device_id = ?, code = NULL, url = NULL
+        WHERE id = ? AND used_at IS NULL AND revoked = 0 AND expires_at > ?`).run(nowIso, deviceId, invite.id, nowIso);
+      if (claimed.changes !== 1) throw fail(409, 'Invitația a fost deja folosită.');
+      this.db.exec('COMMIT');
+      return this.resolvePermission(deviceId, classroomId);
+    } catch (error) {
+      this.db.exec('ROLLBACK');
+      throw error;
+    }
+  }
+
   getDevice(token) {
     if (typeof token !== 'string' || !/^[A-Za-z0-9_-]{43}$/u.test(token)) return null;
     const nowIso = new Date(this.now()).toISOString();
     const row = this.db.prepare(`SELECT id, label, created_at, last_seen, role, child_id, access_expires_at, is_owner FROM devices
       WHERE token_hash = ? AND revoked = 0 AND expires_at > ?
-        AND (access_expires_at IS NULL OR access_expires_at > ?)`).get(hash(token), nowIso, nowIso);
+        AND EXISTS (SELECT 1 FROM device_permissions p WHERE p.device_id = devices.id
+          AND (p.access_expires_at IS NULL OR p.access_expires_at > ?))`).get(hash(token), nowIso, nowIso);
     if (!row) return null;
     this.db.prepare('UPDATE devices SET last_seen = ? WHERE id = ?').run(nowIso, row.id);
     return { ...row, is_owner: Boolean(row.is_owner), last_seen: nowIso };

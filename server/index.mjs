@@ -277,13 +277,21 @@ export function createApp(options = {}) {
       const route = BUSINESS_ROUTES.find(([pattern]) => pattern.test(pathname));
       const reportPdf = pathname.match(/^\/api\/reports\/([A-Za-z0-9_-]{1,100})\/pdf$/u);
       const brandingImage = pathname.match(/^\/api\/branding\/(school|class)$/u);
-      if (!route && !reportPdf && !brandingImage && !['/api/auth/me', '/api/auth/logout', '/api/state', '/api/export', '/api/reports', '/api/classrooms'].includes(pathname)) throw httpError(404, 'Nu a fost găsit.');
+      if (!route && !reportPdf && !brandingImage && !['/api/auth/me', '/api/auth/access', '/api/auth/logout', '/api/state', '/api/export', '/api/reports', '/api/classrooms'].includes(pathname)) throw httpError(404, 'Nu a fost găsit.');
       const token = readSessionCookie(req.headers.cookie, config.cookieSecure);
       const device = auth.getDevice(token);
       if (!device) throw httpError(401, 'Activează acest dispozitiv cu o invitație.');
       if (pathname === '/api/auth/me') {
         requireMethod(req, 'GET');
         return sendJson(res, 200, { device, classrooms: classroomsFor(device) });
+      }
+      if (pathname === '/api/auth/access') {
+        requireMethod(req, 'POST');
+        checkOrigin(req, config.publicBaseUrl);
+        const body = await readJson(req);
+        exactKeys(body, ['code'], ['code']);
+        const permission = auth.addAccess(body.code, device.id);
+        return sendJson(res, 200, { device: auth.getDevice(token), classrooms: classroomsFor(device), classroomId: permission.classroom_id });
       }
       if (pathname === '/api/auth/logout') {
         requireMethod(req, 'POST');
