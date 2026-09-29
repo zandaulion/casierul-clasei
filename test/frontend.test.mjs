@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { money, parseMoney, roundUp, collectionResult, expensePreview, sortChildren, unpaid } from '../web/helpers.mjs';
+import { money, parseMoney, roundUp, collectionResult, expensePreview, sortChildren, unpaid, whatsappReminder, whatsappUrl } from '../web/helpers.mjs';
 const child = { dueMinor: 8500, contributions: [
   { expenseId: 'books', title: 'Culegeri', dueDate: '2026-10-02', remainingMinor: 6000 },
   { expenseId: 'trip', title: 'Excursie', dueDate: '2026-10-01', remainingMinor: 2500 },
@@ -58,4 +58,14 @@ test('exact split distributes every ban by lexical child ID independent of input
 test('surname order uses Romanian collation and paid contributions are excluded', () => {
   assert.deepEqual(sortChildren([{ id:'1',lastName:'Șerban',firstName:'Ana' },{ id:'2',lastName:'Avram',firstName:'Dan' },{ id:'3',lastName:'Bălan',firstName:'Ioana' }]).map(c => c.id), ['2','3','1']);
   assert.equal(unpaid({ contributions: [{expenseId:'paid',remainingMinor:0}, ...child.contributions] }).length, 2);
+});
+test('WhatsApp reminders contain only the selected child situation and use a direct conversation URL', () => {
+  const pupil = { ...child, firstName: 'Ana', lastName: 'Popescu', creditMinor: 500 };
+  const message = whatsappReminder(pupil, 'III B');
+  assert.match(message, /Popescu Ana din III B/u);
+  assert.match(message, /Excursie: 25 lei \(termen 1 oct\. 2026\)/u);
+  assert.match(message, /Total de achitat: 85 lei/u);
+  assert.match(message, /Avans disponibil: 5 lei/u);
+  assert.equal(whatsappUrl('+40722111222', message), `https://wa.me/40722111222?text=${encodeURIComponent(message)}`);
+  assert.equal(whatsappUrl('număr invalid', message), '');
 });

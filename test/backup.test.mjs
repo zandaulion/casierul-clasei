@@ -32,6 +32,8 @@ test('live WAL-backed STRICT databases restore as standalone private files with 
   const request = { childId: child.id, receivedMinor: 12500, changeMinor: 500, allocations: [], requestId: randomUUID(), expectedRevision: 1 };
   const receipt = ledger.dispatch('collection.create', request, actor);
   ledger.dispatch('settings.update', { schoolLogo: tinyPng, requestId: randomUUID(), expectedRevision: 2 }, actor);
+  ledger.dispatch('child.contacts.update', { childId: child.id, contacts: [{ label: 'Mama', phone: '0722 111 222' }],
+    requestId: randomUUID(), expectedRevision: 3 }, actor);
   const expected = ledger.getState();
   assert.ok((await stat(path.join(directory, 'ledger.sqlite-wal'))).size > 0);
   assert.ok((await stat(path.join(directory, 'auth.sqlite-wal'))).size > 0);
@@ -42,7 +44,7 @@ test('live WAL-backed STRICT databases restore as standalone private files with 
   for (const name of ['ledger.sqlite', secondLedgerName, 'auth.sqlite']) assert.equal((await stat(path.join(folder, name))).mode & 0o777, 0o600);
 
   // Later live writes must not change the completed snapshot.
-  ledger.dispatch('payment.create', { amountMinor: 1000, destination: 'Magazin', requestId: randomUUID(), expectedRevision: 3 }, actor);
+  ledger.dispatch('payment.create', { amountMinor: 1000, destination: 'Magazin', requestId: randomUUID(), expectedRevision: 4 }, actor);
   const restored = path.join(directory, 'restored');
   await mkdir(restored);
   for (const name of ['ledger.sqlite', secondLedgerName, 'auth.sqlite']) await copyFile(path.join(folder, name), path.join(restored, name));
@@ -51,6 +53,7 @@ test('live WAL-backed STRICT databases restore as standalone private files with 
   try {
     assert.deepEqual(restoredLedger.getState(), expected);
     assert.equal(restoredLedger.getState().summary.balanceMinor, 12000);
+    assert.equal(restoredLedger.getState().contacts[0].phone, '+40722111222');
     assert.ok(restoredLedger.getBrandingImage('school').data.length > 0);
     assert.equal(restoredLedger.dispatch('collection.create', request, actor).transactionId, receipt.transactionId);
     assert.equal(restoredLedger.getState().transactions.length, 1);

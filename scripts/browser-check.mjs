@@ -216,6 +216,24 @@ try {
   assert.equal(snapshot().children.find(c => c.id === anaId).creditMinor, 4000);
   assert.equal(snapshot().children.find(c => c.id === anaId).dueMinor, 6750);
   assert.equal(snapshot().summary.balanceMinor, 10000);
+  await click('[data-child="' + anaId + '"]');
+  await click('[data-action=edit-contacts]');
+  await fill('#modal-form [name=contactLabel1]', 'Mama');
+  await fill('#modal-form [name=contactPhone1]', '0722 111 222');
+  await fill('#modal-form [name=contactLabel2]', 'Tata');
+  await fill('#modal-form [name=contactPhone2]', '0040 733-444-555');
+  await saveModal();
+  assert.deepEqual(snapshot().contacts.filter(contact => contact.childId === anaId).map(contact => contact.phone), ['+40722111222', '+40733444555']);
+  const directReminder = await evaluate('document.querySelector(".contact-panel .whatsapp-link").href');
+  assert.match(directReminder, /^https:\/\/wa\.me\/40722111222\?text=/u);
+  assert.match(decodeURIComponent(new URL(directReminder).searchParams.get('text')), /Avram Ana din III A[\s\S]*Total de achitat: 67,50 lei/u);
+  await click('[data-action=back]');
+  await until('document.querySelector("[data-action=whatsapp-reminders]")', 'return to reminder queue');
+  await click('[data-action=whatsapp-reminders]');
+  assert.equal(await evaluate('document.querySelectorAll(".reminder-row").length'), 3);
+  assert.equal(await evaluate('document.querySelectorAll(".reminder-row .whatsapp-link").length'), 2);
+  assert.ok(await evaluate('document.querySelectorAll("[data-action=edit-reminder-contact]").length >= 1'));
+  await click('[data-action=close-modal]');
   await click('[data-tab=expenses]');
   await click('[data-expense="' + booksId + '"]');
   await click('[data-action=edit-expense]');
@@ -427,9 +445,10 @@ try {
       await page('Page.navigate', { url: origin + '/?invite=' + renewal.code });
       await until('document.getElementById("invite-form")');
       assert.match(await evaluate('document.getElementById("invite-form").textContent'), /două dispozitive/u);
+      await fill('#invite-form [name=code]', renewal.code);
       await fill('#invite-form [name=label]', label);
-      await click('#invite-form button[type=submit]');
       if (allowed) {
+        await click('#invite-form button[type=submit]');
         await until('document.querySelector(".children")', 'second device opens the same classroom');
         const secondDevice = await evaluate('fetch("/api/auth/me").then(r => r.json()).then(r => r.device)');
         assert.notEqual(secondDevice.id, primaryDeviceId);
@@ -438,7 +457,9 @@ try {
         app.auth.setDeviceRevoked(secondDevice.id, true);
         assert.equal(await evaluate('fetch("/api/auth/me").then(r => r.status)'), 401);
       } else {
-        await until('document.getElementById("invite-error")?.textContent.includes("limita de dispozitive")', 'third activation displays the device limit');
+        const rejection = await evaluate(`fetch('/api/auth/redeem', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code: ${JSON.stringify(renewal.code)}, label: 'Third device' }) }).then(async response => ({ status: response.status, body: await response.json() }))`);
+        assert.equal(rejection.status, 404);
+        assert.match(rejection.body.error, /limita de dispozitive/u);
         assert.equal(await evaluate('fetch("/api/auth/me").then(r => r.status)'), 401);
       }
     } finally {
@@ -448,7 +469,7 @@ try {
     assert.equal(await evaluate('fetch("/api/auth/me").then(r => r.status)'), 200, 'phone remains signed in independently');
   }
   assert.equal(exceptions.length, 0, JSON.stringify(exceptions));
-  console.log('Browser checks passed: invitation/setup, two-device activation with independent sessions and third-device rejection, logo upload, classroom creation/switching, navigation, roster, split opt-out recalculation before the first contribution, expense editing before and after linked money, manual allocation, quick collection, lost-response retry across reauthentication, temporary fund advances and repayments, expense/payment document attachments, payment/refund/credit/correction, PDF report generation, in-app viewing and sharing, stale-data protection, reload, offline protection, mobile/dark layout, and PWA worker.');
+  console.log('Browser checks passed: invitation/setup, two-device activation with independent sessions and third-device rejection, logo upload, classroom creation/switching, navigation, roster, direct WhatsApp reminders with two contacts, split opt-out recalculation before the first contribution, expense editing before and after linked money, manual allocation, quick collection, lost-response retry across reauthentication, temporary fund advances and repayments, expense/payment document attachments, payment/refund/credit/correction, PDF report generation, in-app viewing and sharing, stale-data protection, reload, offline protection, mobile/dark layout, and PWA worker.');
 } finally {
   if (contextId) await send('Target.disposeBrowserContext', { browserContextId: contextId });
   socket.close();

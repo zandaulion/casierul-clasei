@@ -265,6 +265,7 @@ test('parent state exposes class totals and only the associated child', () => {
   const child = (id, firstName) => ({ id, firstName, lastName: 'Pop', active: true, creditMinor: 0, dueMinor: 1000,
     contributions: [{ expenseId: 'expense-1', title: 'Poze', amountMinor: 1000, paidMinor: 0, remainingMinor: 1000 }] });
   const state = { revision: 2, settings: {}, summary: { totalDueMinor: 2000 }, children: [child('ana', 'Ana'), child('ion', 'Ion')],
+    contacts: [{ childId: 'ana', position: 1, label: 'Mama', phone: '+40722111222' }],
     expenses: [{ id: 'expense-1', title: 'Poze', comment: 'notă internă', contributions: [
       { childId: 'ana', amountMinor: 1000 }, { childId: 'ion', amountMinor: 1000 }], totalMinor: 2000 }],
     advances: [{ id: 'advance', person: 'Casier', comment: 'notă internă' }],
@@ -288,6 +289,9 @@ test('parent state exposes class totals and only the associated child', () => {
   assert.deepEqual(view.attachments.map((item) => item.id), ['class-doc']);
   assert.deepEqual(view.reports.map((item) => item.id), ['class', 'own-report']);
   assert.equal(view.summary.totalDueMinor, 2000);
+  assert.equal(Object.hasOwn(view, 'contacts'), false);
+  assert.equal(Object.hasOwn(projectState(state, { role: 'auditor' }), 'contacts'), false);
+  assert.deepEqual(projectState(state, { role: 'treasurer' }).contacts, state.contacts);
 });
 
 test('redeem attempts are rate limited and recover after the window', (t) => {
@@ -571,11 +575,19 @@ test('business routes enforce body types, size, ids, and method before dispatch'
   assert.equal((await publicRequest('/api/expenses', {
     method: 'POST', body: { ...base, participants: [{ childId: 'kid', quantity: '2' }] }, headers: { Cookie: cookie },
   })).status, 400);
+  assert.equal((await publicRequest('/api/children/kid-123/contacts', {
+    method: 'POST', body: { ...base, contacts: [{ label: 'Mama', phone: 722111222 }] }, headers: { Cookie: cookie },
+  })).status, 400);
   assert.equal(ledger.calls.length, 0);
   assert.equal((await publicRequest('/api/children/kid-123', {
     method: 'POST', body: { ...base, firstName: 'Ana', lastName: 'Pop' }, headers: { Cookie: cookie },
   })).status, 200);
   assert.equal(ledger.calls[0].body.childId, 'kid-123');
+  assert.equal((await publicRequest('/api/children/kid-123/contacts', {
+    method: 'POST', body: { ...base, contacts: [{ label: 'Mama', phone: '0722 111 222' }] }, headers: { Cookie: cookie },
+  })).status, 200);
+  assert.equal(ledger.calls[1].operation, 'child.contacts.update');
+  assert.equal(ledger.calls[1].body.childId, 'kid-123');
 });
 
 test('ledger 409 errors pass through and internal exceptions do not reveal internals', async (t) => {

@@ -25,6 +25,7 @@ Fișierele din `web/` sunt încărcate de server la pornire. După orice modific
 - Clasele adăugate: câte un `~/.local/share/casierul-clasei/classroom-<uuid>.sqlite`.
 - Invitații, dispozitive, catalogul claselor și drepturile: `~/.local/share/casierul-clasei/auth.sqlite`.
 - Documentele justificative sunt stocate în baza SQLite a clasei, împreună cu amprenta SHA-256 și vizibilitatea lor. Limitele sunt 10 MB per fișier, 25 de documente per cheltuială/plată și 200 MB per clasă.
+- Cele maximum două contacte WhatsApp ale fiecărui copil sunt stocate în baza SQLite a clasei. Numerele sunt normalizate la format internațional și sunt trimise numai dispozitivelor cu rol de casier; nu apar la părinte, auditor, în PDF-uri sau în exportul JSON.
 - Directorul de date este privat (0700); nu se află în directorul public.
 - Fiecare invitație acordă un rol numai pentru clasa aleasă. Rolurile sunt casier, părinte sau auditor; părintele este limitat și la copilul ales.
 - Dispozitivele de casier existente la migrare devin proprietari și pot crea clase. Pe o instalare nouă, primul casier activat devine proprietar.
@@ -53,7 +54,7 @@ Fluxul complet pentru creare, invitații și comutare este documentat în [Mai m
 
 ## Copii de siguranță
 
-`casierul-clasei-backup.timer` produce zilnic copii SQLite consistente, inclusiv datele aflate în WAL și conținutul integral al documentelor atașate, folosind API-ul de backup din Node 24 (`scripts/backup.mjs`). Mai întâi salvează catalogul din `auth.sqlite`, apoi toate bazele claselor active din acel catalog. Fiecare bază este verificată cu `PRAGMA integrity_check` și `PRAGMA foreign_key_check`; setul complet apare apoi într-un subdirector datat din `~/.local/share/casierul-clasei/backups/`. Fișierele salvate nu necesită WAL/SHM pentru restaurare, iar copiile incomplete sunt eliminate. Copiile sunt locale, pe același server; nu există transfer extern sau ștergere automată a copiilor vechi. Monitorizează spațiul ocupat de directorul `backups/`, mai ales după adăugarea documentelor.
+`casierul-clasei-backup.timer` produce zilnic copii SQLite consistente, inclusiv datele aflate în WAL, contactele copiilor și conținutul integral al documentelor atașate, folosind API-ul de backup din Node 24 (`scripts/backup.mjs`). Mai întâi salvează catalogul din `auth.sqlite`, apoi toate bazele claselor active din acel catalog. Fiecare bază este verificată cu `PRAGMA integrity_check` și `PRAGMA foreign_key_check`; setul complet apare apoi într-un subdirector datat din `~/.local/share/casierul-clasei/backups/`. Fișierele salvate nu necesită WAL/SHM pentru restaurare, iar copiile incomplete sunt eliminate. Copiile sunt locale, pe același server; nu există transfer extern sau ștergere automată a copiilor vechi. Monitorizează spațiul ocupat de directorul `backups/`, mai ales după adăugarea documentelor.
 
 Backup manual:
 
@@ -63,7 +64,7 @@ systemctl --user start casierul-clasei-backup.service
 
 Pentru restaurare, oprește aplicația, păstrează o copie a întregului director curent de date, apoi înlocuiește `auth.sqlite` și toate bazele claselor cu fișierele din aceeași copie datată. Catalogul și registrele trebuie să provină din același subdirector de backup. Fișierele WAL și SHM vechi nu trebuie păstrate lângă bazele restaurate. Păstrează proprietarul `opc` și permisiunile private, pornește aplicația și verifică soldurile fiecărei clase. Nu restaura peste o bază deschisă de un proces activ.
 
-Exportul JSON din aplicație conține datele registrului și istoricul, fără credentiale. Pentru documente include metadatele și amprentele SHA-256, nu conținutul fișierelor. Este util pentru verificare și păstrarea unei copii lizibile; restaurarea automată din JSON nu este implementată.
+Exportul JSON din aplicație conține datele registrului și istoricul, fără credentiale sau contactele copiilor. Pentru documente include metadatele și amprentele SHA-256, nu conținutul fișierelor. Este util pentru verificare și păstrarea unei copii lizibile; restaurarea automată din JSON nu este implementată. Pentru restaurarea contactelor este necesară copia SQLite privată.
 
 ## Verificări
 
