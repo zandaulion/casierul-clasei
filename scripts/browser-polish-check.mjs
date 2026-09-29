@@ -108,7 +108,7 @@ async function openRole(role, childId) {
   await until('document.getElementById("invite-form")');
   await fill('#invite-form [name=code]', invite.code);
   await click('#invite-form button[type=submit]');
-  await until('!document.getElementById("invite-form") && !document.getElementById("tabs").hidden', `${role} activated`);
+  await until('!document.getElementById("invite-form") && document.getElementById("tabs")?.hidden === false', `${role} activated`);
   await until('[...document.querySelectorAll(".header-logos img:not([hidden])")].length === 2 && [...document.querySelectorAll(".header-logos img:not([hidden])")].every(image => image.complete && image.naturalWidth > 0)', 'branding images loaded');
   await evaluate('document.fonts.ready.then(() => true)');
   return browserContextId;
@@ -274,6 +274,12 @@ try {
       await screenshot(`${role}-child-2x-text`);
       await restoreText();
     }
+    await viewport(320, 700, 'light');
+    await click('[data-tab=reports]');
+    await scaleText(2);
+    await checkLayout(`${role}-reports-2x-text`);
+    await screenshot(`${role}-reports-2x-text`);
+    await restoreText();
     console.log(`Polish views passed for ${role}.`);
     await send('Target.disposeBrowserContext', { browserContextId: context });
     contexts.delete(context); sessionId = null;

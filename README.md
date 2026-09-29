@@ -32,7 +32,7 @@ Datele afișate în capturi sunt integral sintetice.
 <table>
   <tr>
     <td align="center"><img src="docs/screenshots/06-documente-tableta-768x1024.png" alt="Document justificativ atașat unei plăți" width="440"><br><strong>Documente justificative · 768×1024</strong></td>
-    <td align="center"><img src="docs/screenshots/07-raport-pdf-tableta-1024x768.png" alt="Previzualizarea unui raport PDF exhaustiv" width="440"><br><strong>Raport PDF în aplicație · 1024×768</strong></td>
+    <td align="center"><img src="docs/screenshots/07-raport-pdf-tableta-1024x768.png" alt="Previzualizarea PDF a Tabelului contribuțiilor" width="440"><br><strong>Raport PDF în aplicație · 1024×768</strong></td>
   </tr>
 </table>
 
@@ -66,7 +66,9 @@ Avansul poate acoperi ulterior alte contribuții sau poate fi restituit. Folosir
 - **Corecții:** operațiunile confirmate se anulează printr-o înregistrare separată, cu motiv, păstrând istoricul. O cheltuială fără încasări sau plăți active poate fi anulată și recreată.
 - **Export:** copie JSON a datelor și istoricului, fără credentiale. Restaurarea automată din JSON nu este inclusă.
 - **Identitate vizuală:** sigla școlii și sigla clasei configurate din aplicație apar compact în antetul aplicației și în antetul PDF-urilor.
-- **Rapoarte PDF:** situația clasei, **Tabelul contribuțiilor** și rapoarte pentru fiecare copil sau cheltuială, cu vizualizare directă în aplicație, partajare și descărcare; verde pentru achitat, galben pentru parțial, roșu pentru restant, albastru pentru solduri și bani dați mai departe. Fiecare PDF păstrează siglele și culorile de la momentul emiterii.
+- **Rapoarte PDF:** situația clasei, **Tabelul contribuțiilor** și rapoarte pentru fiecare copil sau cheltuială, cu vizualizare directă în aplicație, partajare și descărcare; verde pentru achitat, galben pentru parțial, roșu pentru neachitat, albastru pentru solduri și bani dați mai departe. Fiecare PDF păstrează siglele și culorile de la momentul emiterii.
+
+Rapoartele au mici accente de papetărie: caiet, avion de hârtie și culori pastelate pentru fiecare tip. PDF-urile nou emise folosesc aceleași motive discrete în antet și subsol, păstrând sumele și tabelele clare. PDF-urile deja arhivate rămân exact în forma în care au fost emise.
 
 Sumele sunt stocate în bani întregi; împărțirea unui total distribuie exact și ultimii bani. Contribuțiile confirmate nu se recalculează automat; modificările permise se fac explicit prin editarea cheltuielii. Numerarul disponibil include avansurile copiilor și sumele avansate temporar fondului, iar datoriile aferente sunt afișate separat. „Sold după restituirea sumelor avansate” arată ce ar rămâne după stingerea lor. Documentele sunt incluse în copiile de siguranță SQLite; exportul JSON conține numai metadatele lor.
 
@@ -75,6 +77,8 @@ Salvarea necesită internet. La pierderea răspunsului, **Verifică / reîncearc
 ## Tehnic și operare
 
 Node.js 24+ și `node:sqlite`; PDF-urile sunt generate cu PDFKit, iar previzualizarea folosește o copie locală PDF.js. Interfața nu încarcă biblioteci, fonturi sau alte resurse de pe CDN-uri. Aplicația folosește mecanismul de actualizări din `../pwa-kit` și administrarea invitațiilor/dispozitivelor din `../pwa-invite-console`.
+
+Ilustrațiile rapoartelor sunt vectoriale: SVG în interfață și desen direct cu PDFKit în PDF, fără dependențe sau servicii externe suplimentare.
 
 ```
 npm test

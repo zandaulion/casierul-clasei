@@ -357,15 +357,26 @@ function renderReports() {
     { type: 'expense', icon: 'receipt', title: 'Situația unei cheltuieli', description: 'Necesar, încasat și plătit, fără numele copiilor.', available: hasExpenses },
     { type: 'child', icon: 'child', title: 'Fișa copilului', description: `${debtors.length} copii au de achitat ${money(debtors.reduce((total, item) => total + item.dueMinor, 0))}. Pentru trimitere privată.`, available: state.children.length },
   ];
-  $('#main').innerHTML = `${pageHeading('Rapoarte de împărtășit', 'Situații clare, pregătite pentru consultare și partajare.', 'reports')}
-    ${canWrite() ? `<div class="report-types">${reportTypes.map(item => `<button class="card card-button report-type" data-action="report-${item.type}" ${item.available ? '' : 'disabled'}><span class="report-icon">${icon(item.icon)}</span><span><h3>${item.title}</h3><span class="caption">${item.description}</span></span></button>`).join('')}</div>` : '<p>Consultă, descarcă sau partajează rapoartele emise de casier la care ai acces.</p>'}
-    <section class="report-archive" aria-labelledby="report-archive-title"><h2 id="report-archive-title">Rapoarte emise</h2>
-      <div class="stack">${reports.length ? reports.map(report => `<article class="card report-card ${report.replacedById ? 'replaced' : ''}">
+  const stationery = `<svg class="reports-illustration" viewBox="0 0 156 116" fill="none" aria-hidden="true" focusable="false">
+    <g transform="rotate(-8 51 68)" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="16" y="35" width="73" height="66" rx="6" fill="var(--surface)"/><path d="M31 36v64" stroke="var(--peach)" stroke-width="3"/>
+      <path d="M12 48h9m-9 16h9m-9 16h9"/><path d="M42 54h32M42 65h26M42 76h30M42 87h19" opacity=".35"/>
+    </g>
+    <path d="M91 26 143 10l-17 49-11-21-24-12Z" fill="var(--sky)" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>
+    <path d="m115 38 28-28m-28 28-4 14 9-5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M119 68c10 18-11 32-22 16-6-9 7-15 13-7 10 16-9 28-24 29" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-dasharray="3 5" opacity=".45"/>
+    <path d="m67 10 2 5 5 2-5 2-2 5-2-5-5-2 5-2Z" fill="var(--sunshine)" stroke="currentColor" stroke-width="1.2"/>
+    <circle cx="140" cy="87" r="4" fill="var(--peach)"/>
+  </svg>`;
+  $('#main').innerHTML = `<section class="reports-intro" aria-labelledby="reports-title"><div class="reports-intro-copy"><h1 id="reports-title">Rapoarte de împărtășit</h1><p>Fiecare contribuție, la locul ei. Situații clare, pregătite pentru consultare și partajare.</p></div>${stationery}</section>
+    ${canWrite() ? `<div class="report-types">${reportTypes.map(item => `<button class="card card-button report-type report-type-${item.type}" data-action="report-${item.type}" ${item.available ? '' : 'disabled'}><span class="report-icon">${icon(item.icon)}</span><span class="report-type-copy"><h3>${item.title}</h3><span class="caption">${item.description}</span></span></button>`).join('')}</div>` : '<p>Consultă, descarcă sau partajează rapoartele emise de casier la care ai acces.</p>'}
+    <section class="report-archive" aria-labelledby="report-archive-title"><div class="report-archive-heading"><h2 id="report-archive-title">${icon('reports')}Rapoarte emise</h2></div>
+      <div class="stack report-archive-list">${reports.length ? reports.map(report => `<article class="card report-card ${report.replacedById ? 'replaced' : ''}">
         <div class="row"><h3>${esc(reportTypeLabels[report.type])}</h3><span class="badge">${report.replacedById ? 'Înlocuit' : 'Emis'}</span></div>
         <div>${esc(report.subjectLabel)}</div><div class="caption">${dateText(report.createdAt)}</div>
         <div class="caption">${esc(report.code)} · revizia ${report.stateRevision}${report.replacesId ? ' · Raport corectiv' : ''}</div>
         <div class="report-actions"><button class="primary" data-action="view-report" data-id="${esc(report.id)}">Vizualizează</button><button data-action="share-report" data-id="${esc(report.id)}">Partajează PDF</button><a href="${esc(scopedUrl(`/api/reports/${encodeURIComponent(report.id)}/pdf`))}" download="${esc(report.filename)}">Descarcă</a>${canWrite() && !report.replacedById ? `<button data-action="replace-report" data-id="${esc(report.id)}">Emite corecție</button>` : ''}</div>
-      </article>`).join('') : `<div class="empty"><p>${canWrite() ? 'Alege un tip de raport de mai sus. PDF-urile emise se păstrează aici, împreună cu istoricul lor.' : 'Rapoartele vor apărea aici după ce sunt emise de casier.'}</p></div>`}</div>
+      </article>`).join('') : `<div class="empty report-empty"><span class="report-empty-icon">${icon('reports')}</span><p>${canWrite() ? 'Alege un tip de raport de mai sus. PDF-urile emise se păstrează aici, împreună cu istoricul lor.' : 'Rapoartele vor apărea aici după ce sunt emise de casier.'}</p></div>`}</div>
     </section>`;
 }
 function reportModal(type, replacesId = null) {
