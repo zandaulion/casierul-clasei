@@ -306,7 +306,7 @@ try {
   await click('[data-action=report-child]');
   assert.equal(await getValue('#modal-form [name=debtFilter]'), 'due');
   assert.equal(await evaluate('document.querySelectorAll("#modal-form [name=subjectId] option").length'), snapshot().children.filter(child => child.dueMinor > 0).length);
-  assert.equal(await evaluate('[...document.querySelectorAll("#modal-form [name=subjectId] option")].every(option => option.textContent.includes("Restant") && option.textContent.includes("lei"))'), true);
+  assert.equal(await evaluate('[...document.querySelectorAll("#modal-form [name=subjectId] option")].every(option => option.textContent.includes("De achitat") && option.textContent.includes("lei"))'), true);
   const reportChildIds = await evaluate('[...document.querySelectorAll("#modal-form [name=subjectId] option")].map(option => option.value)');
   assert.deepEqual(reportChildIds.map(id => snapshot().children.find(child => child.id === id).dueMinor), [...snapshot().children].filter(child => child.dueMinor > 0).sort((a, b) => b.dueMinor - a.dueMinor).map(child => child.dueMinor));
   await click('[data-action=close-modal]');

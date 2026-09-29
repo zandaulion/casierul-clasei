@@ -2,6 +2,8 @@
 
 PWA pentru evidența fondurilor mai multor clase și școli. Interfață în română, sume în lei, date persistente pe server în SQLite.
 
+O atmosferă de comunitate școlară, cu ilustrații discrete, culori calde și situații de plată explicate pe înțelesul tuturor. Pe telefon, încasarea rămâne la îndemână; pe ecrane mari, registrul așază soldul și istoricul alături.
+
 Aplicația: https://casierul-clasei.zandaulion.com
 
 ## Capturi de ecran
@@ -38,18 +40,20 @@ Datele afișate în capturi sunt integral sintetice.
 
 1. Generează o invitație în consola PWA privată și activează telefonul.
 2. Configurează școala, clasa, anul școlar și eventualul sold inițial.
-3. Adaugă copiii individual sau lipește lista, câte un `Nume de familie; Prenume` pe linie.
+3. Din **Copiii clasei → Gestionează copiii**, adaugă copiii individual sau lipește lista, câte un `Nume de familie; Prenume` pe linie.
 4. Creează cheltuielile și selectează participanții: sumă fixă/copil, total împărțit sau cantitate/copil × preț unitar.
 
 Invitațiile pot acorda trei tipuri de acces. **Casierul** vede și modifică întregul registru. **Părintele** are acces doar pentru citire la situația generală și la datele copilului asociat, fără numele sau tranzacțiile celorlalți copii. **Auditorul** vede registrul complet și rapoartele, dar nu poate modifica sau exporta datele brute. Accesul doar pentru citire poate expira automat la data aleasă în consola PWA.
+
+Părintele cu un singur copil asociat ajunge direct la situația lui: contribuții, termene, avansuri și rapoarte disponibile.
 
 Proprietarul poate adăuga alte clase din setări. Fiecare clasă are bază de date, copii, cheltuieli, rapoarte, sigle și drepturi proprii. Selectorul din antet apare când dispozitivul are acces la mai multe clase. Invitațiile se emit pentru o singură clasă și un singur rol; pentru părinte se alege și copilul. **Adaugă acces din invitație** păstrează accesurile existente, astfel încât același dispozitiv poate avea roluri diferite în clase diferite. Pașii compleți sunt în [ghidul pentru mai multe clase și drepturi](docs/multiple-classrooms.md).
 
 ## Încasare rapidă
 
-Atinge copilul din lista alfabetică, apoi alege totalul restant sau o singură cheltuială. Butoanele mari rotunjesc în sus la multiplu de 10, 50 sau 100 lei, pornind mereu de la suma selectată. Un multiplu exact rămâne neschimbat.
+Atinge copilul din lista alfabetică, apoi alege totalul de achitat sau o singură cheltuială. Butoanele mari rotunjesc în sus la multiplu de 10, 50 sau 100 lei, pornind mereu de la suma selectată. Un multiplu exact rămâne neschimbat.
 
-Pentru diferență, alege **Dau rest** sau **Păstrez în avans**. Dacă ai selectat o singură cheltuială, diferența nu se repartizează automat către alte datorii. Poți introduce suma primită și repartizarea manual. Verifică rezumatul și salvează; aplicația revine la lista copiilor.
+Pentru diferență, alege **Dau rest** sau **Păstrez în avans**. Dacă ai selectat o singură cheltuială, diferența nu se repartizează automat către alte datorii. Poți introduce suma primită și repartizarea manual. Rezumatul de lângă salvare arată suma primită, restul și suma înregistrată. Verifică-l și salvează; aplicația revine la lista copiilor și confirmă încasarea pentru copilul ales.
 
 Avansul poate acoperi ulterior alte contribuții sau poate fi restituit. Folosirea avansului nu înregistrează încă o intrare de bani.
 
@@ -62,7 +66,7 @@ Avansul poate acoperi ulterior alte contribuții sau poate fi restituit. Folosir
 - **Corecții:** operațiunile confirmate se anulează printr-o înregistrare separată, cu motiv, păstrând istoricul. O cheltuială fără încasări sau plăți active poate fi anulată și recreată.
 - **Export:** copie JSON a datelor și istoricului, fără credentiale. Restaurarea automată din JSON nu este inclusă.
 - **Identitate vizuală:** sigla școlii și sigla clasei configurate din aplicație apar compact în antetul aplicației și în antetul PDF-urilor.
-- **Rapoarte PDF:** vizualizare directă în aplicație, partajare și descărcare; verde pentru achitat, galben pentru parțial, roșu pentru restant, albastru pentru solduri și bani dați mai departe. Fiecare PDF păstrează siglele și culorile de la momentul emiterii.
+- **Rapoarte PDF:** situația clasei, **Tabelul contribuțiilor** și rapoarte pentru fiecare copil sau cheltuială, cu vizualizare directă în aplicație, partajare și descărcare; verde pentru achitat, galben pentru parțial, roșu pentru restant, albastru pentru solduri și bani dați mai departe. Fiecare PDF păstrează siglele și culorile de la momentul emiterii.
 
 Sumele sunt stocate în bani întregi; împărțirea unui total distribuie exact și ultimii bani. Contribuțiile confirmate nu se recalculează automat; modificările permise se fac explicit prin editarea cheltuielii. Numerarul disponibil include avansurile copiilor și sumele avansate temporar fondului, iar datoriile aferente sunt afișate separat. „Sold după restituirea sumelor avansate” arată ce ar rămâne după stingerea lor. Documentele sunt incluse în copiile de siguranță SQLite; exportul JSON conține numai metadatele lor.
 
@@ -82,6 +86,8 @@ Cloudflare Tunnel folosește `http://127.0.0.1:8018`. API-ul privat de administr
 Detalii: [mai multe clase și drepturi](docs/multiple-classrooms.md), [operare și backup](docs/operations.md), [contract API](docs/api.md), [planul de criptare](docs/encryption.md).
 
 Testele folosesc baze temporare și verifică registrul, autentificarea, calculele interfeței și integrarea HTTP. `scripts/browser-check.mjs` verifică fluxurile complete într-un context Chromium separat, cu server temporar pe portul 18018 și Chromium disponibil prin debugging pe portul 9222.
+
+`node scripts/browser-polish-check.mjs` verifică aspectul și navigarea casierului, părintelui și auditorului pe telefoane, tablete și desktop, în ambele teme și cu text mărit. Folosește date sintetice, un server temporar pe portul 18028 și același Chromium pe portul 9222. Paleta, ilustrația și regulile de prezentare sunt documentate în [identitatea vizuală a clasei](design/community-style.md).
 
 Schița interactivă inițială rămâne în `design/collection-flow.html`; `preview/` păstrează exportul ei pentru revenire la instalarea inițială. Aplicația funcțională este în `web/` și `server/`.
 
