@@ -40,6 +40,22 @@ function integer(value, label, min = 0, max = MAX_MONEY) {
   return value;
 }
 
+function whatsappPhone(value) {
+  const raw = text(value, 'Numărul de telefon', 40);
+  if (!/^[+\d().\s-]+$/u.test(raw)) fail('Numărul de telefon conține caractere nepermise.');
+  let compact = raw.replace(/[().\s-]/gu, '');
+  if (compact.startsWith('00')) compact = `+${compact.slice(2)}`;
+  else if (compact.startsWith('0')) compact = `+40${compact.slice(1)}`;
+  else if (!compact.startsWith('+')) compact = `+${compact}`;
+  if (!/^\+[1-9]\d{7,14}$/u.test(compact)) fail('Introdu un număr complet, de exemplu 07xx xxx xxx sau +40 7xx xxx xxx.');
+  return compact;
+}
+
+function withoutPrivateContacts(state) {
+  const { contacts: _contacts, ...safeState } = state;
+  return safeState;
+}
+
 function add(a, b) {
   const result = a + b;
   if (!Number.isSafeInteger(result)) fail('Totalul depășește limita acceptată.', 422);
@@ -117,6 +133,12 @@ CREATE TABLE IF NOT EXISTS children (
   id TEXT PRIMARY KEY, first_name TEXT NOT NULL, last_name TEXT NOT NULL,
   active INTEGER NOT NULL CHECK(active IN (0, 1)), created_at TEXT NOT NULL
 ) STRICT;
+CREATE TABLE IF NOT EXISTS child_contacts (
+  child_id TEXT NOT NULL REFERENCES children(id) ON DELETE CASCADE,
+  position INTEGER NOT NULL CHECK(position IN (1, 2)),
+  label TEXT NOT NULL, phone TEXT NOT NULL,
+  PRIMARY KEY (child_id, position), UNIQUE (child_id, phone)
+) STRICT;
 CREATE TABLE IF NOT EXISTS expenses (
   id TEXT PRIMARY KEY, title TEXT NOT NULL,
   type TEXT NOT NULL CHECK(type IN ('fixed', 'split', 'quantity')),
@@ -190,6 +212,7 @@ CREATE TABLE IF NOT EXISTS attachments (
 ) STRICT;
 CREATE INDEX IF NOT EXISTS allocations_expense ON allocations(expense_id);
 CREATE INDEX IF NOT EXISTS transactions_child ON transactions(child_id);
+CREATE INDEX IF NOT EXISTS child_contacts_child ON child_contacts(child_id);
 CREATE INDEX IF NOT EXISTS transactions_expense ON transactions(expense_id);
 CREATE INDEX IF NOT EXISTS reports_created ON reports(serial DESC);
 CREATE INDEX IF NOT EXISTS attachments_expense ON attachments(expense_id);
@@ -339,7 +362,7 @@ export class Ledger {
   }
 
   exportData() {
-    return { format: 'casierul-clasei', version: 1, exportedAt: new Date().toISOString(), state: this.getState() };
+    return { format: 'casierul-clasei', version: 1, exportedAt: new Date().toISOString(), state: withoutPrivateContacts(this.getState()) };
   }
 
   getBrandingImage(kind) {
@@ -454,7 +477,8 @@ export class Ledger {
         return { report, reports: this.#reports() };
       }
       const stateWithReports = this.#state();
-      const { reports: _reports, ...state } = stateWithReports;
+      const { reports: _reports, ...reportState } = stateWithReports;
+      const state = withoutPrivateContacts(reportState);
       const subject = reportSubject(state, type, subjectId);
       let replaced = null;
       if (replacesId) {
@@ -501,6 +525,9 @@ export class Ledger {
   #state() {
     const meta = this.#one('SELECT * FROM metadata WHERE singleton = 1');
     const childRows = this.#all('SELECT * FROM children');
+    const contacts = this.#all('SELECT child_id, position, label, phone FROM child_contacts ORDER BY child_id, position').map(row => ({
+      childId: row.child_id, position: row.position, label: row.label, phone: row.phone,
+    }));
     const expenseRows = this.#all('SELECT * FROM expenses ORDER BY rowid DESC');
     const contributionRows = this.#all('SELECT * FROM contributions ORDER BY child_id');
     const transactionRows = this.#all('SELECT * FROM transactions ORDER BY rowid');
@@ -591,7 +618,7 @@ export class Ledger {
       settings: { schoolName: meta.school_name, className: meta.class_name, schoolYear: meta.school_year,
         openingBalanceMinor: meta.opening_balance, hasSchoolLogo: branding.has('school'), hasClassLogo: branding.has('class'),
         schoolLogoVersion: branding.get('school') ?? null, classLogoVersion: branding.get('class') ?? null },
-      children, expenses, advances, attachments: this.#attachments(), transactions: transactions.reverse(),
+      children, contacts, expenses, advances, attachments: this.#attachments(), transactions: transactions.reverse(),
       summary: { balanceMinor, netBalanceMinor: balanceMinor - totalAdvanceOutstandingMinor,
         totalReceivedMinor, totalPaidMinor, totalCreditMinor: sum(children.map(child => child.creditMinor)),
         totalDueMinor: sum(children.map(child => child.dueMinor)), totalAdvancedMinor,
@@ -723,6 +750,24 @@ export class Ledger {
       const lastName = body.lastName === undefined ? child.lastName : text(body.lastName, 'Numele', 80);
       if (body.active !== undefined && typeof body.active !== 'boolean') fail('Starea copilului nu este validă.');
       this.#run('UPDATE children SET first_name = ?, last_name = ?, active = ? WHERE id = ?', firstName, lastName, Number(body.active ?? child.active), child.id);
+      return;
+    }
+    if (operation === 'child.contacts.update') {
+      const child = this.#child(state, body.childId);
+      if (!Array.isArray(body.contacts) || body.contacts.length > 2) fail('Poți salva cel mult două contacte pentru un copil.');
+      const seen = new Set();
+      const contacts = body.contacts.map((item, index) => {
+        object(item, 'Contactul');
+        const phone = whatsappPhone(item.phone);
+        if (seen.has(phone)) fail('Același număr de telefon apare de mai multe ori.');
+        seen.add(phone);
+        return { position: index + 1, label: text(item.label, 'Numele contactului', 80), phone };
+      });
+      this.#run('DELETE FROM child_contacts WHERE child_id = ?', child.id);
+      for (const contact of contacts) {
+        this.#run('INSERT INTO child_contacts (child_id, position, label, phone) VALUES (?, ?, ?, ?)',
+          child.id, contact.position, contact.label, contact.phone);
+      }
       return;
     }
     if (operation === 'expense.create') {

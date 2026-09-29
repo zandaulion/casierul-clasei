@@ -176,6 +176,7 @@ const BUSINESS_ROUTES = [
   [/^\/api\/settings$/u, 'settings.update', ['schoolName', 'className', 'schoolYear', 'openingBalanceMinor', 'schoolLogo', 'classLogo']],
   [/^\/api\/children$/u, 'child.create', ['firstName', 'lastName']],
   [/^\/api\/children\/bulk$/u, 'children.create', ['children']],
+  [/^\/api\/children\/([A-Za-z0-9_-]{1,100})\/contacts$/u, 'child.contacts.update', ['contacts'], 'childId'],
   [/^\/api\/children\/([A-Za-z0-9_-]{1,100})$/u, 'child.update', ['firstName', 'lastName', 'active'], 'childId'],
   [/^\/api\/expenses$/u, 'expense.create', ['title', 'type', 'amountMinor', 'participants', 'occurredAt', 'dueDate', 'comment']],
   [/^\/api\/expenses\/([A-Za-z0-9_-]{1,100})$/u, 'expense.update', ['title', 'type', 'amountMinor', 'participants', 'occurredAt', 'dueDate', 'comment'], 'expenseId'],
@@ -212,6 +213,7 @@ function validateMutation(body, fields) {
     ['children', ['firstName', 'lastName'], ['firstName', 'lastName']],
     ['participants', ['childId', 'quantity'], ['childId']],
     ['allocations', ['expenseId', 'amountMinor'], ['expenseId', 'amountMinor']],
+    ['contacts', ['label', 'phone'], ['label', 'phone']],
   ]) {
     if (!Object.hasOwn(body, key)) continue;
     if (!Array.isArray(body[key]) || body[key].length > 1000) throw httpError(400, `Lista ${key} nu este validă.`);
@@ -241,28 +243,30 @@ function canReadReport(report, device) {
 }
 
 export function projectState(state, device) {
-  if (device.role !== 'parent') return state;
-  const ownChild = state.children.find((child) => child.id === device.child_id);
+  if (device.role === 'treasurer') return state;
+  const { contacts: _contacts, ...safeState } = state;
+  if (device.role !== 'parent') return safeState;
+  const ownChild = safeState.children.find((child) => child.id === device.child_id);
   if (!ownChild) throw httpError(403, 'Copilul asociat acestui acces nu mai este disponibil.');
-  const expenses = state.expenses.map((expense) => ({
+  const expenses = safeState.expenses.map((expense) => ({
     ...expense,
     comment: '',
     participantCount: expense.contributions.length,
     contributions: expense.contributions.filter((contribution) => contribution.childId === device.child_id),
   }));
-  const transactions = state.transactions.filter((transaction) =>
+  const transactions = safeState.transactions.filter((transaction) =>
     ['payment', 'fund_advance', 'advance_repayment'].includes(transaction.type) || transaction.childId === device.child_id).map((transaction) => ({
     ...transaction,
     ...(transaction.childId === device.child_id ? {} : { comment: '' }),
   }));
   return {
-    ...state,
+    ...safeState,
     children: [ownChild],
     expenses,
-    advances: (state.advances || []).map((advance) => ({ ...advance, comment: '' })),
-    attachments: (state.attachments || []).filter((attachment) => attachment.visibility === 'class'),
+    advances: (safeState.advances || []).map((advance) => ({ ...advance, comment: '' })),
+    attachments: (safeState.attachments || []).filter((attachment) => attachment.visibility === 'class'),
     transactions,
-    reports: (state.reports || []).filter((report) => canReadReport(report, device)),
+    reports: (safeState.reports || []).filter((report) => canReadReport(report, device)),
   };
 }
 

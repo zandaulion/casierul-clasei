@@ -318,6 +318,45 @@ main { min-width: 0; padding: 24px 20px; outline: none; }
 .paid-status svg { width: 14px; height: 14px; }
 .due-status { font-weight: 600; font-variant-numeric: tabular-nums; }
 .parent-summary { margin: 16px 0; }
+.reminder-queue-button {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  width: 100%;
+  margin: 18px 0;
+  padding: 13px 15px;
+  border-color: transparent;
+  background: var(--soft);
+  color: var(--text);
+  text-align: left;
+}
+.reminder-queue-button > span, .whatsapp-link > span { min-width: 0; }
+.reminder-queue-button strong, .reminder-queue-button small, .whatsapp-link small { display: block; }
+.contact-panel { margin: 18px 0; padding: 16px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--sky); }
+.contact-panel h2 { margin: 0 0 3px; font-size: 18px; }
+.contact-panel p { margin: 0; }
+.whatsapp-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.whatsapp-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 48px;
+  padding: 8px 12px;
+  border: 1px solid var(--brand);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--brand);
+  font-weight: 600;
+  text-decoration: none;
+}
+.whatsapp-link small { color: var(--muted); font-weight: 400; }
+.whatsapp-link.compact { flex: 1 1 9em; }
+.contact-slot { margin: 14px 0; padding: 8px 14px 14px; border: 1px solid var(--line); border-radius: 14px; }
+.contact-slot legend { padding: 0 6px; font-weight: 650; }
+.reminder-list { display: grid; gap: 10px; margin-top: 16px; }
+.reminder-row { padding: 14px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); }
+.reminder-row > div:first-child { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 5px 12px; }
+.reminder-row > button { width: 100%; margin-top: 10px; }
 .child-layout { display: grid; gap: 12px; }
 .child-overview, .child-contributions, .collection-options, .collection-confirmation { min-width: 0; }
 .access-indicator {

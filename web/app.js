@@ -1,5 +1,5 @@
 import { installUpdates } from '/pwa-update.js';
-import { name, money, decimal, parseMoney, sortChildren, unpaid, roundUp, automaticAllocations, collectionResult, expensePreview } from './helpers.mjs';
+import { name, money, decimal, parseMoney, sortChildren, unpaid, roundUp, automaticAllocations, collectionResult, expensePreview, whatsappReminder, whatsappUrl } from './helpers.mjs';
 import { icon } from './icons.mjs';
 
 const $ = selector => document.querySelector(selector);
@@ -16,7 +16,7 @@ const labels = { collection: 'Încasare', payment: 'Bani dați', credit_apply: '
   fund_advance: 'Sumă avansată fondului', advance_repayment: 'Restituire sumă avansată', reversal: 'Corecție' };
 const typeLabels = { fixed: 'Sumă fixă / copil', split: 'Total împărțit', quantity: 'Cantitate × preț' };
 const reportTypeLabels = { class: 'Situația clasei', matrix: 'Tabelul contribuțiilor', expense: 'Situația unei cheltuieli', child: 'Fișa copilului' };
-const writeActions = new Set(['add-child', 'edit-child', 'bulk-children', 'add-expense', 'edit-expense', 'payment', 'fund-advance', 'repay-advance', 'attach-document',
+const writeActions = new Set(['add-child', 'edit-child', 'edit-contacts', 'edit-reminder-contact', 'whatsapp-reminders', 'bulk-children', 'add-expense', 'edit-expense', 'payment', 'fund-advance', 'repay-advance', 'attach-document',
   'expense-payment', 'apply-credit', 'refund', 'report-class', 'report-matrix', 'report-expense', 'report-child',
   'replace-report', 'reverse', 'cancel-expense', 'remove-logo', 'add-classroom']);
 const pendingKey = 'casierul.pending.v1';
@@ -40,6 +40,7 @@ const child = () => state?.children.find(c => c.id === childId);
 const activeChildren = () => sortChildren(state.children.filter(c => c.active));
 const classroomAccess = () => classrooms.find(item => item.id === classroomId);
 const canWrite = () => classroomAccess()?.role === 'treasurer';
+const contactsFor = id => (state?.contacts || []).filter(contact => contact.childId === id).sort((a, b) => a.position - b.position);
 const accessLabel = () => ({ parent: 'Părinte · doar citire', auditor: 'Auditor · doar citire' }[classroomAccess()?.role] || 'Casier');
 const fileSize = bytes => bytes < 1024 ? `${bytes} B` : bytes < 1024 * 1024 ? `${new Intl.NumberFormat('ro-RO', { maximumFractionDigits: 0 }).format(bytes / 1024)} KB`
   : `${new Intl.NumberFormat('ro-RO', { maximumFractionDigits: 1 }).format(bytes / 1024 / 1024)} MB`;
@@ -244,7 +245,7 @@ function render() {
 function renderRoster() {
   const parent = classroomAccess()?.role === 'parent', hasChildren = state.children.length > 0;
   $('#main').innerHTML = `${welcomeBanner()}<div class="roster-heading"><div><h1>${parent ? 'Situația copilului' : 'Copiii clasei'}</h1><p class="caption">${canWrite() ? 'Alege un copil pentru a înregistra o contribuție.' : 'Contribuții, sume de achitat și avansuri.'}</p></div>${canWrite() ? `<details class="roster-tools" ${hasChildren ? '' : 'open'}><summary>${icon('plus')}<span>Gestionează copiii</span></summary><div class="toolbar"><button data-action="add-child">+ Adaugă un copil</button><button data-action="bulk-children">Adaugă lista</button></div></details>` : ''}</div>
-  ${hasChildren ? `<label class="caption" for="child-search">Caută un copil</label><div class="roster-search">${icon('search')}<input id="child-search" type="search" placeholder="Nume sau prenume" value="${esc(search)}" autocomplete="off"></div><div id="roster-list" class="children"></div>${canWrite() ? `<label class="check caption"><input id="show-archived" type="checkbox" ${showArchived ? 'checked' : ''}>Arată și copiii arhivați</label>` : ''}` : `<div class="empty"><h2>${canWrite() ? 'Începem cu copiii clasei' : 'Situația copilului va apărea aici'}</h2><p>${canWrite() ? 'Adaugă primul copil sau lipește lista clasei folosind butoanele de mai sus.' : 'Nu există încă un copil disponibil pentru acest acces. Casierul clasei te poate ajuta.'}</p></div>`}`;
+  ${hasChildren ? `${canWrite() ? `<button class="reminder-queue-button" data-action="whatsapp-reminders" ${state.children.some(item => item.active && item.dueMinor > 0) ? '' : 'disabled'}>${icon('message')}<span><strong>Remindere WhatsApp</strong><small>Copiii cu sume de achitat</small></span></button>` : ''}<label class="caption" for="child-search">Caută un copil</label><div class="roster-search">${icon('search')}<input id="child-search" type="search" placeholder="Nume sau prenume" value="${esc(search)}" autocomplete="off"></div><div id="roster-list" class="children"></div>${canWrite() ? `<label class="check caption"><input id="show-archived" type="checkbox" ${showArchived ? 'checked' : ''}>Arată și copiii arhivați</label>` : ''}` : `<div class="empty"><h2>${canWrite() ? 'Începem cu copiii clasei' : 'Situația copilului va apărea aici'}</h2><p>${canWrite() ? 'Adaugă primul copil sau lipește lista clasei folosind butoanele de mai sus.' : 'Nu există încă un copil disponibil pentru acest acces. Casierul clasei te poate ajuta.'}</p></div>`}`;
   renderRosterList();
 }
 function renderRosterList() {
@@ -257,6 +258,14 @@ function resetDraft(c) {
   draft = { target: 'all', amount: c.dueMinor ? decimal(c.dueMinor) : '', round: null, excess: 'change', manual: false, allocations: {}, occurredAt: localNow(), comment: '' };
   dirty = false;
 }
+function whatsappLinks(c, compact = false) {
+  const message = whatsappReminder(c, state.settings.className);
+  return contactsFor(c.id).map(contact => `<a class="whatsapp-link ${compact ? 'compact' : ''}" href="${esc(whatsappUrl(contact.phone, message))}" target="_blank" rel="noopener noreferrer" aria-label="Deschide conversația WhatsApp cu ${esc(contact.label)} pentru ${esc(name(c))}">${icon('message')}<span>${esc(contact.label)}<small>${esc(contact.phone)}</small></span></a>`).join('');
+}
+function contactPanel(c) {
+  const contacts = contactsFor(c.id);
+  return `<section class="contact-panel" aria-labelledby="contact-panel-title"><div class="row"><div><h2 id="contact-panel-title">Contacte WhatsApp</h2><p class="caption">Conversația se deschide cu mesajul completat. Verifici și apeși Trimite în WhatsApp.</p></div><button type="button" data-action="edit-contacts">${contacts.length ? 'Editează' : 'Adaugă'}</button></div>${contacts.length ? `<div class="whatsapp-actions">${whatsappLinks(c)}</div>` : '<p class="caption">Poți salva până la două contacte pentru acest copil.</p>'}</section>`;
+}
 function renderChild() {
   const c = child(); if (!draft) resetDraft(c);
   if (!canWrite()) {
@@ -267,7 +276,7 @@ function renderChild() {
     return;
   }
   const contributions = unpaid(c);
-  $('#main').innerHTML = `<button class="back" data-action="back">‹ Copii</button><div class="row"><h1>${esc(name(c))}</h1><button data-action="edit-child" aria-label="Editează copilul">Editează</button></div><div class="caption">Încasare rapidă${c.active ? '' : ' · Copil arhivat'}</div>${c.creditMinor ? `<div class="summary"><div class="row"><span>Avans disponibil</span><strong>${money(c.creditMinor)}</strong></div><div class="toolbar"><button data-action="apply-credit" ${c.dueMinor ? '' : 'disabled'}>Folosește avansul</button><button data-action="refund">Restituie</button></div></div>` : ''}
+  $('#main').innerHTML = `<button class="back" data-action="back">‹ Copii</button><div class="row"><h1>${esc(name(c))}</h1><button data-action="edit-child" aria-label="Editează copilul">Editează</button></div><div class="caption">Încasare rapidă${c.active ? '' : ' · Copil arhivat'}</div>${contactPanel(c)}${c.creditMinor ? `<div class="summary"><div class="row"><span>Avans disponibil</span><strong>${money(c.creditMinor)}</strong></div><div class="toolbar"><button data-action="apply-credit" ${c.dueMinor ? '' : 'disabled'}>Folosește avansul</button><button data-action="refund">Restituie</button></div></div>` : ''}
   <form id="collection-form"><div class="collection-options">
   ${c.dueMinor ? `<button type="button" class="choice total-choice" data-target="all" aria-pressed="true"><span>Total de achitat</span><span class="total-number">${money(c.dueMinor)}</span></button><div class="section-label">Sau alege o singură contribuție</div><div class="stack">${contributions.map(e => `<button type="button" class="choice" data-target="${esc(e.expenseId)}" aria-pressed="false"><span>${esc(e.title)}<span class="caption" style="display:block">${e.dueDate ? `Termen ${dateText(e.dueDate)}` : 'Fără termen'}</span></span><span class="choice-money">${money(e.remainingMinor)}</span></button>`).join('')}</div><div class="section-label" id="round-label">Alege rapid suma primită</div><div class="rounds" id="rounds">${[10, 50, 100].map(unit => `<button type="button" class="round" data-round="${unit}" aria-pressed="false"><span class="round-value"></span><span class="caption">multiplu de ${unit}</span></button>`).join('')}</div>` : '<div class="empty"><h2>Contribuțiile sunt achitate.</h2><p>Poți primi bani în avans. Introdu suma și alege „Păstrez în avans”.</p></div>'}
   <div class="summary" id="collection-summary" aria-live="polite" aria-atomic="true"></div>
@@ -371,7 +380,7 @@ function renderReports() {
   </svg>`;
   $('#main').innerHTML = `<section class="reports-intro" aria-labelledby="reports-title"><div class="reports-intro-copy"><h1 id="reports-title">Rapoarte de împărtășit</h1><p>Fiecare contribuție, la locul ei. Situații clare, pregătite pentru consultare și partajare.</p></div>${stationery}</section>
     ${canWrite() ? `<div class="report-types">${reportTypes.map(item => `<button class="card card-button report-type report-type-${item.type}" data-action="report-${item.type}" ${item.available ? '' : 'disabled'}><span class="report-icon">${icon(item.icon)}</span><span class="report-type-copy"><h3>${item.title}</h3><span class="caption">${item.description}</span></span></button>`).join('')}</div>` : '<p>Consultă, descarcă sau partajează rapoartele emise de casier la care ai acces.</p>'}
-    <section class="report-archive" aria-labelledby="report-archive-title"><div class="report-archive-heading"><h2 id="report-archive-title">${icon('reports')}Rapoarte emise</h2></div>
+    <section class="report-archive" aria-labelledby="report-archive-title"><div class="report-archive-heading"><h2 id="report-archive-title">${icon('reports')}Rapoarte emise</h2></div><p class="caption">„Partajează PDF” deschide selectorul telefonului; de acolo poți alege WhatsApp și grupul părinților.</p>
       <div class="stack report-archive-list">${reports.length ? reports.map(report => `<article class="card report-card ${report.replacedById ? 'replaced' : ''}">
         <div class="row"><h3>${esc(reportTypeLabels[report.type])}</h3><span class="badge">${report.replacedById ? 'Înlocuit' : 'Emis'}</span></div>
         <div>${esc(report.subjectLabel)}</div><div class="caption">${dateText(report.createdAt)}</div>
@@ -610,6 +619,23 @@ function childModal(edit = false) {
   const c = edit ? child() : null;
   openModal(edit ? 'edit-child' : 'add-child', edit ? 'Editează copilul' : 'Adaugă un copil', `${field('Nume de familie', 'lastName', c?.lastName || '', 'required maxlength="80" autocomplete="family-name"')}${field('Prenume', 'firstName', c?.firstName || '', 'required maxlength="80" autocomplete="given-name"')}${c ? `<label class="check"><input type="checkbox" name="active" ${c.active ? 'checked' : ''}>Copil activ în clasă</label><p class="caption">Arhivarea ascunde copilul din lista principală. Datoriile, avansul și istoricul rămân în registru.</p>` : ''}`, 'Salvează', { childId: c?.id });
 }
+function contactsModal(targetId = childId) {
+  const c = state.children.find(item => item.id === targetId);
+  if (!c) return;
+  const contacts = contactsFor(c.id);
+  const slot = index => {
+    const contact = contacts[index];
+    return `<fieldset class="contact-slot"><legend>Contact ${index + 1}</legend>${field('Nume sau rol', `contactLabel${index + 1}`, contact?.label || '', 'maxlength="80" placeholder="Mama, tata, tutore…"')}${field('Număr WhatsApp', `contactPhone${index + 1}`, contact?.phone || '', 'type="tel" inputmode="tel" autocomplete="tel" maxlength="40" placeholder="07xx xxx xxx"')}</fieldset>`;
+  };
+  openModal('contacts', `Contacte pentru ${name(c)}`, `${slot(0)}${slot(1)}<p class="caption">Datele sunt vizibile numai casierilor. Nu apar în rapoarte, exportul JSON sau accesul părinților și auditorilor.</p>`, 'Salvează contactele', { childId: c.id });
+}
+function remindersModal() {
+  const debtors = sortChildren(state.children.filter(item => item.active && item.dueMinor > 0));
+  openModal('whatsapp-reminders', 'Remindere WhatsApp', `<p class="caption">Fiecare buton deschide conversația directă cu situația copilului deja completată. Mesajul se trimite numai după ce îl confirmi în WhatsApp.</p><div class="reminder-list">${debtors.map(c => {
+    const links = whatsappLinks(c, true);
+    return `<article class="reminder-row"><div><strong>${esc(name(c))}</strong><span class="caption">De achitat ${money(c.dueMinor)}</span></div>${links ? `<div class="whatsapp-actions">${links}</div>` : `<button type="button" data-action="edit-reminder-contact" data-id="${esc(c.id)}">Adaugă contact</button>`}</article>`;
+  }).join('')}</div>`, null, { closeLabel: 'Închide' });
+}
 function bulkModal() {
   openModal('bulk-children', 'Adaugă lista clasei', '<p>Un copil pe rând, cu numele de familie și prenumele separate prin punct și virgulă.</p><label>Lista copiilor<textarea name="childrenText" rows="9" required placeholder="Nume de familie; Prenume" spellcheck="false"></textarea></label><p class="caption">Păstrează numele compuse înaintea separatorului. Lista existentă rămâne în registru.</p><div id="bulk-preview" class="preview-list"></div>', 'Adaugă copiii');
 }
@@ -816,6 +842,12 @@ async function submitModal() {
     } else if (modal.type === 'add-child' || modal.type === 'edit-child') {
       path = modal.type === 'add-child' ? '/api/children' : `/api/children/${encodeURIComponent(modal.childId)}`;
       body = { firstName: form.elements.firstName.value.trim(), lastName: form.elements.lastName.value.trim(), ...(modal.type === 'edit-child' ? { active: form.elements.active.checked } : {}) };
+    } else if (modal.type === 'contacts') {
+      path = `/api/children/${encodeURIComponent(modal.childId)}/contacts`;
+      const contacts = [1, 2].map(index => ({ label: form.elements[`contactLabel${index}`].value.trim(), phone: form.elements[`contactPhone${index}`].value.trim() }))
+        .filter(contact => contact.label || contact.phone);
+      if (contacts.some(contact => !contact.label || !contact.phone)) throw new Error('Completează atât numele, cât și numărul fiecărui contact.');
+      body = { contacts };
     } else if (modal.type === 'bulk-children') { path = '/api/children/bulk'; body = { children: parseBulk(form.elements.childrenText.value) }; }
     else if (modal.type === 'expense' || modal.type === 'edit-expense') {
       path = modal.type === 'expense' ? '/api/expenses' : `/api/expenses/${encodeURIComponent(modal.expenseId)}`;
@@ -945,6 +977,9 @@ document.addEventListener('click', async event => {
     case 'add-classroom': classroomModal(); break;
     case 'add-child': childModal(); break;
     case 'edit-child': childModal(true); break;
+    case 'edit-contacts': contactsModal(); break;
+    case 'edit-reminder-contact': contactsModal(button.dataset.id); break;
+    case 'whatsapp-reminders': remindersModal(); break;
     case 'bulk-children': bulkModal(); break;
     case 'add-expense': expenseModal(); break;
     case 'edit-expense': expenseModal(state.expenses.find(expense => expense.id === button.dataset.id)); break;

@@ -41,8 +41,43 @@ test('empty real state has no sample records and settings persist across reopen'
   assert.deepEqual(reopened.getState(), state);
   const exported = reopened.exportData();
   assert.equal(exported.format, 'casierul-clasei');
-  assert.deepEqual(exported.state, state);
+  const { contacts: _contacts, ...publicState } = state;
+  assert.deepEqual(exported.state, publicState);
   assert.equal(JSON.stringify(exported).includes('device-test'), false);
+});
+
+test('up to two child contacts are normalized, replaceable, private to exports and excluded from report snapshots', async t => {
+  const { ledger, path, post, child } = fixture(t, true);
+  const id = child('Ana', 'Avram');
+  post('child.contacts.update', { childId: id, contacts: [
+    { label: 'Mama', phone: '0722 111 222' },
+    { label: 'Tata', phone: '0040 733-444-555' },
+  ] });
+  assert.deepEqual(ledger.getState().contacts, [
+    { childId: id, position: 1, label: 'Mama', phone: '+40722111222' },
+    { childId: id, position: 2, label: 'Tata', phone: '+40733444555' },
+  ]);
+  const exportText = JSON.stringify(ledger.exportData());
+  assert.equal(exportText.includes('Mama'), false);
+  assert.equal(exportText.includes('40722111222'), false);
+  const issued = await ledger.createReport({ requestId: randomUUID(), type: 'child', subjectId: id }, actor);
+  const db = new DatabaseSync(path);
+  try {
+    const snapshot = db.prepare('SELECT snapshot FROM reports WHERE id = ?').get(issued.report.id).snapshot;
+    assert.equal(snapshot.includes('Mama'), false);
+    assert.equal(snapshot.includes('40722111222'), false);
+  } finally { db.close(); }
+  assert.throws(() => post('child.contacts.update', { childId: id, contacts: [
+    { label: 'Unu', phone: '0722111222' }, { label: 'Doi', phone: '+40722111222' },
+  ] }), status(400));
+  assert.throws(() => post('child.contacts.update', { childId: id, contacts: [
+    { label: 'Unu', phone: 'abc' },
+  ] }), status(400));
+  assert.throws(() => post('child.contacts.update', { childId: id, contacts: [
+    { label: '1', phone: '0711111111' }, { label: '2', phone: '0722222222' }, { label: '3', phone: '0733333333' },
+  ] }), status(400));
+  post('child.contacts.update', { childId: id, contacts: [] });
+  assert.deepEqual(ledger.getState().contacts, []);
 });
 
 test('expenses freeze exact fixed, split and quantity contributions with opt-out', t => {

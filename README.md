@@ -48,6 +48,8 @@ Datele afișate în capturi sunt integral sintetice.
 3. Din **Copiii clasei → Gestionează copiii**, adaugă copiii individual sau lipește lista, câte un `Nume de familie; Prenume` pe linie.
 4. Creează cheltuielile și selectează participanții: sumă fixă/copil, total împărțit sau cantitate/copil × preț unitar.
 
+Pentru remindere, deschide un copil și salvează unul sau două contacte WhatsApp. Butonul contactului deschide conversația directă cu situația copilului completată; mesajul rămâne sub controlul tău și se trimite numai după confirmarea din WhatsApp. Din lista copiilor, **Remindere WhatsApp** grupează toți copiii activi care au sume de achitat și arată contactele lipsă.
+
 La o cheltuială împărțită, poți exclude copiii care nu participă până la prima contribuție încasată. Totalul rămâne neschimbat, iar aplicația recalculează automat partea fiecărui copil, inclusiv dacă plata furnizorului sau un avans temporar au fost deja înregistrate.
 
 Invitațiile pot acorda trei tipuri de acces. **Casierul** vede și modifică întregul registru. **Părintele** are acces doar pentru citire la situația generală și la datele copilului asociat, fără numele sau tranzacțiile celorlalți copii. **Auditorul** vede registrul complet și rapoartele, dar nu poate modifica sau exporta datele brute. Accesul doar pentru citire poate expira automat la data aleasă în consola PWA.
@@ -71,13 +73,14 @@ Avansul poate acoperi ulterior alte contribuții sau poate fi restituit. Folosir
 ## Evidență
 
 - **Copii:** contribuții, restanțe, avansuri și istoricul fiecărui copil.
+- **Remindere WhatsApp:** până la două contacte numite pentru fiecare copil și deschiderea conversației directe cu un mesaj privat precompletat. Aplicația nu trimite automat și nu marchează mesajul ca livrat.
 - **Cheltuieli:** participanți, contribuții calculate, termen, sume încasate și plătite. O cheltuială poate fi editată; suma, calculul și participanții se blochează cât timp are operațiuni financiare active, iar denumirea, datele și comentariile rămân editabile. Pentru calculul pe cantități, cantitatea unui participant existent poate fi corectată dacă noua contribuție nu scade sub suma deja achitată.
 - **Registru:** numerar disponibil, încasări, bani dați, restituiri, corecții și sume avansate temporar fondului. O sumă plătită personal poate fi asociată unei cheltuieli și restituită apoi parțial sau integral; aplicația arată separat cât îi mai datorează clasa persoanei care a avansat banii.
 - **Documente justificative:** atașează PDF-uri sau fotografii la cheltuieli și la plățile din registru. Fiecare document are amprentă SHA-256 și poate rămâne doar pentru casier/auditori sau poate fi făcut vizibil părinților cu acces la clasă. Limitele sunt 10 MB per fișier, 25 de documente per înregistrare și 200 MB per clasă.
 - **Corecții:** operațiunile confirmate se anulează printr-o înregistrare separată, cu motiv, păstrând istoricul. O cheltuială fără încasări sau plăți active poate fi anulată și recreată.
 - **Export:** copie JSON a datelor și istoricului, fără credentiale. Restaurarea automată din JSON nu este inclusă.
 - **Identitate vizuală:** sigla școlii și sigla clasei configurate din aplicație apar compact în antetul aplicației și în antetul PDF-urilor.
-- **Rapoarte PDF:** situația clasei, **Tabelul contribuțiilor** și rapoarte pentru fiecare copil sau cheltuială, cu vizualizare directă în aplicație, partajare și descărcare; verde pentru achitat, galben pentru parțial, roșu pentru neachitat, albastru pentru solduri și bani dați mai departe. Fiecare PDF păstrează siglele și culorile de la momentul emiterii.
+- **Rapoarte PDF:** situația clasei, **Tabelul contribuțiilor** și rapoarte pentru fiecare copil sau cheltuială, cu vizualizare directă în aplicație, partajare și descărcare; pe telefoanele compatibile, **Partajează PDF** deschide selectorul sistemului, unde poți alege WhatsApp și grupul părinților. Verde indică achitat, galben parțial, roșu neachitat, iar albastru solduri și bani dați mai departe. Fiecare PDF păstrează siglele și culorile de la momentul emiterii.
 
 Rapoartele au mici accente de papetărie: caiet, avion de hârtie și culori pastelate pentru fiecare tip. PDF-urile nou emise folosesc aceleași motive discrete în antet și subsol, păstrând sumele și tabelele clare. PDF-urile deja arhivate rămân exact în forma în care au fost emise.
 
@@ -85,7 +88,7 @@ Rapoartele au mici accente de papetărie: caiet, avion de hârtie și culori pas
 
 Previzualizarea PDF folosește lățimea disponibilă și se redesenează clar la rotirea tabletei sau redimensionarea ferestrei, păstrând poziția de derulare și fără o nouă descărcare a documentului.
 
-Sumele sunt stocate în bani întregi; împărțirea unui total distribuie exact și ultimii bani. Contribuțiile confirmate nu se recalculează automat; modificările permise se fac explicit prin editarea cheltuielii. Numerarul disponibil include avansurile copiilor și sumele avansate temporar fondului, iar datoriile aferente sunt afișate separat. „Sold după restituirea sumelor avansate” arată ce ar rămâne după stingerea lor. Documentele sunt incluse în copiile de siguranță SQLite; exportul JSON conține numai metadatele lor.
+Sumele sunt stocate în bani întregi; împărțirea unui total distribuie exact și ultimii bani. Contribuțiile confirmate nu se recalculează automat; modificările permise se fac explicit prin editarea cheltuielii. Numerarul disponibil include avansurile copiilor și sumele avansate temporar fondului, iar datoriile aferente sunt afișate separat. „Sold după restituirea sumelor avansate” arată ce ar rămâne după stingerea lor. Documentele și contactele sunt incluse în copiile de siguranță SQLite. Exportul JSON conține numai metadatele documentelor și exclude contactele. Contactele sunt trimise doar dispozitivelor cu rol de casier și nu intră în PDF-uri sau în instantaneele rapoartelor.
 
 Salvarea necesită internet. La pierderea răspunsului, **Verifică / reîncearcă** confirmă aceeași cerere fără dublarea încasării. Modificările făcute pe alt dispozitiv cer verificarea sumelor înainte de salvare. Nu există coadă de operațiuni offline.
 
