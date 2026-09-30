@@ -5,7 +5,7 @@
 - Public: `https://casierul-clasei.zandaulion.com`, prin Cloudflare Tunnel către `http://127.0.0.1:8018`.
 - Aplicația Node rulează ca serviciu systemd de utilizator: `casierul-clasei.service`.
 - API-ul de administrare ascultă separat pe `127.0.0.1:8118`. Portul public răspunde întotdeauna cu 404 pentru `/api/admin` și subrutele lui.
-- Consola privată folosește prefixul `/casierul-clasei`; Caddy injectează credentialul de administrare din configurația privată. Acesta nu este trimis în paginile aplicației sau ale consolei.
+- Consola de invitații (opțională, vezi mai jos) folosește prefixul `/casierul-clasei` pe un ascultător Caddy privat; Caddy injectează credentialul de administrare din configurația privată. Acesta nu este trimis în paginile aplicației sau ale consolei.
 - Serviciul `casierul-clasei-preview.service` păstrează previzualizarea în directorul `preview/`, ca variantă de revenire pentru instalarea inițială.
 
 ## Instalare pe alt server
@@ -21,6 +21,30 @@ Serviciul systemd de utilizator trebuie să poată porni după restart fără au
 ```
 sudo loginctl enable-linger numele-utilizatorului
 ```
+
+## Consola de invitații (opțional)
+
+[pwa-invite-console](https://github.com/zandaulion/pwa-invite-console) este o pagină statică ce administrează invitațiile și dispozitivele mai multor aplicații cu același mecanism de invitații, dintr-un singur loc. Nu este necesară: `scripts/admin.mjs` acoperă aceleași operațiuni din linia de comandă. Merită instalată când casierul preferă o interfață grafică sau când pe același server rulează mai multe aplicații de acest fel.
+
+Modelul de securitate: pagina nu conține niciun secret. Un reverse proxy privat (Caddy, accesibil doar din tailnet sau după autentificare) primește cererile consolei și adaugă antetul `X-Admin-Token` pe drum spre `127.0.0.1:8118`. Oricine poate deschide consola are drepturi depline de administrare, deci ascultătorul ei nu trebuie expus public niciodată.
+
+Conectarea aplicației, făcută automat de `deploy.sh` când găsește `Caddyfile`-ul și `apps.json`:
+
+1. Ruta pe ascultătorul privat (generată de `deploy/install-console.py` din `ADMIN_TOKEN`):
+
+   ```caddyfile
+   handle /casierul-clasei/api/* {
+       uri strip_prefix /casierul-clasei
+       reverse_proxy 127.0.0.1:8118 {
+           header_up -X-Admin
+           header_up X-Admin-Token <ADMIN_TOKEN din app.env>
+       }
+   }
+   ```
+
+2. Intrarea aplicației în `apps.json` al consolei, copiată din `deploy/console-entry.json` (roluri, textele invitațiilor, nota despre cele două activări). La fiecare publicare intrarea este actualizată, deci textele se editează aici, nu în consolă.
+
+Căile implicite sunt `/etc/caddy/Caddyfile` și `/var/www/pwa-invite-console/apps.json`; ruta este inserată înaintea unei linii-ancoră din blocul privat. Pentru altă amplasare, exportă `CASIERUL_CADDYFILE`, `CASIERUL_CONSOLE_APPS` și `CASIERUL_CONSOLE_ANCHOR` (o linie care apare exact o dată în blocul privat al site-ului) înainte de `./deploy.sh`. Scriptul salvează configurația Caddy înainte de modificare, o validează și o restaurează dacă validarea eșuează.
 
 ## Publicare
 
