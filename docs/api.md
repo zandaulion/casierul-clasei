@@ -68,9 +68,10 @@ Business endpoints accept `?classroom=<id>`. Omitting it selects `default` when 
  revision: 0,
  settings: {schoolName:'',className:'',schoolYear:'',openingBalanceMinor:0,paymentRevolutUrl:'',paymentBeneficiary:'',paymentIban:'',hasSchoolLogo:false,hasClassLogo:false,schoolLogoVersion:null,classLogoVersion:null},
  children: [{id,firstName,lastName,active,creditMinor,dueMinor,
-   contributions:[{expenseId,title,dueDate,amountMinor,paidMinor,coveredMinor,adjustedMinor,remainingMinor}]}],
+   contributions:[{expenseId,title,dueDate,amountMinor,paidMinor,directMinor,coveredMinor,adjustedMinor,remainingMinor}]}],
  contacts: [{childId,position,label,phone}], // treasurer state only; omitted for auditor/parent
- expenses: [{id,title,type,amountMinor,totalMinor,collectedMinor,coveredMinor,adjustedMinor,paidOutMinor,
+ expenses: [{id,title,type,amountMinor,totalMinor,collectedMinor,directMinor,coveredMinor,adjustedMinor,paidOutMinor,dueMinor,
+   latestPayment:{id,amountMinor,destination,occurredAt}|null,collectedAfterLatestPaymentMinor,directAfterLatestPaymentMinor,
    occurredAt,dueDate,comment,cancelled,
    contributions:[{childId,amountMinor,quantity}]}],
  transactions: [{id,type,occurredAt,createdAt,childId,expenseId,destination,comment,
@@ -79,7 +80,7 @@ Business endpoints accept `?classroom=<id>`. Omitting it selects `default` when 
  attachments: [{id,entityType,entityId,filename,mimeType,size,sha256,visibility,createdAt,createdByLabel}],
  reports: [{id,serial,code,type,subjectId,subjectLabel,createdAt,stateRevision,createdByLabel,
    replacesId,replacedById,filename,sha256,size}],
- summary:{balanceMinor,netBalanceMinor,totalReceivedMinor,totalPaidMinor,totalCreditMinor,totalDueMinor,totalAdjustedMinor,totalCoveredMinor,
+ summary:{balanceMinor,netBalanceMinor,totalReceivedMinor,totalDirectMinor,totalPaidMinor,totalCreditMinor,totalDueMinor,totalAdjustedMinor,totalCoveredMinor,
    totalAdvancedMinor,totalAdvanceRepaidMinor,totalAdvanceOutstandingMinor}
 }
 ```
@@ -87,6 +88,8 @@ Business endpoints accept `?classroom=<id>`. Omitting it selects `default` when 
 `GET /api/branding/school` and `GET /api/branding/class` return configured PNG images to authenticated devices. Logo bytes stay in SQLite and out of `/api/state` and JSON export payloads. Issued PDFs embed the current images and remain immutable after branding changes.
 
 Types: collection, direct_payment, payment, credit_apply, rounding_adjustment, refund, fund_advance, advance_repayment, advance_waiver, reversal. `amountMinor` is gross received for collections, paid straight to the named beneficiary for `direct_payment`, spent for payments, applied for credit, waived for a rounding adjustment, refunded for refunds, advanced into the fund for `fund_advance`, repaid to the lender for `advance_repayment`, and permanently assigned from an advance liability to a child's contribution for `advance_waiver`. Sum of retained collections minus allocations, credit applications, and refunds = child credit. Cash balance includes opening + retained collections + temporary fund advances − outgoing payments − child refunds − advance repayments; direct payments, rounding adjustments, and advance waivers never move cash. `netBalanceMinor` subtracts outstanding temporary advances from cash. Applying child credit is no cash movement. A direct payment partially or fully settles exactly one contribution and records the recipient separately from fund cash. A collection may atomically use any amount from the child's available credit alongside the new cash. A rounding settlement must close exact contribution remainders totalling at most 100 bani. An advance waiver may cover part or all of an unpaid contribution up to the selected advance's outstanding amount; it reduces that liability and reports the source separately from parent payments. A reversal records and negates the target's effects once. An advance with active repayments or waivers can only be reversed after those transactions are reversed. Reject operations that make child credit, contributions, or an advance balance negative. Expenses with opted-out children simply omit them from participants; split expenses divide exactly in integer bani with deterministic remainder distribution. Child debts are not netted against credit until explicit application. Default occurredAt to now; validate dates and request sizes. Do not silently change confirmed contributions later.
+
+For each expense, `latestPayment` is the newest active linked `payment` by operation time, creation time, and id. `collectedAfterLatestPaymentMinor` sums only later cash-collection allocations to that expense; it excludes child-credit applications because those do not bring new cash into the fund. `directAfterLatestPaymentMinor` reports later direct beneficiary payments separately. Reversing the latest linked payment makes the previous active payment the interval boundary.
 
 ## Frontend
 
