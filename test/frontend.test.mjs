@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { money, parseMoney, roundUp, collectionResult, creditSettlement, smallSettlement, expensePreview, sortChildren, unpaid, whatsappReminder, whatsappUrl, reportShareMessage } from '../web/helpers.mjs';
+import { money, parseMoney, roundUp, collectionResult, creditSettlement, smallSettlement, expensePreview, sortChildren, unpaid, whatsappReminder, whatsappUrl, whatsappShareUrl, paymentShareItems, reportShareMessage } from '../web/helpers.mjs';
 const child = { dueMinor: 8500, contributions: [
   { expenseId: 'books', title: 'Culegeri', dueDate: '2026-10-02', remainingMinor: 6000 },
   { expenseId: 'trip', title: 'Excursie', dueDate: '2026-10-01', remainingMinor: 2500 },
@@ -96,6 +96,16 @@ test('WhatsApp reminders contain only the selected child situation and use a dir
   assert.match(message, /Avans disponibil: 5 lei/u);
   assert.equal(whatsappUrl('+40722111222', message), `https://wa.me/40722111222?text=${encodeURIComponent(message)}`);
   assert.equal(whatsappUrl('număr invalid', message), '');
+});
+test('payment details become three separate WhatsApp messages for easy links and copying', () => {
+  const items = paymentShareItems({ className: 'IX A', paymentRevolutUrl: 'https://revolut.me/danielxxv',
+    paymentBeneficiary: 'Daniel Valentin Marin', paymentIban: 'RO15REVO0000194617944482' });
+  assert.deepEqual(items.map(item => item.key), ['revolut', 'beneficiary', 'iban']);
+  assert.equal(items[0].message, 'Detalii de plată – IX A\nRevolut: https://revolut.me/danielxxv\nDetalii plată: numele elevului');
+  assert.equal(items[1].message, 'Daniel Valentin Marin');
+  assert.equal(items[2].message, 'RO15REVO0000194617944482');
+  assert.equal(whatsappShareUrl(items[2].message), `https://wa.me/?text=${encodeURIComponent(items[2].message)}`);
+  assert.deepEqual(paymentShareItems({ className: 'IX A' }), []);
 });
 test('report sharing messages describe aggregate and private PDFs without inventing live values', () => {
   assert.equal(reportShareMessage({ type: 'class', code: 'R-0012', subjectLabel: 'III B' }, 'III B'),

@@ -33,8 +33,14 @@ test('empty real state has no sample records and settings persist across reopen'
   assert.deepEqual(ledger.getState().children, []);
   assert.deepEqual(ledger.getState().transactions, []);
   assert.equal(ledger.getState().summary.balanceMinor, 0);
-  post('settings.update', { schoolName: 'Școala 1', className: 'III B', schoolYear: '2026–2027', openingBalanceMinor: 12345 });
+  post('settings.update', { schoolName: 'Școala 1', className: 'III B', schoolYear: '2026–2027', openingBalanceMinor: 12345,
+    paymentRevolutUrl: 'revolut.me/danielxxv', paymentBeneficiary: 'Daniel Valentin Marin', paymentIban: 'RO15 REVO 0000 1946 1794 4482' });
   const state = ledger.getState();
+  assert.equal(state.settings.paymentRevolutUrl, 'https://revolut.me/danielxxv');
+  assert.equal(state.settings.paymentBeneficiary, 'Daniel Valentin Marin');
+  assert.equal(state.settings.paymentIban, 'RO15REVO0000194617944482');
+  assert.throws(() => post('settings.update', { paymentRevolutUrl: 'https://example.com/danielxxv' }), status(400));
+  assert.throws(() => post('settings.update', { paymentIban: 'RO15REVO0000194617944483' }), status(400));
   ledger.close();
   const reopened = new Ledger(path);
   t.after(() => reopened.close());

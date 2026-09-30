@@ -84,6 +84,9 @@ try {
   await fill('#modal-form [name=schoolName]', 'Școala de verificare');
   await fill('#modal-form [name=className]', 'III A');
   await fill('#modal-form [name=openingBalance]', '0');
+  await fill('#modal-form [name=paymentRevolutUrl]', 'revolut.me/danielxxv');
+  await fill('#modal-form [name=paymentBeneficiary]', 'Daniel Valentin Marin');
+  await fill('#modal-form [name=paymentIban]', 'RO15 REVO 0000 1946 1794 4482');
   await evaluate(`(() => {
     const bytes = Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='), character => character.charCodeAt(0));
     const transfer = new DataTransfer();
@@ -100,6 +103,8 @@ try {
   await saveModal();
   assert.equal(snapshot().settings.hasSchoolLogo, true);
   assert.equal(snapshot().settings.hasClassLogo, true);
+  assert.equal(snapshot().settings.paymentRevolutUrl, 'https://revolut.me/danielxxv');
+  assert.equal(snapshot().settings.paymentIban, 'RO15REVO0000194617944482');
   await until('!document.getElementById("header-school-logo").hidden && !document.getElementById("header-class-logo").hidden', 'configured logos in app header');
   await click('#settings-button');
   await click('[data-action=add-classroom]');
@@ -343,6 +348,11 @@ try {
   await screenshot('ledger');
   await click('[data-tab=reports]');
   await until('document.querySelector("[data-action=report-class]")', 'reports screen');
+  assert.deepEqual(await evaluate('[...document.querySelectorAll("[data-copy-payment]")].map(button => button.dataset.copyPayment)'), ['revolut', 'beneficiary', 'iban']);
+  assert.deepEqual(await evaluate('[...document.querySelectorAll(".payment-detail-actions .whatsapp-link")].map(link => new URL(link.href).searchParams.get("text"))'), [
+    'Detalii de plată – III A\nRevolut: https://revolut.me/danielxxv\nDetalii plată: numele elevului',
+    'Daniel Valentin Marin', 'RO15REVO0000194617944482',
+  ]);
   await click('[data-action=report-matrix]');
   assert.match(await evaluate('document.getElementById("modal-content").textContent'), /numele tuturor copiilor/u);
   await click('[data-action=close-modal]');
@@ -512,7 +522,7 @@ try {
     assert.equal(await evaluate('fetch("/api/auth/me").then(r => r.status)'), 200, 'phone remains signed in independently');
   }
   assert.equal(exceptions.length, 0, JSON.stringify(exceptions));
-  console.log('Browser checks passed: invitation/setup, two-device activation with independent sessions and third-device rejection, logo upload, classroom creation/switching, navigation, roster, direct WhatsApp reminders with two contacts, personalized message plus individual PDF sharing, split opt-out recalculation before the first contribution, expense editing before and after linked money, manual allocation, quick collection with existing child credit and small-difference settlement, lost-response retry across reauthentication, temporary fund advances and repayments, expense/payment document attachments, payment/refund/credit/correction, PDF report generation, in-app viewing and sharing, stale-data protection, reload, offline protection, mobile/dark layout, and PWA worker.');
+  console.log('Browser checks passed: invitation/setup, two-device activation with independent sessions and third-device rejection, logo upload, classroom creation/switching, navigation, roster, direct WhatsApp reminders with two contacts, separate WhatsApp payment details, personalized message plus individual PDF sharing, split opt-out recalculation before the first contribution, expense editing before and after linked money, manual allocation, quick collection with existing child credit and small-difference settlement, lost-response retry across reauthentication, temporary fund advances and repayments, expense/payment document attachments, payment/refund/credit/correction, PDF report generation, in-app viewing and sharing, stale-data protection, reload, offline protection, mobile/dark layout, and PWA worker.');
 } finally {
   if (contextId) await send('Target.disposeBrowserContext', { browserContextId: contextId });
   socket.close();

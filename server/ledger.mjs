@@ -51,6 +51,35 @@ function whatsappPhone(value) {
   return compact;
 }
 
+function revolutLink(value) {
+  const raw = text(value, 'Linkul Revolut.me', 240, false);
+  if (!raw) return '';
+  let parsed;
+  try { parsed = new URL(/^https?:\/\//iu.test(raw) ? raw : `https://${raw}`); }
+  catch { fail('Linkul Revolut.me nu este valid.'); }
+  if (parsed.protocol !== 'https:' || !['revolut.me', 'www.revolut.me'].includes(parsed.hostname.toLowerCase())
+    || parsed.port || parsed.username || parsed.password || !parsed.pathname || parsed.pathname === '/') {
+    fail('Folosește un link complet de forma https://revolut.me/nume.');
+  }
+  parsed.hash = '';
+  return parsed.toString();
+}
+
+function iban(value) {
+  const raw = text(value, 'IBAN-ul', 64, false);
+  if (!raw) return '';
+  const compact = raw.replace(/[\s-]+/gu, '').toUpperCase();
+  if (!/^[A-Z]{2}\d{2}[A-Z0-9]{11,30}$/u.test(compact)) fail('IBAN-ul nu are un format valid.');
+  const rearranged = compact.slice(4) + compact.slice(0, 4);
+  let remainder = 0;
+  for (const character of rearranged) {
+    const digits = /\d/u.test(character) ? character : String(character.charCodeAt(0) - 55);
+    for (const digit of digits) remainder = (remainder * 10 + Number(digit)) % 97;
+  }
+  if (remainder !== 1) fail('IBAN-ul nu trece verificarea de siguranță. Verifică fiecare caracter.');
+  return compact;
+}
+
 function withoutPrivateContacts(state) {
   const { contacts: _contacts, ...safeState } = state;
   return safeState;
@@ -126,9 +155,12 @@ CREATE TABLE IF NOT EXISTS metadata (
   singleton INTEGER PRIMARY KEY CHECK(singleton = 1),
   revision INTEGER NOT NULL CHECK(revision >= 0),
   school_name TEXT NOT NULL, class_name TEXT NOT NULL, school_year TEXT NOT NULL,
-  opening_balance INTEGER NOT NULL CHECK(opening_balance >= 0)
+  opening_balance INTEGER NOT NULL CHECK(opening_balance >= 0),
+  payment_revolut_url TEXT NOT NULL DEFAULT '', payment_beneficiary TEXT NOT NULL DEFAULT '',
+  payment_iban TEXT NOT NULL DEFAULT ''
 ) STRICT;
-INSERT OR IGNORE INTO metadata VALUES (1, 0, '', '', '', 0);
+INSERT OR IGNORE INTO metadata (singleton, revision, school_name, class_name, school_year, opening_balance)
+  VALUES (1, 0, '', '', '', 0);
 CREATE TABLE IF NOT EXISTS children (
   id TEXT PRIMARY KEY, first_name TEXT NOT NULL, last_name TEXT NOT NULL,
   active INTEGER NOT NULL CHECK(active IN (0, 1)), created_at TEXT NOT NULL
@@ -247,6 +279,13 @@ WHEN NOT EXISTS (SELECT 1 FROM contribution_edit_guard WHERE singleton = 1) BEGI
 END;
 `;
 
+function migratePaymentSettings(db) {
+  const columns = new Set(db.prepare("PRAGMA table_info('metadata')").all().map(column => column.name));
+  if (!columns.has('payment_revolut_url')) db.exec("ALTER TABLE metadata ADD COLUMN payment_revolut_url TEXT NOT NULL DEFAULT ''");
+  if (!columns.has('payment_beneficiary')) db.exec("ALTER TABLE metadata ADD COLUMN payment_beneficiary TEXT NOT NULL DEFAULT ''");
+  if (!columns.has('payment_iban')) db.exec("ALTER TABLE metadata ADD COLUMN payment_iban TEXT NOT NULL DEFAULT ''");
+}
+
 function migrateTransactions(db) {
   const table = db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'transactions'").get();
   if (!table?.sql || table.sql.includes("'rounding_adjustment'")) return;
@@ -339,6 +378,7 @@ export class Ledger {
     this.#db = new DatabaseSync(dbPath);
     this.#db.exec('PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000; PRAGMA journal_mode = WAL; PRAGMA synchronous = FULL;');
     this.#db.exec(SCHEMA);
+    migratePaymentSettings(this.#db);
     migrateTransactions(this.#db);
     this.#db.exec('CREATE INDEX IF NOT EXISTS transactions_advance ON transactions(advance_id)');
     migrateReports(this.#db);
@@ -629,7 +669,9 @@ export class Ledger {
     return {
       revision: meta.revision,
       settings: { schoolName: meta.school_name, className: meta.class_name, schoolYear: meta.school_year,
-        openingBalanceMinor: meta.opening_balance, hasSchoolLogo: branding.has('school'), hasClassLogo: branding.has('class'),
+        openingBalanceMinor: meta.opening_balance, paymentRevolutUrl: meta.payment_revolut_url,
+        paymentBeneficiary: meta.payment_beneficiary, paymentIban: meta.payment_iban,
+        hasSchoolLogo: branding.has('school'), hasClassLogo: branding.has('class'),
         schoolLogoVersion: branding.get('school') ?? null, classLogoVersion: branding.get('class') ?? null },
       children, contacts, expenses, advances, attachments: this.#attachments(), transactions: transactions.reverse(),
       summary: { balanceMinor, netBalanceMinor: balanceMinor - totalAdvanceOutstandingMinor,
@@ -734,8 +776,13 @@ export class Ledger {
       const className = body.className === undefined ? old.className : text(body.className, 'Clasa', 80, false);
       const schoolYear = body.schoolYear === undefined ? old.schoolYear : text(body.schoolYear, 'Anul școlar', 40, false);
       const opening = body.openingBalanceMinor === undefined ? old.openingBalanceMinor : integer(body.openingBalanceMinor, 'Soldul inițial');
+      const paymentRevolutUrl = body.paymentRevolutUrl === undefined ? old.paymentRevolutUrl : revolutLink(body.paymentRevolutUrl);
+      const paymentBeneficiary = body.paymentBeneficiary === undefined ? old.paymentBeneficiary : text(body.paymentBeneficiary, 'Numele beneficiarului', 160, false);
+      const paymentIban = body.paymentIban === undefined ? old.paymentIban : iban(body.paymentIban);
       if (state.transactions.length && opening !== old.openingBalanceMinor) fail('Soldul inițial nu se mai poate modifica după prima operațiune financiară.', 409);
-      this.#run('UPDATE metadata SET school_name = ?, class_name = ?, school_year = ?, opening_balance = ? WHERE singleton = 1', schoolName, className, schoolYear, opening);
+      this.#run(`UPDATE metadata SET school_name = ?, class_name = ?, school_year = ?, opening_balance = ?,
+        payment_revolut_url = ?, payment_beneficiary = ?, payment_iban = ? WHERE singleton = 1`,
+      schoolName, className, schoolYear, opening, paymentRevolutUrl, paymentBeneficiary, paymentIban);
       for (const [field, kind, label] of [['schoolLogo', 'school', 'Sigla școlii'], ['classLogo', 'class', 'Sigla clasei']]) {
         if (!Object.hasOwn(body, field)) continue;
         const data = logo(body[field], label);

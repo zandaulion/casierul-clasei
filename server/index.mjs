@@ -173,7 +173,7 @@ function loadAssets(webDir) {
 }
 
 const BUSINESS_ROUTES = [
-  [/^\/api\/settings$/u, 'settings.update', ['schoolName', 'className', 'schoolYear', 'openingBalanceMinor', 'schoolLogo', 'classLogo']],
+  [/^\/api\/settings$/u, 'settings.update', ['schoolName', 'className', 'schoolYear', 'openingBalanceMinor', 'paymentRevolutUrl', 'paymentBeneficiary', 'paymentIban', 'schoolLogo', 'classLogo']],
   [/^\/api\/children$/u, 'child.create', ['firstName', 'lastName']],
   [/^\/api\/children\/bulk$/u, 'children.create', ['children']],
   [/^\/api\/children\/([A-Za-z0-9_-]{1,100})\/contacts$/u, 'child.contacts.update', ['contacts'], 'childId'],
