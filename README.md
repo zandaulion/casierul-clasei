@@ -6,6 +6,23 @@ O atmosferă de comunitate școlară, cu ilustrații discrete, culori calde și 
 
 Aplicația: https://casierul-clasei.zandaulion.com
 
+## In English
+
+**Casierul clasei** (“the class treasurer”) is a self-hosted progressive web app for keeping the money of a school class in order: which child owes what for each expense, what was collected, what was paid out, who advanced money to the fund and what is left. It is built for Romanian schools — the interface, PDF reports and WhatsApp reminders are in Romanian and amounts are in lei — but the server, tests and deployment files are documented in English.
+
+- One Node.js process, one SQLite file per classroom, no external services; PDF reports rendered on the server, no CDN assets in the app.
+- Three roles by invitation code: cashier (full access), parent (read-only, sees only their own child) and auditor (read-only, whole ledger).
+- Financial history is append-only; corrections are new records. Every write is idempotent and protected against concurrent edits from a second device.
+
+Quick start with Docker (behind an HTTPS reverse proxy such as Caddy or Cloudflare Tunnel):
+
+```
+PUBLIC_BASE_URL=https://casierul.example.com ADMIN_TOKEN=$(openssl rand -hex 32) docker compose up -d
+docker compose exec app node scripts/admin.mjs invite "My phone"   # prints the first cashier invitation
+```
+
+Without Docker: Node.js 24+, `npm ci`, `npm start`, then `node scripts/admin.mjs invite`. Configuration is through environment variables (`PUBLIC_BASE_URL`, `ADMIN_TOKEN`, `DATA_DIR`, `PORT`, `COOKIE_SECURE`); `deploy.sh` installs a systemd user service with daily backups. See [docs/operations.md](docs/operations.md), [docs/api.md](docs/api.md), [CONTRIBUTING.md](CONTRIBUTING.md) and [SECURITY.md](SECURITY.md).
+
 ## Capturi de ecran
 
 Datele afișate în capturi sunt integral sintetice. Setul surprinde și contactele WhatsApp, detaliile de plată, totalul de achitat din Tabelul contribuțiilor, istoricul Registrului cu operațiunile recente primele și Ajutorul vizual integrat.

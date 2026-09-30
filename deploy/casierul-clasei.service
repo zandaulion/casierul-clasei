@@ -4,9 +4,9 @@ After=network.target
 
 [Service]
 Type=simple
-WorkingDirectory=~/projects/casierul-clasei
+WorkingDirectory=%h/projects/casierul-clasei
 EnvironmentFile=%h/.config/casierul-clasei/app.env
-ExecStart=/usr/bin/node ~/projects/casierul-clasei/server/index.mjs
+ExecStart=/usr/bin/node %h/projects/casierul-clasei/server/index.mjs
 Restart=on-failure
 RestartSec=3
 NoNewPrivileges=true

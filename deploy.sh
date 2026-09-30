@@ -15,7 +15,13 @@ install -m 0644 "$PROJECT_DIR/deploy/casierul-clasei-backup.service" "$HOME/.con
 install -m 0644 "$PROJECT_DIR/deploy/casierul-clasei-backup.timer" "$HOME/.config/systemd/user/casierul-clasei-backup.timer"
 systemctl --user daemon-reload
 
-sudo -n python3 "$PROJECT_DIR/deploy/install-console.py" "$HOME/.config/casierul-clasei/app.env"
+# The private invitation console (Caddy route + console entry) exists only on the
+# original host; elsewhere invitations are issued with scripts/admin.mjs.
+if [ -f /etc/caddy/Caddyfile ] && [ -f /var/www/pwa-invite-console/apps.json ]; then
+  sudo -n python3 "$PROJECT_DIR/deploy/install-console.py" "$HOME/.config/casierul-clasei/app.env"
+else
+  printf 'Private invitation console not present; use scripts/admin.mjs for invitations.\n'
+fi
 systemctl --user disable --now casierul-clasei-preview.service 2>/dev/null || true
 systemctl --user enable "$SERVICE_NAME"
 systemctl --user restart "$SERVICE_NAME"
