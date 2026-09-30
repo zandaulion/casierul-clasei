@@ -101,7 +101,7 @@ test('payment details become three separate WhatsApp messages for easy links and
   const items = paymentShareItems({ className: 'IX A', paymentRevolutUrl: 'https://revolut.me/danielxxv',
     paymentBeneficiary: 'Daniel Valentin Marin', paymentIban: 'RO15REVO0000194617944482' });
   assert.deepEqual(items.map(item => item.key), ['revolut', 'beneficiary', 'iban']);
-  assert.equal(items[0].message, 'Detalii de plată – IX A\nRevolut: https://revolut.me/danielxxv\nDetalii plată: numele elevului');
+  assert.equal(items[0].message, 'Detalii de plată – IX A\nRevolut: https://revolut.me/danielxxv\nNu ai nevoie de cont Revolut: poți plăti și cu cardul direct din link.\nDetalii plată: numele elevului');
   assert.equal(items[1].message, 'Daniel Valentin Marin');
   assert.equal(items[2].message, 'RO15REVO0000194617944482');
   assert.equal(whatsappShareUrl(items[2].message), `https://wa.me/?text=${encodeURIComponent(items[2].message)}`);
