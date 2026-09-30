@@ -31,9 +31,14 @@
           <select id="classroom-selector" aria-label="Clasa activă" hidden></select>
         </div>
       </div>
-      <button id="settings-button" class="icon-button" data-action="settings" hidden aria-label="Setări">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9.5 3-.7 2.2-2 .9-2.1-.5-2.5 4.3 1.5 1.7v2.3L2.2 15.5l2.5 4.3 2.1-.5 2 .9.7 2.2h5l.7-2.2 2-.9 2.1.5 2.5-4.3-1.5-1.6v-2.3l1.5-1.7-2.5-4.3-2.1.5-2-.9L14.5 3z" transform="translate(0 -.7) scale(1 .98)"/><circle cx="12" cy="12" r="3"/></svg>
-      </button>
+      <div class="top-actions">
+        <button id="help-button" class="icon-button" data-action="help" hidden aria-label="Ajutor">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.7 9a2.5 2.5 0 1 1 3.8 2.1c-1 .6-1.5 1.1-1.5 2.4M12 17h.01"/></svg>
+        </button>
+        <button id="settings-button" class="icon-button" data-action="settings" hidden aria-label="Setări">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9.5 3-.7 2.2-2 .9-2.1-.5-2.5 4.3 1.5 1.7v2.3L2.2 15.5l2.5 4.3 2.1-.5 2 .9.7 2.2h5l.7-2.2 2-.9 2.1.5 2.5-4.3-1.5-1.6v-2.3l1.5-1.7-2.5-4.3-2.1.5-2-.9L14.5 3z" transform="translate(0 -.7) scale(1 .98)"/><circle cx="12" cy="12" r="3"/></svg>
+        </button>
+      </div>
     </header>
     <div id="connection" class="notice" role="status" hidden></div>
     <div id="pending-notice" class="notice warning" role="alert" hidden></div>

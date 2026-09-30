@@ -96,8 +96,9 @@ svg { width: 20px; height: 20px; flex: none; vertical-align: middle; }
   padding: max(20px, env(safe-area-inset-top)) 20px 16px;
   border-bottom: 1px solid var(--line);
 }
-.top-main { display: flex; align-items: center; gap: 11px; min-width: 0; }
+.top-main { display: flex; align-items: center; gap: 11px; min-width: 0; flex: 1; }
 .top-copy { min-width: 0; flex: 1; }
+.top-actions { display: flex; align-items: center; flex: none; }
 .brand { font-weight: 650; letter-spacing: -.015em; }
 .brand-mark {
   display: grid;
@@ -398,6 +399,21 @@ main { min-width: 0; padding: 24px 20px; outline: none; }
 .app.collecting {
   padding-bottom: calc(var(--collection-dock-height, 300px) + 24px + env(safe-area-inset-bottom));
 }
+.collection-heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px; }
+.context-help-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 7px 0;
+  border: 0;
+  background: transparent;
+  color: var(--brand);
+  font-size: 14px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.context-help-link svg { width: 17px; height: 17px; }
 .choice {
   display: flex;
   flex-wrap: wrap;
@@ -699,6 +715,166 @@ summary { min-height: 44px; padding: 10px 0; color: var(--muted); cursor: pointe
 .document-actions { display: flex; gap: 8px; margin-top: 10px; }
 .document-actions a { display: flex; align-items: center; justify-content: center; flex: 1; min-height: 46px; padding: 8px; border: 1px solid var(--line); border-radius: 10px; text-decoration: none; }
 
+/* Help uses the same warm paper colors as the financial screens. */
+.help-intro {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  margin-bottom: 18px;
+  padding: 16px;
+  border-radius: var(--radius);
+  background: var(--sunshine);
+}
+.help-intro-icon {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 46px;
+  flex: 0 0 44px;
+  border-radius: 14px 14px 17px 6px;
+  background: var(--surface);
+  color: var(--brand);
+  transform: rotate(-3deg);
+}
+.help-intro strong { display: block; font-size: 18px; }
+.help-intro p { margin: 3px 0 0; color: var(--muted); font-size: 14px; }
+.help-journey {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 98px), 1fr));
+  gap: 7px;
+  margin: 0 0 18px;
+}
+.help-journey > div {
+  min-width: 0;
+  padding: 10px;
+  border-radius: 13px;
+  background: var(--lavender);
+  text-align: center;
+}
+.help-journey span {
+  display: grid;
+  place-items: center;
+  width: 25px;
+  height: 25px;
+  margin: 0 auto 5px;
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--brand);
+  font-size: 13px;
+  font-weight: 650;
+}
+.help-journey strong, .help-journey small { display: block; }
+.help-journey strong { font-size: 14px; }
+.help-journey small { margin-top: 2px; font-size: 11px; }
+.help-topics { display: grid; gap: 10px; }
+.help-topic, .context-help {
+  margin: 0;
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  border-radius: 15px;
+  background: var(--surface);
+}
+.help-topic > summary, .context-help > summary {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: var(--text);
+  font-weight: 600;
+  list-style: none;
+}
+.help-topic > summary::-webkit-details-marker, .context-help > summary::-webkit-details-marker { display: none; }
+.help-topic > summary::after, .context-help > summary::after {
+  content: "+";
+  margin-left: auto;
+  color: var(--brand);
+  font-size: 21px;
+  font-weight: 400;
+}
+.help-topic[open] > summary::after, .context-help[open] > summary::after { content: "−"; }
+.help-topic > summary > span:first-child {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 36px;
+  flex: 0 0 34px;
+  border-radius: 11px 11px 13px 5px;
+  background: var(--sky);
+  color: var(--brand);
+}
+.help-topic > summary > span:nth-child(2) { min-width: 0; }
+.help-topic > summary strong, .help-topic > summary small { display: block; }
+.help-topic > summary small { margin-top: 1px; font-weight: 400; }
+.help-topic[open], .context-help[open] { padding-bottom: 14px; }
+.help-flow { padding-top: 6px; }
+.help-step {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  width: min(100%, 500px);
+  margin: 0 auto;
+  padding: 12px 14px;
+  border-radius: 15px;
+  background: var(--sky);
+}
+.help-step.tone-green { background: var(--soft); }
+.help-step.help-decision { background: var(--sunshine); }
+.help-step.help-finish { background: var(--soft); }
+.help-step > span:first-child {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 30px;
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--brand);
+  font-size: 14px;
+  font-weight: 650;
+}
+.help-step > span:first-child svg { width: 17px; height: 17px; }
+.help-step > div { min-width: 0; }
+.help-step strong, .help-step small { display: block; }
+.help-step small { margin-top: 2px; }
+.help-arrow {
+  display: grid;
+  place-items: center;
+  min-height: 26px;
+  color: var(--muted);
+  line-height: 1;
+}
+.help-branches { display: grid; gap: 8px; }
+.help-branches.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.help-branches.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.help-branch {
+  min-width: 0;
+  padding: 12px;
+  border-radius: 14px;
+  background: var(--sky);
+}
+.help-branch.help-success { background: var(--soft); }
+.help-branch-label {
+  display: inline-block;
+  margin-bottom: 7px;
+  padding: 3px 7px;
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--brand);
+  font-size: 12px;
+  font-weight: 650;
+}
+.help-branch strong, .help-branch small { display: block; }
+.help-branch small { margin-top: 4px; }
+.help-definitions { margin: 3px 0 0; }
+.help-definitions > div { display: block; padding: 10px 0; border-top: 1px solid var(--line); }
+.help-definitions > div:first-child { border-top: 0; }
+.help-definitions dt { font-weight: 650; }
+.help-definitions dd { margin: 3px 0 0; color: var(--muted); text-align: left; }
+.context-help { margin-top: 16px; background: var(--lavender); }
+.context-help > summary svg { width: 18px; height: 18px; color: var(--brand); }
+.context-help .help-flow { margin-top: 4px; }
+.help-flow.compact .help-step { padding: 10px 12px; }
+.help-flow.compact .help-branch { padding: 10px; }
+
 /* Feedback remains explicit for connection, pending saves, and access. */
 .error { color: var(--error); font-size: 14px; }
 .notice { margin: 14px 20px 0; padding: 13px 15px; border-radius: 14px; background: var(--soft); font-size: 14px; }
@@ -795,6 +971,7 @@ dialog::backdrop { background: #13271e88; }
   main { padding: 20px 14px; }
   .top { padding-inline: 14px; gap: 6px; }
   .top-main { gap: 7px; }
+  .top-actions .icon-button { width: 42px; flex-basis: 42px; }
   .brand { font-size: 15px; }
   .brand-mark { width: 36px; height: 40px; flex-basis: 36px; }
   .header-logos { gap: 3px; }
@@ -822,6 +999,9 @@ dialog::backdrop { background: #13271e88; }
   .section-icon { width: 38px; height: 38px; flex-basis: 38px; }
   dialog { padding: 16px; }
   .logo-grid { grid-template-columns: 1fr; }
+}
+@media (max-width: 520px) {
+  .help-branches.two, .help-branches.three { grid-template-columns: 1fr; }
 }
 
 /* Tablet layouts grow with the viewport and make room for readable cards. */

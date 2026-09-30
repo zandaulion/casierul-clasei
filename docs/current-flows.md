@@ -90,7 +90,14 @@ Inventarul descrie comportamentul disponibil în aplicație la 30 septembrie 202
 - Aplicația poate fi instalată ca PWA. Actualizarea evită întreruperea unui formular modificat sau a unei salvări în curs.
 - Interfața instalată și resursele statice pot porni din cache, dar datele API nu sunt păstrate pentru lucru offline. Orice salvare necesită internet și nu există coadă de operațiuni offline.
 
-## 13. Exportul, backup-ul și operarea
+## 13. Ajutorul general și contextual
+
+- Semnul întrebării din antet deschide ghidul general pentru toate rolurile. Acesta arată traseul principal prin Copii, Cheltuieli, Încasări, Registru și Rapoarte.
+- Ghidul include fluxuri vizuale pentru încasarea banilor și pentru **Nu mai colectez**, plus explicații despre tipurile de avans, corecții, WhatsApp și rapoarte.
+- În fișa copilului, **Cum încasez?** deschide direct fluxul relevant fără să șteargă suma sau repartizarea deja introduse.
+- În formularul **Nu mai colectez**, ajutorul contextual este inclus în aceeași fereastră și explică efectele recalculării și acoperirii din fond.
+
+## 14. Exportul, backup-ul și operarea
 
 - Exportul JSON conține datele de business și istoricul, fără credentiale, contacte sau conținutul documentelor. Nu este un format de restaurare automată.
 - Backup-ul operațional salvează consistent bazele SQLite, inclusiv contactele și documentele. Serviciul instalat creează zilnic copii locale.
