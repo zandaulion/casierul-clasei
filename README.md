@@ -48,7 +48,7 @@ Datele afișate în capturi sunt integral sintetice.
 3. Din **Copiii clasei → Gestionează copiii**, adaugă copiii individual sau lipește lista, câte un `Nume de familie; Prenume` pe linie.
 4. Creează cheltuielile și selectează participanții: sumă fixă/copil, total împărțit sau cantitate/copil × preț unitar.
 
-Pentru remindere, deschide un copil și salvează unul sau două contacte WhatsApp. Butonul contactului deschide conversația directă cu situația copilului completată; mesajul rămâne sub controlul tău și se trimite numai după confirmarea din WhatsApp. Opțional, poți genera fișa individuală și folosi **Partajează mesajul + PDF**: selectorul telefonului primește același mesaj și raportul, iar tu alegi WhatsApp și părintele. Din lista copiilor, **Remindere WhatsApp** grupează toți copiii activi care au sume de achitat și arată contactele lipsă.
+Pentru remindere, deschide un copil și salvează unul sau două contacte WhatsApp. Lista copiilor arată pentru casier dacă fiecare copil are zero, unul sau două numere configurate. Butonul contactului deschide conversația directă cu situația copilului completată; mesajul rămâne sub controlul tău și se trimite numai după confirmarea din WhatsApp. Opțional, poți genera fișa individuală și folosi **Partajează mesajul + PDF**: selectorul telefonului primește același mesaj și raportul, iar tu alegi WhatsApp și părintele. Din lista copiilor, **Remindere WhatsApp** grupează toți copiii activi care au sume de achitat și arată contactele lipsă.
 
 La o cheltuială împărțită, poți exclude copiii care nu participă până la prima contribuție încasată. Totalul rămâne neschimbat, iar aplicația recalculează automat partea fiecărui copil, inclusiv dacă plata furnizorului sau un avans temporar au fost deja înregistrate.
 

@@ -302,6 +302,21 @@ main { min-width: 0; padding: 24px 20px; outline: none; }
 .child > span:first-child { min-width: 0; flex: 1 1 120px; }
 .child-name { display: block; font-size: 18px; font-weight: 650; overflow-wrap: anywhere; }
 .child-first-name { display: block; margin-top: 1px; font-size: 16px; font-weight: 400; overflow-wrap: anywhere; }
+.child-contact-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 7px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: var(--soft);
+  color: var(--brand);
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.35;
+}
+.child-contact-status.missing { background: var(--warning); color: var(--warning-text); }
+.child-contact-status svg { width: 13px; height: 13px; }
 .child-side { flex-shrink: 0; margin-left: auto; text-align: right; }
 .child-side .caption { display: block; margin-top: 4px; font-size: 12px; }
 .paid-status {

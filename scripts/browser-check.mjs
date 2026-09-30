@@ -117,6 +117,7 @@ try {
   await saveModal();
   assert.equal(snapshot().children.length, 3);
   assert.deepEqual(await evaluate('[...document.querySelectorAll(".child-name")].map(e=>e.textContent)'), ['Avram', 'Bălan', 'Exemplu']);
+  assert.deepEqual(await evaluate('[...document.querySelectorAll(".child-contact-status")].map(e=>[e.dataset.contactCount,e.textContent.trim()])'), [['0', 'Fără telefon'], ['0', 'Fără telefon'], ['0', 'Fără telefon']]);
   const anaId = snapshot().children.find(c => c.firstName === 'Ana').id;
   const davidId = snapshot().children.find(c => c.firstName === 'David').id;
   const ioanaId = snapshot().children.find(c => c.firstName === 'Ioana').id;
@@ -234,6 +235,7 @@ try {
   assert.match(decodeURIComponent(new URL(directReminder).searchParams.get('text')), /Avram Ana din III A[\s\S]*Total de achitat: 67,50 lei/u);
   await click('[data-action=back]');
   await until('document.querySelector("[data-action=whatsapp-reminders]")', 'return to reminder queue');
+  assert.deepEqual(await evaluate(`(() => { const status=document.querySelector('[data-child="${anaId}"] .child-contact-status'); return [status.dataset.contactCount,status.textContent.trim()]; })()`), ['2', '2 telefoane']);
   await click('[data-action=whatsapp-reminders]');
   assert.equal(await evaluate('document.querySelectorAll(".reminder-row").length'), 3);
   assert.equal(await evaluate('document.querySelectorAll(".reminder-row .whatsapp-link").length'), 2);

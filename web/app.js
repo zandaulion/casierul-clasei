@@ -252,7 +252,11 @@ function renderRosterList() {
   if (!$('#roster-list')) return;
   const normalize = value => value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('ro');
   const children = sortChildren(state.children).filter(c => (showArchived || c.active) && normalize(name(c)).includes(normalize(search)));
-  $('#roster-list').innerHTML = children.length ? children.map(c => `<button class="child" data-child="${esc(c.id)}"><span><span class="child-name">${esc(c.lastName)}</span><span class="child-first-name">${esc(c.firstName)}</span>${c.active ? '' : '<span class="caption">Arhivat</span>'}</span><span class="child-side">${c.dueMinor ? `<span class="amount due-status">${money(c.dueMinor)}</span><span class="caption">De achitat</span>` : `<span class="amount paid-status">${icon('check')}Achitat</span>`}${c.creditMinor ? `<span class="caption">Avans ${money(c.creditMinor)}</span>` : ''}</span></button>`).join('') : '<div class="empty"><p>Nu am găsit acest nume. Încearcă numele de familie sau prenumele.</p></div>';
+  $('#roster-list').innerHTML = children.length ? children.map(c => {
+    const contactCount = contactsFor(c.id).length;
+    const contactStatus = canWrite() ? `<span class="child-contact-status ${contactCount ? '' : 'missing'}" data-contact-count="${contactCount}">${icon('phone')}${contactCount ? (contactCount === 1 ? '1 telefon' : `${contactCount} telefoane`) : 'Fără telefon'}</span>` : '';
+    return `<button class="child" data-child="${esc(c.id)}"><span><span class="child-name">${esc(c.lastName)}</span><span class="child-first-name">${esc(c.firstName)}</span>${c.active ? '' : '<span class="caption">Arhivat</span>'}${contactStatus}</span><span class="child-side">${c.dueMinor ? `<span class="amount due-status">${money(c.dueMinor)}</span><span class="caption">De achitat</span>` : `<span class="amount paid-status">${icon('check')}Achitat</span>`}${c.creditMinor ? `<span class="caption">Avans ${money(c.creditMinor)}</span>` : ''}</span></button>`;
+  }).join('') : '<div class="empty"><p>Nu am găsit acest nume. Încearcă numele de familie sau prenumele.</p></div>';
 }
 function resetDraft(c) {
   draft = { target: 'all', amount: c.dueMinor ? decimal(c.dueMinor) : '', round: null, excess: 'change', manual: false, allocations: {}, occurredAt: localNow(), comment: '' };
