@@ -170,20 +170,18 @@ function collectionHelpFlow(compact = false) {
   </div>`;
 }
 
-function stopCollectionHelpFlow(compact = false, { canRecalculate = true, canCover = true } = {}) {
+function stopCollectionHelpFlow(compact = false, { canRecalculate = true, canCover = true, canRound = true } = {}) {
   const branches = `${canRecalculate ? '<div class="help-branch help-success"><span class="help-branch-label">Nu participă</span><strong>Exclude și recalculează</strong><small>Pentru o cheltuială împărțită eligibilă, totalul rămâne același și părțile celorlalți se refac.</small></div>' : ''}
+    ${canRound ? '<div class="help-branch"><span class="help-branch-label">Diferență mică</span><strong>Ajustează rotunjirea</strong><small>Închizi un rest de cel mult 1 leu după o încasare parțială, fără să modifici numerarul.</small></div>' : ''}
     ${canCover ? '<div class="help-branch"><span class="help-branch-label">Suma este acoperită</span><strong>Alege avansul personal</strong><small>Acoperi parțial sau integral; numerarul nu se schimbă, iar datoria clasei scade.</small></div>' : ''}`;
-  const decision = canRecalculate && canCover ? 'Copilul nu participă sau suma este acoperită din fond.'
-    : canRecalculate ? 'Copilul poate fi exclus, iar contribuțiile celorlalți vor fi recalculate.'
-      : 'Contribuția poate fi acoperită dintr-un avans personal disponibil.';
-  const finish = canRecalculate && !canCover ? 'Vezi noile contribuții înainte de confirmare.'
-    : 'Rapoartele separă plata părintelui de suma acoperită din fond.';
+  const branchCount = Number(canRecalculate) + Number(canRound) + Number(canCover);
+  const branchClass = branchCount === 3 ? 'three' : branchCount === 2 ? 'two' : '';
   return `<div class="help-flow ${compact ? 'compact' : ''}" aria-label="Pașii pentru o contribuție care nu mai este colectată">
     <div class="help-step tone-green"><span>1</span><div><strong>Deschide contribuția neachitată</strong><small>Din fișa copilului.</small></div></div>${helpArrow}
     <div class="help-step"><span>2</span><div><strong>Apasă „Nu mai colectez”</strong><small>Vezi numai opțiunile disponibile pentru acea contribuție.</small></div></div>${helpArrow}
-    <div class="help-step help-decision"><span>?</span><div><strong>Alege situația reală</strong><small>${decision}</small></div></div>${helpArrow}
-    <div class="help-branches ${canRecalculate && canCover ? 'two' : ''}">${branches}</div>${helpArrow}
-    <div class="help-step help-finish"><span>${icon('check')}</span><div><strong>Verifică și confirmă</strong><small>${finish}</small></div></div>
+    <div class="help-step help-decision"><span>?</span><div><strong>Alege situația reală</strong><small>Alege varianta care descrie sursa reală a închiderii contribuției.</small></div></div>${helpArrow}
+    <div class="help-branches ${branchClass}">${branches}</div>${helpArrow}
+    <div class="help-step help-finish"><span>${icon('check')}</span><div><strong>Verifică și confirmă</strong><small>Numerarul și sursa închiderii rămân distincte în istoric și rapoarte.</small></div></div>
   </div>`;
 }
 
@@ -211,7 +209,7 @@ function helpModal(topic = 'overview') {
     ['Pornire și organizare', 'children', 'Cum gestionez copiii?', 'Adăugare, contacte, căutare și arhivare.', simpleHelpFlow('children')],
     ['Pornire și organizare', 'expenses', 'Cum creez o cheltuială?', 'Calcul, participanți, previzualizare și editare.', simpleHelpFlow('expenses')],
     ['Bani și corecții', 'collection', 'Cum încasez bani?', 'Suma primită, rotunjire, rest și avans.', collectionHelpFlow()],
-    ['Bani și corecții', 'stop-collection', 'Ce face „Nu mai colectez”?', 'Excluderea unui participant sau acoperirea din fond.', stopCollectionHelpFlow()],
+    ['Bani și corecții', 'stop-collection', 'Ce face „Nu mai colectez”?', 'Recalculare, diferență mică sau acoperire din fond.', stopCollectionHelpFlow()],
     ['Bani și corecții', 'credit', 'Cum folosesc avansul copilului?', 'Păstrare, repartizare și restituire.', simpleHelpFlow('credit')],
     ['Bani și corecții', 'ledger', 'Cum înregistrez plățile și avansurile personale?', 'Numerar, datorii și restituiri.', simpleHelpFlow('ledger')],
     ['Bani și corecții', 'corrections', 'Cum corectez o greșeală?', 'Inversare explicită și istoric păstrat.', simpleHelpFlow('corrections')],
@@ -489,7 +487,8 @@ function renderChild() {
       && (!item.expenseId || item.expenseId === e.expenseId));
     const canRecalculate = expense?.type === 'split' && expense.contributions.length > 1
       && expense.collectedMinor === 0 && (expense.adjustedMinor || 0) === 0 && (expense.coveredMinor || 0) === 0;
-    return `<div class="contribution-choice"><button type="button" class="choice" data-target="${esc(e.expenseId)}" aria-pressed="false"><span>${esc(e.title)}<span class="caption" style="display:block">${e.dueDate ? `Termen ${dateText(e.dueDate)}` : 'Fără termen'}${e.coveredMinor ? ` · acoperit din fond ${money(e.coveredMinor)}` : ''}</span></span><span class="choice-money">${money(e.remainingMinor)}</span></button>${matchingAdvance || canRecalculate ? `<button type="button" class="stop-collection" data-action="stop-collection" data-id="${esc(e.expenseId)}">Nu mai colectez</button>` : ''}</div>`;
+    const canRound = e.remainingMinor <= 100 && e.paidMinor > 0;
+    return `<div class="contribution-choice"><button type="button" class="choice" data-target="${esc(e.expenseId)}" aria-pressed="false"><span>${esc(e.title)}<span class="caption" style="display:block">${e.dueDate ? `Termen ${dateText(e.dueDate)}` : 'Fără termen'}${e.coveredMinor ? ` · acoperit din fond ${money(e.coveredMinor)}` : ''}</span></span><span class="choice-money">${money(e.remainingMinor)}</span></button>${matchingAdvance || canRecalculate || canRound ? `<button type="button" class="stop-collection" data-action="stop-collection" data-id="${esc(e.expenseId)}">Nu mai colectez</button>` : ''}</div>`;
   }).join('');
   $('#main').innerHTML = `<button class="back" data-action="back">‹ Copii</button><div class="row"><h1>${esc(name(c))}</h1><button data-action="edit-child" aria-label="Editează copilul">Editează</button></div><div class="collection-heading"><div class="caption">Încasare rapidă${c.active ? '' : ' · Copil arhivat'}</div><button type="button" class="context-help-link" data-action="help" data-help-topic="collection">${icon('help')}Cum încasez?</button></div>${c.creditMinor ? `<div class="summary"><div class="row"><span>Avans disponibil</span><strong>${money(c.creditMinor)}</strong></div><div class="toolbar"><button data-action="apply-credit" ${c.dueMinor ? '' : 'disabled'}>Folosește avansul</button><button data-action="refund">Restituie</button></div></div>` : ''}
   <form id="collection-form"><div class="collection-options">
@@ -1003,10 +1002,11 @@ function stopCollectionModal(expenseId) {
     .sort((a, b) => Number(b.expenseId === expense.id) - Number(a.expenseId === expense.id) || b.occurredAt.localeCompare(a.occurredAt));
   const canRecalculate = expense.type === 'split' && expense.contributions.length > 1
     && expense.collectedMinor === 0 && (expense.adjustedMinor || 0) === 0 && (expense.coveredMinor || 0) === 0;
-  if (!advances.length && !canRecalculate) {
-    toast('Contribuția poate fi închisă numai dintr-un avans personal disponibil.'); return;
+  const canRound = contribution.remainingMinor <= 100 && contribution.paidMinor > 0;
+  if (!advances.length && !canRecalculate && !canRound) {
+    toast('Nu există încă o opțiune disponibilă pentru închiderea acestei contribuții.'); return;
   }
-  const methodOptions = `${advances.length ? '<option value="waive">Acoperă dintr-o sumă avansată</option>' : ''}${canRecalculate ? '<option value="recalculate">Recalculează pentru ceilalți</option>' : ''}`;
+  const methodOptions = `${canRound ? '<option value="rounding">Închide ca ajustare de rotunjire</option>' : ''}${advances.length ? '<option value="waive">Acoperă dintr-o sumă avansată</option>' : ''}${canRecalculate ? '<option value="recalculate">Recalculează pentru ceilalți</option>' : ''}`;
   const firstAdvance = advances[0];
   const advanceOptions = advances.map(item => {
     const linkedExpense = item.expenseId ? state.expenses.find(exp => exp.id === item.expenseId)?.title : 'fără cheltuială asociată';
@@ -1017,18 +1017,22 @@ function stopCollectionModal(expenseId) {
   const recalculatedValues = [...new Set(recalculated.map(item => item.amountMinor))].map(money).join(' / ');
   openModal('stop-collection', `Nu mai colectez · ${contribution.title}`,
     `<p><strong>${esc(name(c))}</strong> · de achitat ${money(contribution.remainingMinor)}</p><label>Cum închizi contribuția?<select name="method">${methodOptions}</select></label>
-    <section id="stop-waiver-fields"><label>Suma avansată<select name="advanceId">${advanceOptions}</select></label>${field('Suma acoperită (lei)', 'amount', firstAdvance ? decimal(Math.min(contribution.remainingMinor, firstAdvance.outstandingMinor)) : '', 'inputmode="decimal" autocomplete="off"')}${timestampField()}${comments()}<div class="summary"><p>Suma se scade din ceea ce fondul trebuie să restituie persoanei care a avansat banii. Numerarul nu se modifică.</p><p class="caption">Poți acoperi integral contribuția sau doar o parte. În rapoarte apare separat ca „Acoperită din fond”.</p></div></section>
+    <section id="stop-rounding-info"><div class="summary"><strong>Închizi diferența de ${money(contribution.remainingMinor)}</strong><p>Numerarul rămâne neschimbat. Diferența apare separat ca ajustare de rotunjire în registru și rapoarte.</p></div></section>
+    <section id="stop-waiver-fields"><label>Suma avansată<select name="advanceId">${advanceOptions}</select></label>${field('Suma acoperită (lei)', 'amount', firstAdvance ? decimal(Math.min(contribution.remainingMinor, firstAdvance.outstandingMinor)) : '', 'inputmode="decimal" autocomplete="off"')}<div class="summary"><p>Suma se scade din ceea ce fondul trebuie să restituie persoanei care a avansat banii. Numerarul nu se modifică.</p><p class="caption">Poți acoperi integral contribuția sau doar o parte. În rapoarte apare separat ca „Acoperită din fond”.</p></div></section>
     <section id="stop-recalculate-info"><div class="summary"><strong>${remainingParticipants.length} copii vor rămâne participanți</strong><p>Noua contribuție: ${esc(recalculatedValues || '—')}</p></div><p class="caption">Totalul cheltuielii rămâne ${money(expense.totalMinor)}. Copilul este exclus, iar suma se împarte din nou între ceilalți participanți.</p></section>
-    <details class="context-help"><summary>${icon('help')}Cum funcționează această alegere?</summary>${stopCollectionHelpFlow(true, { canRecalculate, canCover: advances.length > 0 })}</details>`,
+    <section id="stop-financial-fields">${timestampField()}${comments()}</section>
+    <details class="context-help"><summary>${icon('help')}Cum funcționează această alegere?</summary>${stopCollectionHelpFlow(true, { canRecalculate, canCover: advances.length > 0, canRound })}</details>`,
     'Confirmă', { childId: c.id, expenseId: expense.id, contributionRemainingMinor: contribution.remainingMinor,
-      advances, canRecalculate });
+      advances, canRecalculate, canRound });
   updateStopCollectionModal();
 }
 function updateStopCollectionModal() {
   if (modal?.type !== 'stop-collection') return;
-  const form = $('#modal-form'), waive = form.elements.method.value === 'waive';
+  const form = $('#modal-form'), method = form.elements.method.value, waive = method === 'waive', rounding = method === 'rounding';
   $('#stop-waiver-fields').hidden = !waive;
-  $('#stop-recalculate-info').hidden = waive;
+  $('#stop-rounding-info').hidden = !rounding;
+  $('#stop-recalculate-info').hidden = method !== 'recalculate';
+  $('#stop-financial-fields').hidden = method === 'recalculate';
   if (waive) {
     const advance = modal.advances.find(item => item.id === form.elements.advanceId.value);
     const maximum = Math.min(modal.contributionRemainingMinor, advance?.outstandingMinor || 0);
@@ -1168,7 +1172,8 @@ async function submitModal() {
       body = { amountMinor, ...metadata(form) };
     }
     else if (modal.type === 'stop-collection') {
-      if (form.elements.method.value === 'waive') {
+      const method = form.elements.method.value;
+      if (method === 'waive') {
         const advance = modal.advances.find(item => item.id === form.elements.advanceId.value);
         if (!advance) throw new Error('Alege suma avansată din care acoperi contribuția.');
         const amountMinor = positiveMoney(form.elements.amount.value);
@@ -1176,6 +1181,10 @@ async function submitModal() {
         if (amountMinor > advance.outstandingMinor) throw new Error('Suma depășește avansul rămas de restituit.');
         path = `/api/fund-advances/${encodeURIComponent(advance.id)}/waivers`;
         body = { childId: modal.childId, expenseId: modal.expenseId, amountMinor, ...metadata(form) };
+      } else if (method === 'rounding') {
+        if (!modal.canRound) throw new Error('Diferența nu mai poate fi închisă prin ajustare de rotunjire.');
+        path = '/api/rounding-adjustments';
+        body = { childId: modal.childId, expenseId: modal.expenseId, ...metadata(form) };
       } else {
         const expense = state.expenses.find(item => item.id === modal.expenseId);
         if (!expense || !modal.canRecalculate) throw new Error('Cheltuiala nu mai poate fi recalculată.');

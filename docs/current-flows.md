@@ -38,13 +38,15 @@ Inventarul descrie comportamentul disponibil în aplicație la 30 septembrie 202
 3. Pentru surplus alege **Dau rest** sau **Păstrez în avans**. Înainte de salvare vede numerarul primit, suma acoperită, restul, avansul nou și cât rămâne de achitat.
 4. Dacă există deja avans la copil, **Folosește avansul copilului** îl poate aplica în aceeași operațiune, inclusiv fără numerar nou când acoperă tot.
 5. Pentru un rest de cel mult 1 leu sunt disponibile păstrarea datoriei, acoperirea din avansul copilului și o ajustare de rotunjire fără mișcare de numerar.
+   Dacă încasarea parțială a fost deja salvată, restul poate fi închis ulterior din **Nu mai colectez** ca ajustare de rotunjire.
 6. Salvarea este idempotentă. După pierderea răspunsului, **Verifică / reîncearcă** nu dublează încasarea; o modificare concurentă cere reîmprospătarea și verificarea sumelor.
 
 ## 6. Renunțarea la colectarea unei contribuții
 
 - Din **Nu mai colectez**, un copil poate fi scos dintr-o cheltuială împărțită atunci când recalcularea încă este permisă. Totalul cheltuielii rămâne același, iar părțile celorlalți participanți se refac automat.
 - Dacă există un avans personal nerestituit fondului, contribuția poate fi acoperită parțial sau integral din el. Copilul nu apare ca plătit de părinte, datoria clasei față de persoana care a avansat banii scade, iar numerarul nu se mișcă din nou.
-- Acoperirea este o operațiune separată, vizibilă în registru și rapoarte, și poate fi anulată cu motiv.
+- După o încasare parțială, un rest de cel mult 1 leu poate fi închis ca **Ajustare de rotunjire**. Suma primită rămâne cea reală, diferența apare separat, iar numerarul nu se modifică.
+- Acoperirea și ajustarea sunt operațiuni separate, vizibile în registru și rapoarte, și pot fi anulate cu motiv.
 
 ## 7. Registrul financiar
 

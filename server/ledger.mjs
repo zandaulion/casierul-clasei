@@ -976,6 +976,19 @@ export class Ledger {
       if (amountMinor > child.creditMinor) fail('Avansul disponibil nu acoperă sumele selectate.');
       return this.#transaction('credit_apply', body, actor, { childId: child.id, amountMinor, allocations });
     }
+    if (operation === 'rounding_adjustment.create') {
+      const child = this.#child(state, body.childId);
+      const expense = this.#expense(state, body.expenseId);
+      const contribution = child.contributions.find(item => item.expenseId === expense.id);
+      if (!contribution) fail('Copilul nu are o contribuție la această cheltuială.', 404);
+      if (contribution.remainingMinor <= 0) fail('Contribuția este deja închisă.', 409);
+      if (contribution.paidMinor <= 0) fail('Ajustarea de rotunjire este disponibilă numai după o încasare parțială.', 409);
+      if (contribution.remainingMinor > 100) fail('Doar diferențele de cel mult 1 leu pot fi închise prin ajustare de rotunjire.');
+      const amountMinor = contribution.remainingMinor;
+      return this.#transaction('rounding_adjustment', body, actor, {
+        childId: child.id, amountMinor, allocations: [{ expenseId: expense.id, amountMinor }],
+      });
+    }
     if (operation === 'refund.create') {
       const child = this.#child(state, body.childId);
       const amountMinor = integer(body.amountMinor, 'Suma restituită', 1);

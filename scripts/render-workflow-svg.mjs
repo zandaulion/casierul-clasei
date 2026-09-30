@@ -50,7 +50,7 @@ const diagrams = [
       ] },
       { title: '6. Nu mai colectez', stages: [
         ['Deschizi contribuția'], ['Apeși „Nu mai colectez”'],
-        ['Excluzi și recalculezi', 'Acoperi din avans personal'], ['Verifici efectul'], ['Confirmi'],
+        ['Excluzi și recalculezi', 'Ajustezi diferența mică', 'Acoperi din avans personal'], ['Verifici efectul'], ['Confirmi'],
       ] },
       { title: '7. Avansul copilului', stages: [
         ['Primești surplus'], ['Păstrezi în avans'],

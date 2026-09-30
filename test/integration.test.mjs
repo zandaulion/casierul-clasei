@@ -135,6 +135,19 @@ test('invited device manages a persisted class ledger without exposing admin or 
   assert.equal(state.summary.balanceMinor, 2000, 'covering from an existing advance does not move cash again');
   assert.equal(state.summary.totalAdvanceOutstandingMinor, 500);
   assert.equal(state.children.find(child => child.id === davidId).contributions.find(c => c.expenseId === booksId).coveredMinor, 500);
+  await mutate('/api/expenses', { title: 'Echipament sportiv', type: 'fixed', amountMinor: 1414,
+    participants: [{ childId: davidId }] });
+  const equipmentId = state.expenses.find(expense => expense.title === 'Echipament sportiv').id;
+  await mutate('/api/collections', { childId: davidId, receivedMinor: 1400, changeMinor: 0,
+    allocations: [{ expenseId: equipmentId, amountMinor: 1400 }] });
+  await mutate('/api/rounding-adjustments', {
+    childId: davidId, expenseId: equipmentId, comment: 'Diferență de 14 bani',
+  });
+  const roundedContribution = state.children.find(child => child.id === davidId).contributions.find(c => c.expenseId === equipmentId);
+  assert.equal(roundedContribution.remainingMinor, 0);
+  assert.equal(roundedContribution.paidMinor, 1400);
+  assert.equal(roundedContribution.adjustedMinor, 14);
+  assert.equal(state.summary.balanceMinor, 3400, 'standalone rounding does not move cash');
   const snapshot = await json(origin() + '/api/export', { headers });
   assert.equal(snapshot.status, 200);
   assert.match(snapshot.headers.get('content-disposition'), /attachment/);
