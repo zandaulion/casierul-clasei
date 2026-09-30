@@ -79,7 +79,7 @@ const diagrams = [
       ] },
       { title: '11. WhatsApp și detaliile de plată', stages: [
         ['Configurezi contactele și plata'], ['Copil', 'Grup', 'Date de plată'],
-        ['Mesaj precompletat'], ['Alegi conversația'], ['Verifici și trimiți'],
+        ['Doar mesajul', 'Mesaj + PDF', 'Date separate'], ['Alegi conversația'], ['Verifici și trimiți'],
       ] },
       { title: '12. Rapoartele', stages: [
         ['Deschizi Rapoarte'], ['Clasă', 'Tabel', 'Cheltuială', 'Copil'],

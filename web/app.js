@@ -111,7 +111,8 @@ const simpleHelpFlows = {
     ['Configurezi contactele și plata', 'Numerele copilului, Revolut.me, beneficiar și IBAN.'],
     ['Deschizi reminderul', 'Mesajul include situația copilului și detaliile de plată.'],
     ['Verifici mesajul', 'Aplicația nu îl trimite și nu pretinde că a fost livrat.'],
-    ['Alegi conversația', 'Contact direct pentru copil sau selectorul telefonului pentru raport.'],
+    ['Alegi ce partajezi', 'Doar mesajul sau mesajul împreună cu raportul individual.'],
+    ['Alegi conversația', 'Contact direct pentru copil sau selectorul telefonului.'],
     ['Apeși Trimite în WhatsApp', 'Expedierea rămâne sub controlul tău.'],
   ] },
   reports: { label: 'Emiterea și partajarea rapoartelor', steps: [
@@ -467,7 +468,7 @@ function contactPanel(c) {
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
   const report = latestReport?.stateRevision === state.revision ? latestReport : null;
   const reportAction = report
-    ? `<div class="child-report-option"><div><strong>Mesaj + raport individual</strong><span class="caption">${esc(report.code)} · emis ${dateText(report.createdAt)}. Alegi WhatsApp și contactul din selectorul telefonului.</span></div><div class="report-actions"><button type="button" class="primary" data-action="share-child-report" data-id="${esc(report.id)}">Partajează mesajul + PDF</button><button type="button" data-action="create-child-report">Generează unul actualizat</button></div></div>`
+    ? `<div class="child-report-option"><div><strong>Mesaj și raport individual</strong><span class="caption">${esc(report.code)} · emis ${dateText(report.createdAt)}. Alege dacă partajezi doar mesajul sau mesajul împreună cu PDF-ul.</span></div><div class="report-actions"><button type="button" data-action="share-child-text" data-id="${esc(c.id)}">Doar mesajul</button><button type="button" class="primary" data-action="share-child-report" data-id="${esc(report.id)}">Mesajul + PDF</button><button type="button" data-action="create-child-report">Generează unul actualizat</button></div></div>`
     : `<div class="child-report-option"><div><strong>Mesaj + raport individual</strong><span class="caption">${latestReport ? `${esc(latestReport.code)} este dintr-o versiune anterioară a registrului. Generează fișa actuală înainte de partajare.` : 'Generează întâi fișa actuală; apoi o poți partaja împreună cu același mesaj.'}</span></div><button type="button" data-action="create-child-report">Generează raportul PDF</button></div>`;
   return `<section class="contact-panel" aria-labelledby="contact-panel-title"><div class="row"><div><h2 id="contact-panel-title">Contacte WhatsApp</h2><p class="caption">Conversația se deschide cu mesajul completat. Verifici și apeși Trimite în WhatsApp.</p><button type="button" class="context-help-link" data-action="help" data-help-topic="whatsapp">${icon('help')}Cum trimit?</button></div><button type="button" data-action="edit-contacts">${contacts.length ? 'Editează' : 'Adaugă'}</button></div>${contacts.length ? `<div class="whatsapp-actions">${whatsappLinks(c)}</div>` : '<p class="caption">Poți salva până la două contacte pentru acest copil.</p>'}${reportAction}</section>`;
 }
@@ -694,6 +695,17 @@ async function shareChildReport(reportId) {
   const c = report ? state.children.find(item => item.id === report.subjectId) : null;
   if (!c) return;
   await shareReport(report.id, whatsappReminder(c, state.settings.className, state.settings));
+}
+async function shareChildText(id) {
+  const c = state.children.find(item => item.id === id);
+  if (!c) return;
+  const message = whatsappReminder(c, state.settings.className, state.settings);
+  saving = true; updateNotices();
+  try {
+    if (navigator.share) await navigator.share({ title: `Situația contribuțiilor · ${name(c)}`, text: message });
+    else window.open(whatsappShareUrl(message), '_blank', 'noopener,noreferrer');
+  } catch (error) { if (error.name !== 'AbortError') toast(error.message || 'Mesajul nu a putut fi partajat.'); }
+  finally { saving = false; updateNotices(); }
 }
 async function copyPaymentDetail(key) {
   const item = paymentShareItems(state.settings).find(entry => entry.key === key);
@@ -1359,6 +1371,7 @@ document.addEventListener('click', async event => {
     case 'report-child': reportModal('child'); break;
     case 'view-report': viewReport(button.dataset.id); break;
     case 'share-report': await shareReport(button.dataset.id); break;
+    case 'share-child-text': await shareChildText(button.dataset.id); break;
     case 'share-child-report': await shareChildReport(button.dataset.id); break;
     case 'replace-report': {
       const report = (state.reports || []).find(item => item.id === button.dataset.id);

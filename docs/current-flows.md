@@ -67,7 +67,7 @@ Inventarul descrie comportamentul disponibil în aplicație la 30 septembrie 202
 
 - Contactul salvat deschide conversația directă cu situația copilului și detaliile de plată precompletate. Trimiterea rămâne manuală în WhatsApp.
 - **Remindere WhatsApp** afișează copiii activi cu sume restante și evidențiază contactele lipsă.
-- Raportul individual poate fi generat și partajat împreună cu mesajul prin selectorul sistemului. Utilizatorul alege aplicația și conversația.
+- După generarea raportului individual, casierul alege între **Doar mesajul** și **Mesajul + PDF**. Ambele folosesc același text actualizat și selectorul sistemului, unde utilizatorul alege aplicația și conversația.
 - Rapoartele agregate au texte de partajare potrivite tipului lor și pot fi trimise prin același selector.
 - Linkul Revolut.me, beneficiarul și IBAN-ul au acțiuni separate de copiere sau partajare. Mesajul Revolut precizează că linkul acceptă plata cu cardul și fără cont Revolut.
 
