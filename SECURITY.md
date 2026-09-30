@@ -20,6 +20,6 @@ Out of scope: the reverse proxy, the operating system and third-party services (
 
 ## What operators should know
 
-- The admin API listens on a separate loopback-only port and is protected by `ADMIN_TOKEN`; keep that token out of the public web tier.
+- The admin API listens on a separate loopback-only port and is protected by `ADMIN_TOKEN`; keep that token private and do not proxy the admin port.
 - Data at rest (SQLite files, backups) is **not** encrypted by the application. Protect the data directory and backups at the operating-system level; see `docs/encryption.md` for the plan.
 - Keep Node.js at a supported version and run `npm audit` after updating dependencies.

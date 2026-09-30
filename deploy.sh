@@ -5,15 +5,25 @@ PROJECT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 SERVICE_NAME=casierul-clasei.service
 cd "$PROJECT_DIR"
 
+for command in node npm python3 systemctl curl; do
+  command -v "$command" >/dev/null || { printf 'Missing required command: %s\n' "$command" >&2; exit 1; }
+done
+NODE_BIN="$(command -v node)"
+PYTHON_BIN="$(command -v python3)"
 npm test
 python3 "$PROJECT_DIR/deploy/configure-env.py" "${1:-}"
 test -s "$PROJECT_DIR/web/index.html"
 test -s "$PROJECT_DIR/server/index.mjs"
-install -d -m 0755 "$HOME/.config/systemd/user"
-install -m 0644 "$PROJECT_DIR/deploy/$SERVICE_NAME" "$HOME/.config/systemd/user/$SERVICE_NAME"
-install -m 0644 "$PROJECT_DIR/deploy/casierul-clasei-backup.service" "$HOME/.config/systemd/user/casierul-clasei-backup.service"
-install -m 0644 "$PROJECT_DIR/deploy/casierul-clasei-backup.timer" "$HOME/.config/systemd/user/casierul-clasei-backup.timer"
+SYSTEMD_DIR="$HOME/.config/systemd/user"
+python3 "$PROJECT_DIR/deploy/install-systemd.py" "$PROJECT_DIR" "$SYSTEMD_DIR" "$NODE_BIN" "$PYTHON_BIN"
 systemctl --user daemon-reload
+
+if command -v loginctl >/dev/null; then
+  LINGER="$(loginctl show-user "$(id -un)" --property=Linger --value 2>/dev/null || true)"
+  if [ "$LINGER" != yes ]; then
+    printf 'Warning: enable lingering to start the user service after reboot without logging in: sudo loginctl enable-linger %s\n' "$(id -un)" >&2
+  fi
+fi
 
 # The private invitation console (Caddy route + console entry) exists only on the
 # original host; elsewhere invitations are issued with scripts/admin.mjs.

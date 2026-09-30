@@ -10,7 +10,7 @@ COPY scripts ./scripts
 
 # The public server listens on all container interfaces; the admin API stays on loopback
 # inside the container and is reached with `docker compose exec app node scripts/admin.mjs …`.
-ENV NODE_ENV=production HOST=0.0.0.0 PORT=8018 ADMIN_HOST=127.0.0.1 ADMIN_PORT=8118 DATA_DIR=/data
+ENV NODE_ENV=production HOST=0.0.0.0 PORT=8018 ADMIN_PORT=8118 DATA_DIR=/data
 RUN mkdir -p /data && chown node:node /data
 USER node
 VOLUME /data

@@ -7,7 +7,7 @@ import http from 'node:http';
 import { createHash } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
 import { AuthStore, CLIENT_FAILURE_LIMIT, COOKIE_NAME, GLOBAL_FAILURE_LIMIT, adminTokenMatches, readSessionCookie } from '../server/auth.mjs';
-import { projectState } from '../server/index.mjs';
+import { loadConfig, projectState } from '../server/index.mjs';
 
 function temporary(t) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'casierul-auth-'));
@@ -21,6 +21,13 @@ function authStore(t, options = {}) {
   t.after(() => auth.close());
   return { auth, file };
 }
+
+test('the admin listener remains on loopback regardless of public host configuration', () => {
+  const config = loadConfig({ HOST: '0.0.0.0', ADMIN_HOST: '0.0.0.0', ADMIN_PORT: '9123' });
+  assert.equal(config.host, '0.0.0.0');
+  assert.equal(config.adminHost, '127.0.0.1');
+  assert.equal(config.adminPort, 9123);
+});
 
 test('invites activate two independent devices and erase plaintext only when exhausted or revoked', (t) => {
   let time = Date.parse('2026-09-28T12:00:00Z');

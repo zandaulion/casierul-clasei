@@ -16,3 +16,27 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm test
+      - name: Build Docker image
+        run: docker build --tag casierul-clasei:test .
+      - name: Smoke-test Docker image and administration CLI
+        run: |
+          docker run --detach --name casierul-clasei-test \
+            --publish 127.0.0.1:18018:8018 \
+            --env PUBLIC_BASE_URL=https://casierul.example \
+            --env ADMIN_TOKEN=ci-only-secret \
+            casierul-clasei:test
+          for attempt in {1..30}; do
+            if curl --fail --silent http://127.0.0.1:18018/api/health >/dev/null; then
+              break
+            fi
+            sleep 1
+          done
+          curl --fail --silent http://127.0.0.1:18018/api/health >/dev/null
+          docker exec casierul-clasei-test node scripts/admin.mjs options
+          docker exec casierul-clasei-test node scripts/backup.mjs
+      - name: Show Docker logs after a failure
+        if: failure()
+        run: docker logs casierul-clasei-test || true
+      - name: Remove Docker test container
+        if: always()
+        run: docker rm --force casierul-clasei-test || true
