@@ -46,7 +46,7 @@ export function automaticAllocations(contributions, available, target = 'all') {
 }
 export function collectionResult(child, draft) {
   const receivedMinor = parseMoney(draft.amount);
-  if (receivedMinor === null || receivedMinor <= 0) return { error: 'Introdu o sumă mai mare decât zero, cu cel mult două zecimale.' };
+  if (receivedMinor === null || receivedMinor < 0 || (receivedMinor === 0 && !draft.useCredit)) return { error: 'Introdu o sumă mai mare decât zero, cu cel mult două zecimale.' };
   const contributions = unpaid(child);
   if (!draft.manual && draft.target !== 'all' && !contributions.some(e => e.expenseId === draft.target)) return { error: 'Cheltuiala selectată nu mai are restanță. Alege din nou totalul sau o cheltuială.' };
   if (draft.manual && Object.entries(draft.allocations).some(([id, value]) => parseMoney(value) > 0 && !contributions.some(e => e.expenseId === id))) return { error: 'O contribuție repartizată nu mai are restanță. Selectează din nou totalul sau o cheltuială și verifică repartizarea.' };
@@ -57,6 +57,19 @@ export function collectionResult(child, draft) {
   const excessMinor = receivedMinor - coveredMinor;
   const changeMinor = draft.excess === 'change' ? excessMinor : 0;
   return { receivedMinor, allocations: allocations.filter(a => a.amountMinor > 0), coveredMinor, excessMinor, changeMinor, creditMinor: excessMinor - changeMinor, netMinor: receivedMinor - changeMinor, dueMinor: child.dueMinor - coveredMinor };
+}
+export function creditSettlement(child, draft, result = collectionResult(child, draft)) {
+  if (!draft.useCredit || result.error || child.creditMinor <= 0) return null;
+  const paidByExpense = new Map(result.allocations.map(item => [item.expenseId, item.amountMinor]));
+  let available = child.creditMinor;
+  const allocations = unpaid(child).filter(item => draft.target === 'all' || item.expenseId === draft.target).map(item => {
+    const remainingMinor = item.remainingMinor - (paidByExpense.get(item.expenseId) || 0);
+    const amountMinor = Math.min(available, remainingMinor);
+    available -= amountMinor;
+    return { expenseId: item.expenseId, amountMinor };
+  }).filter(item => item.amountMinor > 0);
+  const amountMinor = allocations.reduce((sum, item) => sum + item.amountMinor, 0);
+  return amountMinor > 0 ? { amountMinor, allocations } : null;
 }
 export function smallSettlement(child, draft, result = collectionResult(child, draft)) {
   if (result.error || result.netMinor <= 0) return null;

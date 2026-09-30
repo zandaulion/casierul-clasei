@@ -316,6 +316,22 @@ test('small cash differences close atomically from credit or as an auditable rou
   assert.deepEqual(ledger.getState(), before, 'invalid combined settlement rolls back the cash entry too');
 });
 
+test('a collection can use any available child credit alongside the received cash', t => {
+  const { ledger, post, child, expense } = fixture(t);
+  const id = child('Daria', 'Ion');
+  const equipment = expense([id], 1415, 'fixed', { title: 'Echipament sportiv' });
+  post('collection.create', { childId: id, receivedMinor: 200, changeMinor: 0, allocations: [] });
+  post('collection.create', { childId: id, receivedMinor: 1215, changeMinor: 0,
+    allocations: [{ expenseId: equipment, amountMinor: 1215 }],
+    settlement: { type: 'credit', allocations: [{ expenseId: equipment, amountMinor: 200 }] } });
+  const state = ledger.getState();
+  assert.equal(state.children[0].dueMinor, 0);
+  assert.equal(state.children[0].creditMinor, 0);
+  assert.equal(state.summary.balanceMinor, 1415);
+  assert.equal(state.transactions.filter(item => item.type === 'collection').length, 2);
+  assert.equal(state.transactions.filter(item => item.type === 'credit_apply').length, 1);
+});
+
 test('invalid money, allocations, dates and partial bulk import roll back atomically', t => {
   const { ledger, post, child, expense } = fixture(t);
   const id = child();

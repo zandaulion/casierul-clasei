@@ -475,6 +475,12 @@ main { min-width: 0; padding: 24px 20px; outline: none; }
 .collection-dock-amount label { margin: 0; font-weight: 600; }
 .collection-dock .money-input { min-width: 0; min-height: 48px; flex: 1 1 11em; padding-block: 1px; }
 .collection-dock .money-input input { min-height: 44px; font-size: 25px; }
+.collection-dock .use-credit {
+  width: 100%; min-height: 46px; display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  border-color: var(--brand); color: var(--brand); background: var(--soft);
+}
+.collection-dock .use-credit span { display: inline-flex; align-items: center; gap: 7px; text-align: left; }
+.collection-dock .use-credit[aria-pressed="true"] { color: var(--on-brand); background: var(--brand); border-color: var(--brand); }
 .collection-dock .excess { margin: 8px 0; }
 .collection-dock .excess legend { margin-bottom: 5px; color: var(--muted); font-size: 13px; }
 .collection-dock .switch button { min-height: 46px; font-size: 14px; }

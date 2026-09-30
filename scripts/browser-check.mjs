@@ -236,6 +236,13 @@ try {
   assert.equal(snapshot().children.find(c => c.id === anaId).dueMinor, 6750);
   assert.equal(snapshot().summary.balanceMinor, 10000);
   await click('[data-child="' + anaId + '"]');
+  assert.equal(await evaluate('document.querySelector("[data-use-credit-amount]").textContent'), '40 lei');
+  await click('[data-use-credit]');
+  assert.equal(await getValue('#received'), '27,50');
+  assert.match(await evaluate('document.getElementById("collection-dock-summary").textContent'), /Acoperă din avans40 lei/u);
+  assert.match(await evaluate('document.getElementById("collection-dock-summary").textContent'), /Rămâne de achitat0 lei/u);
+  await click('[data-use-credit]');
+  assert.equal(await getValue('#received'), '67,50');
   await click('[data-action=edit-contacts]');
   await fill('#modal-form [name=contactLabel1]', 'Mama');
   await fill('#modal-form [name=contactPhone1]', '0722 111 222');
@@ -505,7 +512,7 @@ try {
     assert.equal(await evaluate('fetch("/api/auth/me").then(r => r.status)'), 200, 'phone remains signed in independently');
   }
   assert.equal(exceptions.length, 0, JSON.stringify(exceptions));
-  console.log('Browser checks passed: invitation/setup, two-device activation with independent sessions and third-device rejection, logo upload, classroom creation/switching, navigation, roster, direct WhatsApp reminders with two contacts, personalized message plus individual PDF sharing, split opt-out recalculation before the first contribution, expense editing before and after linked money, manual allocation, quick collection with small-difference settlement, lost-response retry across reauthentication, temporary fund advances and repayments, expense/payment document attachments, payment/refund/credit/correction, PDF report generation, in-app viewing and sharing, stale-data protection, reload, offline protection, mobile/dark layout, and PWA worker.');
+  console.log('Browser checks passed: invitation/setup, two-device activation with independent sessions and third-device rejection, logo upload, classroom creation/switching, navigation, roster, direct WhatsApp reminders with two contacts, personalized message plus individual PDF sharing, split opt-out recalculation before the first contribution, expense editing before and after linked money, manual allocation, quick collection with existing child credit and small-difference settlement, lost-response retry across reauthentication, temporary fund advances and repayments, expense/payment document attachments, payment/refund/credit/correction, PDF report generation, in-app viewing and sharing, stale-data protection, reload, offline protection, mobile/dark layout, and PWA worker.');
 } finally {
   if (contextId) await send('Target.disposeBrowserContext', { browserContextId: contextId });
   socket.close();

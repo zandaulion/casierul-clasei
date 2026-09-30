@@ -70,7 +70,7 @@ Dacă după o încasare rămâne cel mult 1 leu pentru totalul sau contribuția 
 
 Pe tabletă în mod peisaj și pe laptop, contribuțiile și confirmarea încasării apar alături. Panoul de confirmare rămâne la îndemână în timpul derulării; pe telefon, el stă la baza ecranului. Rotirea sau redimensionarea ferestrei păstrează suma introdusă, contribuția selectată și repartizarea manuală.
 
-Avansul poate acoperi ulterior alte contribuții sau poate fi restituit. Folosirea avansului nu înregistrează încă o intrare de bani.
+Avansul poate acoperi ulterior alte contribuții sau poate fi restituit. Când copilul are simultan o sumă de achitat și un avans, butonul **Folosește avansul copilului** apare chiar în confirmarea încasării: avansul disponibil se scade din suma cerută în numerar, iar ambele repartizări se salvează împreună. Dacă avansul acoperă integral suma selectată, operațiunea se salvează fără o nouă încasare. Folosirea avansului nu înregistrează încă o intrare de bani.
 
 ## Evidență
 

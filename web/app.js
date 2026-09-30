@@ -1,5 +1,5 @@
 import { installUpdates } from '/pwa-update.js';
-import { name, money, decimal, parseMoney, sortChildren, unpaid, roundUp, automaticAllocations, collectionResult, smallSettlement, expensePreview, whatsappReminder, whatsappUrl, reportShareMessage } from './helpers.mjs';
+import { name, money, decimal, parseMoney, sortChildren, unpaid, roundUp, automaticAllocations, collectionResult, creditSettlement, smallSettlement, expensePreview, whatsappReminder, whatsappUrl, reportShareMessage } from './helpers.mjs';
 import { icon } from './icons.mjs';
 
 const $ = selector => document.querySelector(selector);
@@ -140,7 +140,10 @@ function updateNotices() {
   if (pending) notice.innerHTML = `<strong>${saving ? 'Se confirmă salvarea…' : 'Salvarea așteaptă confirmarea serverului.'}</strong><div>Nu înregistra încă o dată aceeași operațiune. Reîncercarea verifică aceeași înregistrare.</div><button data-action="retry" ${saving ? 'disabled' : ''}>Verifică / reîncearcă</button>`;
   else if (conflict) notice.innerHTML = '<strong>Registrul s-a schimbat pe alt dispozitiv.</strong><div>Încarcă datele actuale și verifică sumele înainte să salvezi din nou.</div><button data-action="review">Actualizează și verifică</button>';
   $('#modal-submit').disabled = (!canWrite() && modal?.type !== 'add-access') || saving || !!pending || conflict || !!modal?.logoProcessing || !navigator.onLine || disconnected;
-  if ($('#collection-save')) $('#collection-save').disabled = saving || !!pending || conflict || !navigator.onLine || disconnected || !!collectionResult(child(), draft).error || collectionResult(child(), draft).netMinor <= 0;
+  if ($('#collection-save')) {
+    const result = collectionResult(child(), draft), credit = creditSettlement(child(), draft, result);
+    $('#collection-save').disabled = saving || !!pending || conflict || !navigator.onLine || disconnected || !!result.error || (result.netMinor <= 0 && !credit);
+  }
   if ($('#dialog').open && (pending || conflict)) {
     const error = $('#modal-error'); error.hidden = false;
     error.innerHTML = pending ? `Salvarea așteaptă confirmarea. <button type="button" data-action="retry" ${saving ? 'disabled' : ''}>Verifică / reîncearcă</button>` : 'Datele s-au schimbat. <button type="button" data-action="review">Actualizează și verifică</button>';
@@ -259,7 +262,7 @@ function renderRosterList() {
   }).join('') : '<div class="empty"><p>Nu am găsit acest nume. Încearcă numele de familie sau prenumele.</p></div>';
 }
 function resetDraft(c) {
-  draft = { target: 'all', amount: c.dueMinor ? decimal(c.dueMinor) : '', round: null, excess: 'change', settlement: 'none', manual: false, allocations: {}, occurredAt: localNow(), comment: '' };
+  draft = { target: 'all', amount: c.dueMinor ? decimal(c.dueMinor) : '', round: null, excess: 'change', settlement: 'none', useCredit: false, cashBeforeCredit: null, manual: false, allocations: {}, occurredAt: localNow(), comment: '' };
   dirty = false;
 }
 function whatsappLinks(c, compact = false) {
@@ -293,6 +296,7 @@ function renderChild() {
   <details id="allocation-details" ${draft.manual ? 'open' : ''}><summary>Ajustează repartizarea</summary><label class="check"><input type="checkbox" id="manual" ${draft.manual ? 'checked' : ''} data-write-control>Aleg manual sumele pentru cheltuieli</label>${contributions.map(e => `<label class="allocation"><span>${esc(e.title)}<small style="display:block">De achitat ${money(e.remainingMinor)}</small></span><input inputmode="decimal" aria-label="${esc(e.title)}: repartizare în lei" data-allocation="${esc(e.expenseId)}" value="0" data-write-control></label>`).join('')}<p class="caption">Repartizarea automată acoperă mai întâi termenele cele mai apropiate. O cheltuială selectată primește doar suma datorată; diferența rămâne rest sau avans.</p></details>
   <details><summary>Data, ora și comentarii</summary><label>Data și ora<input id="collection-date" type="datetime-local" value="${esc(draft.occurredAt)}" required data-write-control></label><label>Comentarii<textarea id="collection-comment" maxlength="2000" data-write-control>${esc(draft.comment)}</textarea></label></details></div>
   <div class="collection-confirmation"><section class="collection-dock" aria-label="Confirmarea încasării"><div class="collection-dock-amount"><label for="received">Primesc</label><div class="money-input"><input id="received" inputmode="decimal" autocomplete="off" spellcheck="false" value="${esc(draft.amount)}" aria-label="Suma primită în lei" data-write-control><span>lei</span></div></div>
+  ${c.creditMinor && c.dueMinor ? `<button type="button" class="use-credit" data-use-credit aria-pressed="${draft.useCredit}"><span>${icon('check')}Folosește avansul copilului</span><strong data-use-credit-amount>${money(Math.min(c.creditMinor, c.dueMinor))}</strong></button>` : ''}
   <fieldset class="excess" id="excess" hidden><legend id="excess-label"></legend><div class="switch"><button type="button" data-excess="change" aria-pressed="true">Dau rest</button><button type="button" data-excess="credit" aria-pressed="false">Păstrez în avans</button></div></fieldset>
   <div id="collection-dock-summary" class="collection-dock-summary"></div><div id="small-settlement" class="small-settlement" hidden></div><p class="error" id="collection-error" role="alert" hidden></p><button type="submit" class="primary wide" id="collection-save">Înregistrează încasarea</button></section></div></form>
   ${contactPanel(c)}
@@ -302,9 +306,10 @@ function renderChild() {
 function updateCollection() {
   if (!$('#collection-form') || !draft) return;
   const c = child(), result = collectionResult(c, draft);
-  const settlement = smallSettlement(c, draft, result);
+  const credit = creditSettlement(c, draft, result);
+  const settlement = draft.useCredit ? null : smallSettlement(c, draft, result);
   if (!settlement || (draft.settlement === 'credit' && c.creditMinor < settlement.amountMinor)) draft.settlement = 'none';
-  const settlementMinor = settlement && draft.settlement !== 'none' ? settlement.amountMinor : 0;
+  const settlementMinor = credit?.amountMinor || (settlement && draft.settlement !== 'none' ? settlement.amountMinor : 0);
   const finalDueMinor = Math.max(0, (result.dueMinor || 0) - settlementMinor);
   const base = draft.target === 'all' ? c.dueMinor : c.contributions.find(e => e.expenseId === draft.target)?.remainingMinor || 0;
   $$('[data-target]').forEach(b => b.setAttribute('aria-pressed', String(!draft.manual && b.dataset.target === draft.target)));
@@ -315,9 +320,11 @@ function updateCollection() {
     b.textContent = b.dataset.excess === 'change' ? `Dau rest · ${money(result.excessMinor || 0)}` : `Păstrez avans · ${money(result.excessMinor || 0)}`;
   });
   if ($('#received').value !== draft.amount) $('#received').value = draft.amount;
+  if ($('[data-use-credit]')) $('[data-use-credit]').setAttribute('aria-pressed', String(draft.useCredit));
+  if ($('[data-use-credit-amount]')) $('[data-use-credit-amount]').textContent = money(Math.min(c.creditMinor, base));
   $('#manual').checked = draft.manual;
   $$('[data-allocation]').forEach(input => { input.readOnly = !draft.manual; const value = draft.manual ? draft.allocations[input.dataset.allocation] || '0' : decimal(result.allocations?.find(a => a.expenseId === input.dataset.allocation)?.amountMinor || 0); if (input.value !== value) input.value = value; });
-  const error = result.error || (!result.netMinor ? 'Pentru a încasa un avans, alege „Păstrez în avans”.' : '');
+  const error = result.error || (!result.netMinor && !credit ? 'Pentru a încasa un avans, alege „Păstrez în avans”.' : '');
   $('#collection-error').hidden = !error || !draft.amount; $('#collection-error').textContent = error;
   $('#excess').hidden = !!result.error || !result.excessMinor;
   $('#excess-label').textContent = `Diferență: ${money(result.excessMinor || 0)}`;
@@ -330,10 +337,10 @@ function updateCollection() {
   }
   $('#collection-summary').hidden = !!result.error;
   $('#collection-dock-summary').hidden = !!result.error;
-  const settlementRow = settlementMinor ? `<div><dt>${draft.settlement === 'credit' ? 'Acoperă din avans' : 'Ajustare de rotunjire'}</dt><dd>${money(settlementMinor)}</dd></div>` : '';
+  const settlementRow = settlementMinor ? `<div><dt>${credit || draft.settlement === 'credit' ? 'Acoperă din avans' : 'Ajustare de rotunjire'}</dt><dd>${money(settlementMinor)}</dd></div>` : '';
   if (!result.error) $('#collection-dock-summary').innerHTML = `<dl><div><dt>Acoperă din numerar</dt><dd>${money(result.coveredMinor)}</dd></div>${settlementRow}<div><dt>Rămâne de achitat</dt><dd>${money(finalDueMinor)}</dd></div></dl>`;
   if (!result.error) $('#collection-summary').innerHTML = `<dl><div><dt>Acoperă din numerar</dt><dd>${money(result.coveredMinor)}</dd></div>${settlementRow}${result.changeMinor ? `<div><dt>Rest de dat</dt><dd>${money(result.changeMinor)}</dd></div>` : ''}${result.creditMinor ? `<div><dt>Avans nou</dt><dd>${money(result.creditMinor)}</dd></div>` : ''}<div><dt>Rămâne de achitat</dt><dd>${money(finalDueMinor)}</dd></div><div><dt>Intră în fondul clasei</dt><dd><strong>${money(result.netMinor)}</strong></dd></div></dl>`;
-  $('#collection-save').textContent = result.netMinor > 0 ? `Înregistrează · ${money(result.netMinor)}` : 'Înregistrează încasarea';
+  $('#collection-save').textContent = result.netMinor > 0 ? `Înregistrează · ${money(result.netMinor)} numerar` : credit ? `Folosește avansul · ${money(credit.amountMinor)}` : 'Înregistrează încasarea';
   updateNotices();
   updateDockHeight();
 }
@@ -908,13 +915,20 @@ async function submitCollection() {
   if (!canWrite()) return;
   if (saving || pending || conflict) return;
   const result = collectionResult(child(), draft);
-  if (result.error || result.netMinor <= 0) return;
+  const credit = creditSettlement(child(), draft, result);
+  if (result.error || (result.netMinor <= 0 && !credit)) return;
   const occurredAt = new Date(draft.occurredAt);
   if (Number.isNaN(occurredAt.getTime())) { $('#collection-error').textContent = 'Completează data și ora încasării.'; $('#collection-error').hidden = false; return; }
-  const settlement = smallSettlement(child(), draft, result);
-  const settlementBody = settlement && draft.settlement !== 'none' ? { settlement: { type: draft.settlement, allocations: settlement.allocations } } : {};
-  const settlementMessage = settlementBody.settlement ? (draft.settlement === 'credit'
-    ? ` Diferența de ${money(settlement.amountMinor)} a fost acoperită din avans.`
+  if (result.netMinor === 0 && credit) {
+    await mutate('/api/credit/apply', { childId, allocations: credit.allocations, occurredAt: occurredAt.toISOString(), comment: draft.comment.trim() },
+      `Avans repartizat pentru ${name(child())}: ${money(credit.amountMinor)}.`);
+    return;
+  }
+  const settlement = credit || smallSettlement(child(), draft, result);
+  const settlementType = credit ? 'credit' : draft.settlement;
+  const settlementBody = settlement && settlementType !== 'none' ? { settlement: { type: settlementType, allocations: settlement.allocations } } : {};
+  const settlementMessage = settlementBody.settlement ? (settlementType === 'credit'
+    ? ` Din avans au fost folosiți ${money(settlement.amountMinor)}.`
     : ` Diferența de ${money(settlement.amountMinor)} a fost închisă ca ajustare de rotunjire.`) : '';
   await mutate('/api/collections', { childId, receivedMinor: result.receivedMinor, changeMinor: result.changeMinor, allocations: result.allocations,
     ...settlementBody, occurredAt: occurredAt.toISOString(), comment: draft.comment.trim() },
@@ -982,13 +996,24 @@ document.addEventListener('click', async event => {
   }
   if (saving || pending) { if (button.type !== 'submit') toast('Verifică mai întâi salvarea în așteptare.'); return; }
   if (button.dataset.target) {
-    draft.target = button.dataset.target; draft.manual = false; draft.round = null; draft.settlement = 'none';
+    draft.target = button.dataset.target; draft.manual = false; draft.round = null; draft.settlement = 'none'; draft.useCredit = false; draft.cashBeforeCredit = null;
     draft.amount = decimal(draft.target === 'all' ? child().dueMinor : unpaid(child()).find(e => e.expenseId === draft.target).remainingMinor);
     dirty = true; updateCollection(); return;
   }
   if (button.dataset.round) {
     const base = draft.target === 'all' ? child().dueMinor : unpaid(child()).find(e => e.expenseId === draft.target)?.remainingMinor || 0;
-    draft.round = Number(button.dataset.round); draft.amount = decimal(roundUp(base, draft.round)); dirty = true; updateCollection(); return;
+    draft.round = Number(button.dataset.round); draft.amount = decimal(roundUp(base, draft.round)); draft.useCredit = false; draft.cashBeforeCredit = null; dirty = true; updateCollection(); return;
+  }
+  if (button.dataset.useCredit !== undefined) {
+    const c = child();
+    if (draft.useCredit) {
+      draft.useCredit = false; draft.amount = draft.cashBeforeCredit || decimal(draft.target === 'all' ? c.dueMinor : unpaid(c).find(e => e.expenseId === draft.target)?.remainingMinor || 0); draft.cashBeforeCredit = null;
+    } else {
+      const base = draft.target === 'all' ? c.dueMinor : unpaid(c).find(e => e.expenseId === draft.target)?.remainingMinor || 0;
+      draft.cashBeforeCredit = draft.amount; draft.useCredit = true; draft.manual = false; draft.round = null; draft.settlement = 'none';
+      draft.amount = decimal(Math.max(0, base - Math.min(c.creditMinor, base)));
+    }
+    dirty = true; updateCollection(); return;
   }
   if (button.dataset.excess) { draft.excess = button.dataset.excess; dirty = true; updateCollection(); return; }
   if (button.dataset.tab) {
@@ -1070,7 +1095,7 @@ document.addEventListener('input', event => {
   }
   if (input.closest('#collection-form')) {
     dirty = true;
-    if (input.id === 'received') { draft.amount = input.value; draft.round = null; draft.settlement = 'none'; }
+    if (input.id === 'received') { draft.amount = input.value; draft.round = null; draft.settlement = 'none'; draft.useCredit = false; draft.cashBeforeCredit = null; }
     if (input.dataset.allocation) { draft.allocations[input.dataset.allocation] = input.value; draft.settlement = 'none'; }
     if (input.id === 'collection-date') draft.occurredAt = input.value;
     if (input.id === 'collection-comment') draft.comment = input.value;
@@ -1112,7 +1137,7 @@ document.addEventListener('change', async event => {
   if (input.id === 'manual') {
     const result = collectionResult(child(), draft);
     if (input.checked) draft.allocations = Object.fromEntries(unpaid(child()).map(e => [e.expenseId, decimal(result.allocations?.find(a => a.expenseId === e.expenseId)?.amountMinor || 0)]));
-    draft.manual = input.checked; draft.round = null; draft.settlement = 'none'; dirty = true; updateCollection();
+    draft.manual = input.checked; draft.round = null; draft.settlement = 'none'; draft.useCredit = false; draft.cashBeforeCredit = null; dirty = true; updateCollection();
   }
   if (input.id === 'all-participants') { $$('[data-participant]').forEach(el => { el.checked = input.checked; }); modalDirty = true; updateExpensePreview(); }
   if (input.dataset.participant || input.name === 'type') updateExpensePreview();
