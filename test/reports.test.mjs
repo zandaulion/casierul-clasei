@@ -222,17 +222,24 @@ test('all four PDF reports preserve financial values, privacy, branding and read
   }
 });
 
-test('reports state a per-child contribution only when every participant owes the same amount', async t => {
+test('reports use the common amount or the lower base amount of a one-ban split', async t => {
   const data = await fixture(t);
   const equalReport = await inspectPdf(data, 'expense', 'equal-per-child');
   assertMetric(equalReport, 'Contribuție per copil', money(3000));
 
   data.post('expense.create', { title: 'Împărțire cu diferență de un ban', type: 'split', amountMinor: 100,
     participants: data.ledger.getState().children.slice(0, 3).map(child => ({ childId: child.id })) });
-  const unequal = data.ledger.getState().expenses.find(expense => expense.title === 'Împărțire cu diferență de un ban');
-  const unequalReport = await inspectPdf({ ...data, primary: unequal.id }, 'expense', 'unequal-per-child');
+  const roundedSplit = data.ledger.getState().expenses.find(expense => expense.title === 'Împărțire cu diferență de un ban');
+  assert.deepEqual(roundedSplit.contributions.map(contribution => contribution.amountMinor).toSorted((a, b) => a - b), [33, 33, 34]);
+  const roundedSplitReport = await inspectPdf({ ...data, primary: roundedSplit.id }, 'expense', 'rounded-split-per-child');
+  assertMetric(roundedSplitReport, 'Contribuție per copil', money(33));
+
+  data.post('expense.create', { title: 'Cantități diferite', type: 'quantity', amountMinor: 100,
+    participants: data.ledger.getState().children.slice(0, 2).map((child, index) => ({ childId: child.id, quantity: index + 1 })) });
+  const unequal = data.ledger.getState().expenses.find(expense => expense.title === 'Cantități diferite');
+  const unequalReport = await inspectPdf({ ...data, primary: unequal.id }, 'expense', 'unequal-quantity-per-child');
   assert.equal(unequalReport.text.includes('Contribuție per copil'), false,
-    'a 0,34 / 0,33 / 0,33 split is not described as equal');
+    'genuinely different contributions are not described as one common amount');
 });
 
 test('multipage PDFs keep long titles, comments and histories without clipping or overlap', async t => {

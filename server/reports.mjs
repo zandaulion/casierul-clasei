@@ -39,11 +39,13 @@ function expenseStatus(state, expense) {
   return { count: outstanding.length, amountMinor: sum(outstanding.map(item => item.remainingMinor)) };
 }
 
-function equalContributionMinor(expense) {
+function reportedContributionMinor(expense) {
   if (!expense.contributions.length) return null;
-  const amountMinor = expense.contributions[0].amountMinor;
-  if (amountMinor <= 0) return null;
-  return expense.contributions.every(contribution => contribution.amountMinor === amountMinor) ? amountMinor : null;
+  const amounts = expense.contributions.map(contribution => contribution.amountMinor);
+  const minimum = Math.min(...amounts), maximum = Math.max(...amounts);
+  if (minimum <= 0) return null;
+  if (minimum === maximum) return minimum;
+  return expense.type === 'split' && maximum - minimum === 1 ? minimum : null;
 }
 
 export function reportSubject(state, type, subjectId) {
@@ -328,7 +330,7 @@ export async function renderReportPdf(report, state, branding = {}) {
     section('Cheltuieli');
     for (const expense of state.expenses.filter(entry => !entry.cancelled).reverse()) {
       const due = expenseStatus(state, expense);
-      const contributionMinor = equalContributionMinor(expense);
+      const contributionMinor = reportedContributionMinor(expense);
       const tone = due.amountMinor === 0 ? 'positive' : expense.collectedMinor > 0 ? 'warning' : 'negative';
       item(expense.title, money(expense.totalMinor),
         `${contributionMinor === null ? '' : `Contribuție per copil ${money(contributionMinor)} · `}Încasat ${money(expense.collectedMinor)} · Acoperit din fond ${money(expense.coveredMinor ?? 0)} · Ajustări ${money(expense.adjustedMinor ?? 0)} · Dat mai departe ${money(expense.paidOutMinor)} · De achitat: ${due.count} copii · ${money(due.amountMinor)} · Documente partajate: ${sharedAttachments(state, 'expense', expense.id).length}`,
@@ -357,7 +359,7 @@ export async function renderReportPdf(report, state, branding = {}) {
     const partiallyPaid = childContributions.filter(entry => entry.paidMinor + (entry.coveredMinor ?? 0) > 0 && entry.remainingMinor > 0).length;
     section('Rezumat');
     metric('Necesar total', money(expense.totalMinor));
-    const contributionMinor = equalContributionMinor(expense);
+    const contributionMinor = reportedContributionMinor(expense);
     if (contributionMinor !== null) metric('Contribuție per copil', money(contributionMinor), 'info');
     metric('Încasat de la părinți', money(expense.collectedMinor), expense.collectedMinor ? 'positive' : null);
     metric('Acoperit din fond', money(expense.coveredMinor ?? 0), expense.coveredMinor ? 'info' : null);
