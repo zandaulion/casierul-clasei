@@ -18,6 +18,8 @@ test('Romanian money converts exactly to bani and rejects ambiguous or imprecise
   for (const text of ['', '-1', '1.000,25', '1,999', '1e2', 'Infinity']) assert.equal(parseMoney(text), null, text);
 });
 test('rounding uses the selected original amount and preserves exact multiples', () => {
+  assert.equal(roundUp(1414, 5), 1500);
+  assert.equal(roundUp(1500, 5), 1500);
   assert.equal(roundUp(8550, 10), 9000);
   assert.equal(roundUp(8550, 50), 10000);
   assert.equal(roundUp(10000, 100), 10000);

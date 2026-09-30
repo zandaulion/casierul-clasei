@@ -405,7 +405,7 @@ main { min-width: 0; padding: 24px 20px; outline: none; }
 .total-choice { min-height: 86px; margin: 20px 0 0; border-radius: var(--radius); }
 .total-number { font-size: 29px; font-weight: 650; white-space: nowrap; }
 .choice-money { font-size: 19px; font-weight: 600; white-space: nowrap; }
-.rounds { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 5.5em), 1fr)); gap: 8px; }
+.rounds { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 .round { min-height: 74px; padding: 10px 4px; background: var(--sky); border-color: transparent; }
 .round[aria-pressed=true] {
   border-color: var(--brand);
@@ -781,6 +781,7 @@ dialog::backdrop { background: #13271e88; }
   .welcome-copy p { font-size: 15px; }
   .welcome-banner img { width: 160px; height: 126px; flex-basis: 160px; }
   .children { gap: 14px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 17.5em), 1fr)); }
+  .rounds { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .expense-grid, .report-types {
     gap: 16px;
     grid-template-columns: repeat(auto-fit, minmax(min(100%, max(19em, (100% - 16px) / 2)), 1fr));

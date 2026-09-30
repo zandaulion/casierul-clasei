@@ -186,6 +186,11 @@ try {
   await page('Emulation.setDeviceMetricsOverride', { width: 320, height: 700, deviceScaleFactor: 1, mobile: true });
   assert.equal(await evaluate('(() => { const dock=document.querySelector(".collection-dock").getBoundingClientRect(); return dock.top >= 0 && dock.bottom <= innerHeight && [...document.querySelectorAll("[data-excess]")].every(button => button.scrollWidth <= button.clientWidth); })()'), true, 'fixed collection actions fit a small phone');
   await page('Emulation.setDeviceMetricsOverride', { width: 412, height: 915, deviceScaleFactor: 1, mobile: true });
+  assert.deepEqual(await evaluate('[...document.querySelectorAll("[data-round]")].map(button => Number(button.dataset.round))'), [5, 10, 50, 100]);
+  assert.equal(await evaluate('document.getElementById("rounds").compareDocumentPosition(document.querySelector("[data-target]:not([data-target=all])")) & Node.DOCUMENT_POSITION_FOLLOWING'), 4, 'rounding controls precede individual contributions');
+  assert.equal(await evaluate('document.querySelector(".contact-panel").compareDocumentPosition(document.getElementById("collection-form")) & Node.DOCUMENT_POSITION_PRECEDING'), 2, 'WhatsApp tools follow the collection form');
+  await click('[data-round="5"]');
+  assert.equal(await getValue('#received'), '130,00');
   await click('[data-target="' + booksId + '"]');
   assert.equal(await getValue('#received'), '60,00');
   await click('[data-round="100"]');
