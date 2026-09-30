@@ -162,12 +162,13 @@ export async function renderReportPdf(report, state, branding = {}) {
     const expenses = state.expenses.filter(entry => !entry.cancelled).sort((a, b) => a.occurredAt.localeCompare(b.occurredAt) || a.title.localeCompare(b.title, locale));
     if (!expenses.length) { note('Nu există cheltuieli active pentru tabel.'); return; }
     const children = state.children;
-    const left = doc.page.margins.left, nameWidth = 145, minimumCellWidth = 92;
+    const left = doc.page.margins.left, nameWidth = 188, totalWidth = 62, minimumCellWidth = 92;
+    const childNameWidth = nameWidth - totalWidth - 14;
     const columnsPerGroup = Math.max(1, Math.floor((width - nameWidth) / minimumCellWidth));
     const groups = Array.from({ length: Math.ceil(expenses.length / columnsPerGroup) }, (_, index) => expenses.slice(index * columnsPerGroup, (index + 1) * columnsPerGroup));
     const colors = { paid: '#d9f0e1', partial: '#fff0bf', unpaid: '#f7d6d2', none: '#eeeeea' };
     const rowHeight = 23, headerHeight = 68;
-    const closingNote = `Raport nominal pentru verificare internă, generat din registrul „Casierul clasei”. Sumele sunt în lei. Celulele arată contribuțiile închise, inclusiv ajustările de rotunjire; barele și procentele arată numai contribuțiile acoperite din bani încasați.${expenses.some(expense => expense.totalMinor === 0) ? ' „—” în antet: fără sumă de acoperit.' : ''}`;
+    const closingNote = `Raport nominal pentru verificare internă, generat din registrul „Casierul clasei”. Sumele sunt în lei. Total de plată arată suma rămasă de achitat de fiecare copil pentru toate contribuțiile active. Celulele arată contribuțiile închise, inclusiv ajustările de rotunjire; barele și procentele arată numai contribuțiile acoperite din bani încasați.${expenses.some(expense => expense.totalMinor === 0) ? ' „—” în antet: fără sumă de acoperit.' : ''}`;
     doc.font('Regular').fontSize(8.5);
     const closingHeight = doc.heightOfString(closingNote, { width, lineGap: 2 }) + 16;
     const compactMoney = minor => compactMoneyFormat.format(minor / 100);
@@ -191,7 +192,8 @@ export async function renderReportPdf(report, state, branding = {}) {
       const cellWidth = Math.min(118, (width - nameWidth) / group.length), tableWidth = nameWidth + cellWidth * group.length;
       let x = left, y = doc.y;
       doc.rect(x, y, nameWidth, headerHeight).fillAndStroke(paper.fill, line);
-      doc.font('Bold').fontSize(8).fillColor(dark).text('Copil', x + 5, y + 18, { width: nameWidth - 10, ellipsis: true, lineBreak: false });
+      doc.font('Bold').fontSize(8).fillColor(dark).text('Copil', x + 5, y + 18, { width: childNameWidth, ellipsis: true, lineBreak: false });
+      doc.font('Bold').fontSize(7.2).fillColor(dark).text('Total de\nplată', x + nameWidth - totalWidth - 4, y + 14, { width: totalWidth, align: 'right', lineGap: 1 });
       doc.font('Regular').fontSize(7).fillColor(muted).text('Acoperire din contribuții', x + 5, y + 48, { width: nameWidth - 10 });
       x += nameWidth;
       for (const expense of group) {
@@ -220,7 +222,8 @@ export async function renderReportPdf(report, state, branding = {}) {
         if (doc.y + rowHeight + (isLastRow ? closingHeight : 0) > doc.page.height - doc.page.margins.bottom - 4) geometry = newMatrixPage(group, groupIndex);
         const y = doc.y;
         doc.rect(left, y, nameWidth, rowHeight).fillAndStroke('#fffdf7', line);
-        doc.font('Regular').fontSize(7.5).fillColor(dark).text(`${personName(child)}${child.active ? '' : ' · arhivat'}`, left + 5, y + 7, { width: nameWidth - 10, height: rowHeight - 8, ellipsis: true, lineBreak: false });
+        doc.font('Regular').fontSize(7.5).fillColor(dark).text(`${personName(child)}${child.active ? '' : ' · arhivat'}`, left + 5, y + 7, { width: childNameWidth, height: rowHeight - 8, ellipsis: true, lineBreak: false });
+        doc.font('Bold').fontSize(7.2).fillColor(child.dueMinor ? dark : green).text(`${compactMoney(child.dueMinor)} lei`, left + nameWidth - totalWidth - 4, y + 7, { width: totalWidth, align: 'right', lineBreak: false });
         group.forEach((expense, index) => {
           const contribution = child.contributions.find(entry => entry.expenseId === expense.id);
           const settledMinor = contribution ? contribution.paidMinor + (contribution.adjustedMinor ?? 0) : 0;
