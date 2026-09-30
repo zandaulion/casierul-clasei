@@ -5,7 +5,8 @@ import { dirname, resolve } from 'node:path';
 import { REPORT_TYPES, renderReportPdf, reportCode, reportFilename, reportSubject } from './reports.mjs';
 
 const MAX_MONEY = 1_000_000_000_000;
-const MAX_CHILDREN = 500;
+// A real class has a few dozen children; the cap keeps state payloads and PDF tables responsive.
+const MAX_CHILDREN = 100;
 const MAX_LOGO_BYTES = 256 * 1024;
 const MAX_REQUEST_BYTES = 1024 * 1024;
 export const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
@@ -202,9 +203,11 @@ CREATE TABLE IF NOT EXISTS transactions (
   destination TEXT NOT NULL, comment TEXT NOT NULL,
   amount INTEGER NOT NULL CHECK(amount > 0), change INTEGER NOT NULL CHECK(change >= 0 AND change <= amount),
   reverses_id TEXT UNIQUE REFERENCES transactions(id), advance_id TEXT REFERENCES transactions(id),
+  settles_id TEXT REFERENCES transactions(id),
   actor_id TEXT NOT NULL, actor_label TEXT NOT NULL,
   CHECK((type = 'reversal') = (reverses_id IS NOT NULL)),
-  CHECK((type IN ('advance_repayment', 'advance_waiver')) = (advance_id IS NOT NULL))
+  CHECK((type IN ('advance_repayment', 'advance_waiver')) = (advance_id IS NOT NULL)),
+  CHECK(settles_id IS NULL OR type IN ('credit_apply', 'rounding_adjustment'))
 ) STRICT;
 CREATE TABLE IF NOT EXISTS allocations (
   transaction_id TEXT NOT NULL REFERENCES transactions(id),
@@ -338,6 +341,30 @@ function migrateTransactions(db) {
   }
 }
 
+function migrateSettlements(db) {
+  if (db.prepare("PRAGMA table_info('transactions')").all().some(column => column.name === 'settles_id')) return;
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    // Link each settlement to the collection it was saved with, so a correction can undo both together.
+    // Before this column existed, the settlement row was inserted immediately after its collection.
+    db.exec(`ALTER TABLE transactions ADD COLUMN settles_id TEXT REFERENCES transactions(id);
+      DROP TRIGGER IF EXISTS transactions_no_update;
+      UPDATE transactions SET settles_id = (
+        SELECT c.id FROM transactions AS c WHERE c.rowid = transactions.rowid - 1 AND c.type = 'collection'
+          AND c.child_id = transactions.child_id AND c.actor_id = transactions.actor_id
+          AND c.occurred_at = transactions.occurred_at AND c.comment = transactions.comment
+          AND abs(julianday(c.created_at) - julianday(transactions.created_at)) * 86400 < 1)
+        WHERE type IN ('credit_apply', 'rounding_adjustment');
+      CREATE TRIGGER transactions_no_update BEFORE UPDATE ON transactions BEGIN
+        SELECT RAISE(ABORT, 'Financial history is immutable');
+      END;
+      COMMIT;`);
+  } catch (error) {
+    try { db.exec('ROLLBACK'); } catch { /* Transaction may already be closed. */ }
+    throw error;
+  }
+}
+
 function migrateReports(db) {
   const table = db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'reports'").get();
   if (!table?.sql || table.sql.includes("'matrix'")) return;
@@ -387,6 +414,7 @@ export class Ledger {
     migratePaymentSettings(this.#db);
     migrateTransactions(this.#db);
     this.#db.exec('CREATE INDEX IF NOT EXISTS transactions_advance ON transactions(advance_id)');
+    migrateSettlements(this.#db);
     migrateReports(this.#db);
   }
 
@@ -514,17 +542,20 @@ export class Ledger {
     const who = object(actor, 'Dispozitivul');
     const actorLabel = text(who.label, 'Numele dispozitivului', 160);
     const fingerprint = createHash('sha256').update(canonical({ type, subjectId, replacesId })).digest('hex');
-    this.#db.exec('BEGIN IMMEDIATE');
-    try {
+    const repeatedReport = () => {
       const repeated = this.#one('SELECT id, request_fingerprint FROM reports WHERE request_id = ?', requestId);
-      if (repeated) {
-        if (repeated.request_fingerprint !== fingerprint) fail('Identificatorul cererii a fost deja folosit pentru alt raport.', 409);
-        const report = this.#reports().find(item => item.id === repeated.id);
-        this.#db.exec('COMMIT');
-        return { report, reports: this.#reports() };
-      }
-      const stateWithReports = this.#state();
-      const { reports: _reports, ...reportState } = stateWithReports;
+      if (!repeated) return null;
+      if (repeated.request_fingerprint !== fingerprint) fail('Identificatorul cererii a fost deja folosit pentru alt raport.', 409);
+      const reports = this.#reports();
+      return { report: reports.find(item => item.id === repeated.id), reports };
+    };
+    // Rendering a PDF yields to the event loop, so it happens outside any transaction: SQLite runs on a
+    // single connection here, and another request must never find a transaction left open by this one.
+    // The write below only commits if the ledger is still exactly what the PDF was rendered from.
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const repeated = repeatedReport();
+      if (repeated) return repeated;
+      const { reports: _reports, ...reportState } = this.getState();
       const state = withoutPrivateContacts(reportState);
       const subject = reportSubject(state, type, subjectId);
       let replaced = null;
@@ -539,27 +570,36 @@ export class Ledger {
       const report = { id, serial, code: reportCode(serial), type, subjectId: subject.id, subjectLabel: subject.label,
         createdAt, stateRevision: state.revision, createdByLabel: actorLabel,
         replacesId: replaced?.id ?? null, replacesCode: replaced ? reportCode(replaced.serial) : null };
-      const branding = Object.fromEntries(['school', 'class'].map((kind) => {
-        const image = this.getBrandingImage(kind);
-        return [kind, image?.data ?? null];
-      }));
+      const branding = Object.fromEntries(['school', 'class'].map((kind) => [kind, this.getBrandingImage(kind)?.data ?? null]));
       const pdf = await renderReportPdf(report, state, branding);
       const sha256 = createHash('sha256').update(pdf).digest('hex');
       const filename = reportFilename(report);
-      this.#run(`INSERT INTO reports (serial, id, request_id, request_fingerprint, type, subject_id, subject_label,
-        created_at, state_revision, created_by_label, replaces_id, replaced_by_id, filename, sha256, snapshot, pdf)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?)`,
-      serial, id, requestId, fingerprint, type, subject.id, subject.label, createdAt, state.revision,
-      actorLabel, replaced?.id ?? null, filename, sha256, JSON.stringify(state), pdf);
-      if (replaced) this.#run('UPDATE reports SET replaced_by_id = ? WHERE id = ?', id, replaced.id);
-      const saved = this.#reports().find(item => item.id === id);
-      const reports = this.#reports();
-      this.#db.exec('COMMIT');
-      return { report: saved, reports };
-    } catch (error) {
-      this.#db.exec('ROLLBACK');
-      throw error;
+      this.#db.exec('BEGIN IMMEDIATE');
+      try {
+        const repeatedMeanwhile = repeatedReport();
+        if (repeatedMeanwhile) { this.#db.exec('COMMIT'); return repeatedMeanwhile; }
+        const currentRevision = this.#one('SELECT revision FROM metadata WHERE singleton = 1').revision;
+        const currentSerial = Number(this.#one('SELECT COALESCE(MAX(serial), 0) + 1 AS value FROM reports').value);
+        const replacedMeanwhile = replaced && this.#one('SELECT replaced_by_id FROM reports WHERE id = ?', replaced.id)?.replaced_by_id;
+        if (currentRevision !== state.revision || currentSerial !== serial || replacedMeanwhile) {
+          this.#db.exec('ROLLBACK');
+          continue;
+        }
+        this.#run(`INSERT INTO reports (serial, id, request_id, request_fingerprint, type, subject_id, subject_label,
+          created_at, state_revision, created_by_label, replaces_id, replaced_by_id, filename, sha256, snapshot, pdf)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?)`,
+        serial, id, requestId, fingerprint, type, subject.id, subject.label, createdAt, state.revision,
+        actorLabel, replaced?.id ?? null, filename, sha256, JSON.stringify(state), pdf);
+        if (replaced) this.#run('UPDATE reports SET replaced_by_id = ? WHERE id = ?', id, replaced.id);
+        const reports = this.#reports();
+        this.#db.exec('COMMIT');
+        return { report: reports.find(item => item.id === id), reports };
+      } catch (error) {
+        this.#db.exec('ROLLBACK');
+        throw error;
+      }
     }
+    fail('Registrul s-a schimbat în timpul generării raportului. Încearcă din nou.', 409);
   }
 
   getReportPdf(reportId) {
@@ -607,7 +647,7 @@ export class Ledger {
       id: row.id, type: row.type, occurredAt: row.occurred_at, createdAt: row.created_at,
       childId: row.child_id, expenseId: row.expense_id, destination: row.destination,
       comment: row.comment, amountMinor: row.amount, changeMinor: row.change,
-      advanceId: row.advance_id,
+      advanceId: row.advance_id, settlesId: row.settles_id,
       allocations: allocationsByTransaction.get(row.id) ?? [],
       reversed: reversed.has(row.id), reversesId: row.reverses_id, actorLabel: row.actor_label,
     }));
@@ -674,6 +714,13 @@ export class Ledger {
         bump(tx.type === 'collection' ? collectedAfterPayment : directAfterPayment, allocation.expenseId, allocation.amountMinor);
       }
     }
+    const contributionsByExpense = new Map(), contributionsByChild = new Map();
+    for (const row of contributionRows) {
+      if (!contributionsByExpense.has(row.expense_id)) contributionsByExpense.set(row.expense_id, []);
+      contributionsByExpense.get(row.expense_id).push(row);
+      if (!contributionsByChild.has(row.child_id)) contributionsByChild.set(row.child_id, []);
+      contributionsByChild.get(row.child_id).push(row);
+    }
     const expenses = expenseRows.map(row => ({
       id: row.id, title: row.title, type: row.type, amountMinor: row.amount, totalMinor: row.total,
       collectedMinor: expenseCollected.get(row.id) ?? 0, adjustedMinor: expenseAdjusted.get(row.id) ?? 0,
@@ -687,28 +734,28 @@ export class Ledger {
       directAfterLatestPaymentMinor: directAfterPayment.get(row.id) ?? 0,
       occurredAt: row.occurred_at, dueDate: row.due_date, comment: row.comment,
       cancelled: Boolean(row.cancelled),
-      contributions: contributionRows.filter(c => c.expense_id === row.id).map(c => ({
+      contributions: (contributionsByExpense.get(row.id) ?? []).map(c => ({
         childId: c.child_id, amountMinor: c.amount, quantity: c.quantity,
       })),
     }));
     const expensesById = new Map(expenses.map(expense => [expense.id, expense]));
+    const expenseDue = new Map();
     const children = childRows.map(row => {
-      const contributions = contributionRows.filter(c => c.child_id === row.id && !expensesById.get(c.expense_id).cancelled).map(c => {
+      const contributions = (contributionsByChild.get(row.id) ?? []).filter(c => !expensesById.get(c.expense_id).cancelled).map(c => {
         const expense = expensesById.get(c.expense_id);
         const paidMinor = contributionPaid.get(`${row.id}:${c.expense_id}`) ?? 0;
         const directMinor = contributionDirect.get(`${row.id}:${c.expense_id}`) ?? 0;
         const adjustedMinor = contributionAdjusted.get(`${row.id}:${c.expense_id}`) ?? 0;
         const coveredMinor = contributionCovered.get(`${row.id}:${c.expense_id}`) ?? 0;
+        const remainingMinor = c.amount - paidMinor - directMinor - adjustedMinor - coveredMinor;
+        bump(expenseDue, c.expense_id, remainingMinor);
         return { expenseId: c.expense_id, title: expense.title, dueDate: expense.dueDate,
-          amountMinor: c.amount, paidMinor, directMinor, adjustedMinor, coveredMinor,
-          remainingMinor: c.amount - paidMinor - directMinor - adjustedMinor - coveredMinor };
+          amountMinor: c.amount, paidMinor, directMinor, adjustedMinor, coveredMinor, remainingMinor };
       }).sort((a, b) => (a.dueDate ?? '9999-12-31').localeCompare(b.dueDate ?? '9999-12-31') || names.compare(a.title, b.title) || a.expenseId.localeCompare(b.expenseId));
       return { id: row.id, firstName: row.first_name, lastName: row.last_name, active: Boolean(row.active),
         creditMinor: childCredit.get(row.id), dueMinor: sum(contributions.map(c => c.remainingMinor)), contributions };
     }).sort((a, b) => names.compare(a.lastName, b.lastName) || names.compare(a.firstName, b.firstName) || a.id.localeCompare(b.id));
-    for (const expense of expenses) {
-      expense.dueMinor = sum(children.map(child => child.contributions.find(contribution => contribution.expenseId === expense.id)?.remainingMinor ?? 0));
-    }
+    for (const expense of expenses) expense.dueMinor = expenseDue.get(expense.id) ?? 0;
     const advances = transactions.filter(tx => tx.type === 'fund_advance').map(tx => {
       const repaidMinor = advanceRepaid.get(tx.id) ?? 0;
       const waivedMinor = advanceWaived.get(tx.id) ?? 0;
@@ -812,11 +859,11 @@ export class Ledger {
   #transaction(type, body, actor, values = {}) {
     const id = randomUUID();
     const record = { childId: null, expenseId: null, destination: '', comment: text(body.comment, 'Comentariul', 2000, false),
-      amountMinor: 0, changeMinor: 0, reversesId: null, advanceId: null, allocations: [], ...values };
+      amountMinor: 0, changeMinor: 0, reversesId: null, advanceId: null, settlesId: null, allocations: [], ...values };
     this.#run(`INSERT INTO transactions (id, type, occurred_at, created_at, child_id, expense_id,
-      destination, comment, amount, change, reverses_id, advance_id, actor_id, actor_label) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      destination, comment, amount, change, reverses_id, advance_id, settles_id, actor_id, actor_label) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     id, type, timestamp(body.occurredAt), new Date().toISOString(), record.childId, record.expenseId,
-    record.destination, record.comment, record.amountMinor, record.changeMinor, record.reversesId, record.advanceId, actor.id, actor.label);
+    record.destination, record.comment, record.amountMinor, record.changeMinor, record.reversesId, record.advanceId, record.settlesId, actor.id, actor.label);
     for (const allocation of record.allocations) {
       this.#run('INSERT INTO allocations (transaction_id, expense_id, amount) VALUES (?, ?, ?)', id, allocation.expenseId, allocation.amountMinor);
     }
@@ -1007,7 +1054,7 @@ export class Ledger {
       }
       const transactionId = this.#transaction('collection', body, actor, { childId: child.id, amountMinor: receivedMinor, changeMinor, allocations });
       if (settlement) this.#transaction(settlement.type === 'credit' ? 'credit_apply' : 'rounding_adjustment', body, actor,
-        { childId: child.id, amountMinor: settlement.amountMinor, allocations: settlement.allocations });
+        { childId: child.id, amountMinor: settlement.amountMinor, allocations: settlement.allocations, settlesId: transactionId });
       return transactionId;
     }
     if (operation === 'credit.apply') {
@@ -1099,9 +1146,14 @@ export class Ledger {
         }
       }
       const comment = text(body.comment, 'Motivul corecției', 2000);
-      return this.#transaction('reversal', { comment }, actor, { childId: original.childId, expenseId: original.expenseId,
-        destination: original.destination, amountMinor: original.amountMinor, changeMinor: original.changeMinor,
-        reversesId: original.id, allocations: original.allocations });
+      const reverse = target => this.#transaction('reversal', { comment }, actor, { childId: target.childId, expenseId: target.expenseId,
+        destination: target.destination, amountMinor: target.amountMinor, changeMinor: target.changeMinor,
+        reversesId: target.id, allocations: target.allocations });
+      const reversalId = reverse(original);
+      // A settlement saved together with a collection only makes sense next to that collection:
+      // a waived remainder or applied credit must not survive the cash entry it completed.
+      for (const companion of state.transactions.filter(tx => tx.settlesId === original.id && !tx.reversed)) reverse(companion);
+      return reversalId;
     }
     fail('Operațiunea nu există.', 404);
   }

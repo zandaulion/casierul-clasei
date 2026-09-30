@@ -322,6 +322,79 @@ test('small cash differences close atomically from credit or as an auditable rou
   assert.deepEqual(ledger.getState(), before, 'invalid combined settlement rolls back the cash entry too');
 });
 
+test('reversing a collection also reverses the settlement saved with it', t => {
+  const { ledger, post, child, expense } = fixture(t);
+  const rounded = child('David', 'Bălan');
+  const withCredit = child('Ana', 'Avram');
+  const roundedExpense = expense([rounded], 1000, 'fixed', { title: 'Excursie David' });
+  const creditExpense = expense([withCredit], 1000, 'fixed', { title: 'Excursie Ana' });
+  const collection = post('collection.create', { childId: rounded, receivedMinor: 950, changeMinor: 0,
+    allocations: [{ expenseId: roundedExpense, amountMinor: 950 }],
+    settlement: { type: 'rounding', allocations: [{ expenseId: roundedExpense, amountMinor: 50 }] } }).transactionId;
+  post('collection.create', { childId: withCredit, receivedMinor: 200, changeMinor: 0, allocations: [] });
+  const creditCollection = post('collection.create', { childId: withCredit, receivedMinor: 900, changeMinor: 0,
+    allocations: [{ expenseId: creditExpense, amountMinor: 900 }],
+    settlement: { type: 'credit', allocations: [{ expenseId: creditExpense, amountMinor: 100 }] } }).transactionId;
+  let state = ledger.getState();
+  assert.equal(state.transactions.find(tx => tx.type === 'rounding_adjustment').settlesId, collection);
+  assert.equal(state.transactions.find(tx => tx.type === 'credit_apply').settlesId, creditCollection);
+
+  post('transaction.reverse', { transactionId: collection, comment: 'Încasare greșită' });
+  state = ledger.getState();
+  const contribution = state.children.find(item => item.id === rounded).contributions[0];
+  assert.deepEqual([contribution.paidMinor, contribution.adjustedMinor, contribution.remainingMinor], [0, 0, 1000]);
+  assert.equal(state.transactions.find(tx => tx.type === 'rounding_adjustment').reversed, true);
+  assert.equal(state.transactions.filter(tx => tx.type === 'reversal').length, 2);
+  assert.equal(state.summary.totalAdjustedMinor, 0);
+
+  post('transaction.reverse', { transactionId: creditCollection, comment: 'Încasare greșită' });
+  state = ledger.getState();
+  const ana = state.children.find(item => item.id === withCredit);
+  assert.deepEqual([ana.creditMinor, ana.dueMinor], [200, 1000]);
+  assert.equal(state.transactions.find(tx => tx.type === 'credit_apply').reversed, true);
+  assert.equal(state.summary.balanceMinor, 200);
+});
+
+test('existing settlements are linked to their collections when the database is upgraded', t => {
+  const { ledger, path, post, child, expense } = fixture(t, true);
+  const rounded = child('David', 'Bălan');
+  const roundedExpense = expense([rounded], 1000, 'fixed', { title: 'Excursie' });
+  const collection = post('collection.create', { childId: rounded, receivedMinor: 950, changeMinor: 0,
+    allocations: [{ expenseId: roundedExpense, amountMinor: 950 }],
+    settlement: { type: 'rounding', allocations: [{ expenseId: roundedExpense, amountMinor: 50 }] } }).transactionId;
+  ledger.close();
+  // Simulate a database written before the link existed: rebuild the table without settles_id.
+  const db = new DatabaseSync(path);
+  db.exec(`PRAGMA foreign_keys = OFF;
+    DROP TRIGGER transactions_no_update; DROP TRIGGER transactions_no_delete;
+    CREATE TABLE transactions_old AS SELECT id, type, occurred_at, created_at, child_id, expense_id, destination, comment,
+      amount, change, reverses_id, advance_id, actor_id, actor_label FROM transactions;
+    DROP TABLE transactions;
+    CREATE TABLE transactions (
+      id TEXT PRIMARY KEY,
+      type TEXT NOT NULL CHECK(type IN ('collection', 'direct_payment', 'payment', 'credit_apply', 'rounding_adjustment', 'refund', 'fund_advance', 'advance_repayment', 'advance_waiver', 'reversal')),
+      occurred_at TEXT NOT NULL, created_at TEXT NOT NULL,
+      child_id TEXT REFERENCES children(id), expense_id TEXT REFERENCES expenses(id),
+      destination TEXT NOT NULL, comment TEXT NOT NULL,
+      amount INTEGER NOT NULL CHECK(amount > 0), change INTEGER NOT NULL CHECK(change >= 0 AND change <= amount),
+      reverses_id TEXT UNIQUE REFERENCES transactions(id), advance_id TEXT REFERENCES transactions(id),
+      actor_id TEXT NOT NULL, actor_label TEXT NOT NULL
+    ) STRICT;
+    INSERT INTO transactions SELECT * FROM transactions_old; DROP TABLE transactions_old;
+    CREATE TRIGGER transactions_no_update BEFORE UPDATE ON transactions BEGIN SELECT RAISE(ABORT, 'x'); END;
+    CREATE TRIGGER transactions_no_delete BEFORE DELETE ON transactions BEGIN SELECT RAISE(ABORT, 'x'); END;`);
+  db.close();
+  const reopened = new Ledger(path);
+  t.after(() => { try { reopened.close(); } catch {} });
+  let state = reopened.getState();
+  assert.equal(state.transactions.find(tx => tx.type === 'rounding_adjustment').settlesId, collection);
+  post('transaction.reverse', { transactionId: collection, comment: 'Încasare greșită' }, reopened);
+  state = reopened.getState();
+  assert.equal(state.children[0].contributions[0].remainingMinor, 1000);
+  assert.throws(() => reopened.dispatch('transaction.reverse', { requestId: randomUUID(), expectedRevision: state.revision,
+    transactionId: state.transactions.find(tx => tx.type === 'rounding_adjustment').id, comment: 'x' }, actor), status(409));
+});
+
 test('a saved partial cash collection can be followed by a standalone rounding adjustment', t => {
   const { ledger, post, child, expense } = fixture(t);
   const ianis = child('Ianis', 'Mirea');
