@@ -116,11 +116,13 @@ npm test
 
 Cloudflare Tunnel folosește `http://127.0.0.1:8018`. API-ul privat de administrare ascultă separat pe `127.0.0.1:8118`. Publicarea instalează serviciul systemd, integrarea consolei și copii de siguranță locale zilnice.
 
-Detalii: [fluxurile implementate](docs/current-flows.md), [ghidul vizual al fluxurilor](docs/visual-flow-guide.md), [roadmap-ul de produs](docs/roadmap.md), [mai multe clase și drepturi](docs/multiple-classrooms.md), [operare și backup](docs/operations.md), [contract API](docs/api.md), [planul de criptare](docs/encryption.md).
+Detalii: [fluxurile implementate](docs/current-flows.md), [ghidul vizual al fluxurilor](docs/visual-flow-guide.md), [planșele SVG](docs/workflows/README.md), [roadmap-ul de produs](docs/roadmap.md), [mai multe clase și drepturi](docs/multiple-classrooms.md), [operare și backup](docs/operations.md), [contract API](docs/api.md), [planul de criptare](docs/encryption.md).
 
 Testele folosesc baze temporare și verifică registrul, autentificarea, calculele interfeței și integrarea HTTP. `scripts/browser-check.mjs` verifică fluxurile complete într-un context Chromium separat, cu server temporar pe portul 18018 și Chromium disponibil prin debugging pe portul 9222.
 
 `node scripts/browser-polish-check.mjs` verifică 216 combinații de rol, ecran, dimensiune și temă, de la 320 la 1920 px, plus text mărit, ecrane joase, păstrarea schiței încasării la redimensionare și previzualizări PDF adaptive. Folosește date sintetice, un server temporar pe portul 18028 și același Chromium pe portul 9222. Paleta, ilustrația și regulile de prezentare sunt documentate în [identitatea vizuală a clasei](design/community-style.md).
+
+`node scripts/render-workflow-svg.mjs` regenerează cele patru planșe SVG din `docs/workflows/`. Scriptul nu folosește fonturi, biblioteci sau servicii externe.
 
 Schița interactivă inițială rămâne în `design/collection-flow.html`; `preview/` păstrează exportul ei pentru revenire la instalarea inițială. Aplicația funcțională este în `web/` și `server/`.
 

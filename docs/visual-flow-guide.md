@@ -2,7 +2,11 @@
 
 Acest ghid desenează toate fluxurile disponibile în aplicație. Textele și ordinea pașilor sunt aceleași cu ajutorul integrat accesibil prin semnul întrebării din antet. Pentru regulile și limitele fiecărei operațiuni, vezi și [inventarul fluxurilor implementate](current-flows.md).
 
+Fiecare categorie are și o planșă SVG statică, potrivită pentru consultare directă, includere în alte documente sau imprimare. Fișierele sunt păstrate în [`docs/workflows`](workflows/README.md) și pot fi regenerate cu `node scripts/render-workflow-svg.mjs`.
+
 ## Pornire și organizare
+
+[![Planșa fluxurilor pentru pornire și organizare](workflows/01-pornire-si-organizare.svg)](workflows/01-pornire-si-organizare.svg)
 
 ```mermaid
 flowchart TB
@@ -50,6 +54,8 @@ flowchart TB
 ```
 
 ## Bani și corecții
+
+[![Planșa fluxurilor pentru bani și corecții](workflows/02-bani-si-corectii.svg)](workflows/02-bani-si-corectii.svg)
 
 ```mermaid
 flowchart TB
@@ -110,6 +116,8 @@ flowchart TB
 
 ## Documente și comunicare
 
+[![Planșa fluxurilor pentru documente și comunicare](workflows/03-documente-si-comunicare.svg)](workflows/03-documente-si-comunicare.svg)
+
 ```mermaid
 flowchart TB
   subgraph J["Documentele justificative"]
@@ -153,6 +161,8 @@ flowchart TB
 ```
 
 ## Acces, siguranță și date
+
+[![Planșa fluxurilor pentru acces, siguranță și date](workflows/04-acces-siguranta-si-date.svg)](workflows/04-acces-siguranta-si-date.svg)
 
 ```mermaid
 flowchart TB
