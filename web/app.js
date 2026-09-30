@@ -16,7 +16,7 @@ const labels = { collection: 'Încasare', payment: 'Bani dați', credit_apply: '
   fund_advance: 'Sumă avansată fondului', advance_repayment: 'Restituire sumă avansată', reversal: 'Corecție' };
 const typeLabels = { fixed: 'Sumă fixă / copil', split: 'Total împărțit', quantity: 'Cantitate × preț' };
 const reportTypeLabels = { class: 'Situația clasei', matrix: 'Tabelul contribuțiilor', expense: 'Situația unei cheltuieli', child: 'Fișa copilului' };
-const writeActions = new Set(['add-child', 'edit-child', 'edit-contacts', 'edit-reminder-contact', 'whatsapp-reminders', 'bulk-children', 'add-expense', 'edit-expense', 'payment', 'fund-advance', 'repay-advance', 'attach-document',
+const writeActions = new Set(['add-child', 'edit-child', 'edit-contacts', 'edit-reminder-contact', 'whatsapp-reminders', 'create-child-report', 'bulk-children', 'add-expense', 'edit-expense', 'payment', 'fund-advance', 'repay-advance', 'attach-document',
   'expense-payment', 'apply-credit', 'refund', 'report-class', 'report-matrix', 'report-expense', 'report-child',
   'replace-report', 'reverse', 'cancel-expense', 'remove-logo', 'add-classroom']);
 const pendingKey = 'casierul.pending.v1';
@@ -264,7 +264,13 @@ function whatsappLinks(c, compact = false) {
 }
 function contactPanel(c) {
   const contacts = contactsFor(c.id);
-  return `<section class="contact-panel" aria-labelledby="contact-panel-title"><div class="row"><div><h2 id="contact-panel-title">Contacte WhatsApp</h2><p class="caption">Conversația se deschide cu mesajul completat. Verifici și apeși Trimite în WhatsApp.</p></div><button type="button" data-action="edit-contacts">${contacts.length ? 'Editează' : 'Adaugă'}</button></div>${contacts.length ? `<div class="whatsapp-actions">${whatsappLinks(c)}</div>` : '<p class="caption">Poți salva până la două contacte pentru acest copil.</p>'}</section>`;
+  const latestReport = [...(state.reports || [])].filter(item => item.type === 'child' && item.subjectId === c.id && !item.replacedById)
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
+  const report = latestReport?.stateRevision === state.revision ? latestReport : null;
+  const reportAction = report
+    ? `<div class="child-report-option"><div><strong>Mesaj + raport individual</strong><span class="caption">${esc(report.code)} · emis ${dateText(report.createdAt)}. Alegi WhatsApp și contactul din selectorul telefonului.</span></div><div class="report-actions"><button type="button" class="primary" data-action="share-child-report" data-id="${esc(report.id)}">Partajează mesajul + PDF</button><button type="button" data-action="create-child-report">Generează unul actualizat</button></div></div>`
+    : `<div class="child-report-option"><div><strong>Mesaj + raport individual</strong><span class="caption">${latestReport ? `${esc(latestReport.code)} este dintr-o versiune anterioară a registrului. Generează fișa actuală înainte de partajare.` : 'Generează întâi fișa actuală; apoi o poți partaja împreună cu același mesaj.'}</span></div><button type="button" data-action="create-child-report">Generează raportul PDF</button></div>`;
+  return `<section class="contact-panel" aria-labelledby="contact-panel-title"><div class="row"><div><h2 id="contact-panel-title">Contacte WhatsApp</h2><p class="caption">Conversația se deschide cu mesajul completat. Verifici și apeși Trimite în WhatsApp.</p></div><button type="button" data-action="edit-contacts">${contacts.length ? 'Editează' : 'Adaugă'}</button></div>${contacts.length ? `<div class="whatsapp-actions">${whatsappLinks(c)}</div>` : '<p class="caption">Poți salva până la două contacte pentru acest copil.</p>'}${reportAction}</section>`;
 }
 function renderChild() {
   const c = child(); if (!draft) resetDraft(c);
@@ -389,15 +395,16 @@ function renderReports() {
       </article>`).join('') : `<div class="empty report-empty"><span class="report-empty-icon">${icon('reports')}</span><p>${canWrite() ? 'Alege un tip de raport de mai sus. PDF-urile emise se păstrează aici, împreună cu istoricul lor.' : 'Rapoartele vor apărea aici după ce sunt emise de casier.'}</p></div>`}</div>
     </section>`;
 }
-function reportModal(type, replacesId = null) {
+function reportModal(type, replacesId = null, subjectId = null) {
   const replaced = replacesId ? (state.reports || []).find(report => report.id === replacesId) : null;
-  const fixedSubject = replaced?.subjectId || null;
+  const fixedSubject = replaced?.subjectId || subjectId || null;
   let selector = '';
   if (type === 'expense') {
     const expenses = [...state.expenses].filter(expense => !expense.cancelled).reverse();
     selector = replaced ? `<p><strong>${esc(replaced.subjectLabel)}</strong></p>` : `<label>Cheltuiala<select name="subjectId" required>${expenses.map(expense => `<option value="${esc(expense.id)}">${esc(expense.title)}</option>`).join('')}</select></label>`;
   } else if (type === 'child') {
-    selector = replaced ? `<p><strong>${esc(replaced.subjectLabel)}</strong></p>` : `<label>Filtrează lista<select name="debtFilter"><option value="due">Doar copiii cu sume de achitat</option><option value="all">Toți copiii</option><option value="paid">Doar copiii cu totul achitat</option></select></label><label>Copilul<select name="subjectId" required></select></label><p id="report-child-count" class="caption"></p>`;
+    const fixedChild = fixedSubject ? state.children.find(item => item.id === fixedSubject) : null;
+    selector = fixedSubject ? `<p><strong>${esc(replaced?.subjectLabel || (fixedChild ? name(fixedChild) : 'Copil'))}</strong></p>` : `<label>Filtrează lista<select name="debtFilter"><option value="due">Doar copiii cu sume de achitat</option><option value="all">Toți copiii</option><option value="paid">Doar copiii cu totul achitat</option></select></label><label>Copilul<select name="subjectId" required></select></label><p id="report-child-count" class="caption"></p>`;
   }
   const privacy = type === 'child' ? 'Fișa conține numele copilului și este destinată trimiterii private.' : type === 'matrix' ? 'Raportul conține numele tuturor copiilor și este destinat verificării interne de către tine și dirigintă.' : 'Restanțele apar doar ca număr de copii și sumă totală, fără nume sau inițiale.';
   openModal('report', replaced ? 'Emite raport corectiv' : reportTypeLabels[type], `${selector}<div class="summary"><strong>Situație la momentul emiterii</strong><p class="caption">PDF-ul va păstra exact datele și revizia actuală a registrului.</p></div><p class="caption">${privacy}</p>${replaced ? `<p class="caption">Noul raport va marca faptul că înlocuiește ${esc(replaced.code)}. Raportul vechi rămâne în arhivă.</p>` : ''}`, 'Generează PDF', {
@@ -431,7 +438,7 @@ async function createReport(form) {
   } catch (error) { $('#modal-error').textContent = error.message; $('#modal-error').hidden = false; }
   finally { saving = false; updateNotices(); }
 }
-async function shareReport(reportId) {
+async function shareReport(reportId, message = '') {
   const report = (state.reports || []).find(item => item.id === reportId);
   if (!report) return;
   saving = true; updateNotices();
@@ -440,7 +447,7 @@ async function shareReport(reportId) {
     if (!response.ok) throw new Error('PDF-ul nu a putut fi descărcat.');
     const file = new File([await response.blob()], report.filename, { type: 'application/pdf' });
     if (navigator.share && (!navigator.canShare || navigator.canShare({ files: [file] }))) {
-      await navigator.share({ title: `${report.code} · ${reportTypeLabels[report.type]}`, files: [file] });
+      await navigator.share({ title: `${report.code} · ${reportTypeLabels[report.type]}`, ...(message ? { text: message } : {}), files: [file] });
     } else {
       const url = URL.createObjectURL(file), link = document.createElement('a');
       link.href = url; link.download = report.filename; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
@@ -448,6 +455,12 @@ async function shareReport(reportId) {
     }
   } catch (error) { if (error.name !== 'AbortError') toast(error.message || 'PDF-ul nu a putut fi partajat.'); }
   finally { saving = false; updateNotices(); }
+}
+async function shareChildReport(reportId) {
+  const report = (state.reports || []).find(item => item.id === reportId && item.type === 'child');
+  const c = report ? state.children.find(item => item.id === report.subjectId) : null;
+  if (!c) return;
+  await shareReport(report.id, whatsappReminder(c, state.settings.className));
 }
 async function loadReportPreview(currentModal, report) {
   const status = $('#pdf-preview-status'), pages = $('#pdf-preview-pages'), dialog = $('#dialog');
@@ -980,6 +993,7 @@ document.addEventListener('click', async event => {
     case 'edit-contacts': contactsModal(); break;
     case 'edit-reminder-contact': contactsModal(button.dataset.id); break;
     case 'whatsapp-reminders': remindersModal(); break;
+    case 'create-child-report': reportModal('child', null, childId); break;
     case 'bulk-children': bulkModal(); break;
     case 'add-expense': expenseModal(); break;
     case 'edit-expense': expenseModal(state.expenses.find(expense => expense.id === button.dataset.id)); break;
@@ -996,6 +1010,7 @@ document.addEventListener('click', async event => {
     case 'report-child': reportModal('child'); break;
     case 'view-report': viewReport(button.dataset.id); break;
     case 'share-report': await shareReport(button.dataset.id); break;
+    case 'share-child-report': await shareChildReport(button.dataset.id); break;
     case 'replace-report': {
       const report = (state.reports || []).find(item => item.id === button.dataset.id);
       if (report) reportModal(report.type, report.id);
