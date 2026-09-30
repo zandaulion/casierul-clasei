@@ -355,7 +355,7 @@ test('reversing a collection also reverses the settlement saved with it', t => {
   assert.equal(state.summary.balanceMinor, 200);
 });
 
-test('existing settlements are linked to their collections when the database is upgraded', t => {
+test('an upgraded database adds settlement links without guessing relationships between historical rows', t => {
   const { ledger, path, post, child, expense } = fixture(t, true);
   const rounded = child('David', 'Bălan');
   const roundedExpense = expense([rounded], 1000, 'fixed', { title: 'Excursie' });
@@ -387,12 +387,13 @@ test('existing settlements are linked to their collections when the database is 
   const reopened = new Ledger(path);
   t.after(() => { try { reopened.close(); } catch {} });
   let state = reopened.getState();
-  assert.equal(state.transactions.find(tx => tx.type === 'rounding_adjustment').settlesId, collection);
+  const adjustment = state.transactions.find(tx => tx.type === 'rounding_adjustment');
+  assert.equal(adjustment.settlesId, null);
   post('transaction.reverse', { transactionId: collection, comment: 'Încasare greșită' }, reopened);
   state = reopened.getState();
-  assert.equal(state.children[0].contributions[0].remainingMinor, 1000);
-  assert.throws(() => reopened.dispatch('transaction.reverse', { requestId: randomUUID(), expectedRevision: state.revision,
-    transactionId: state.transactions.find(tx => tx.type === 'rounding_adjustment').id, comment: 'x' }, actor), status(409));
+  assert.equal(state.children[0].contributions[0].remainingMinor, 950, 'the independently preserved adjustment still covers 50 bani');
+  post('transaction.reverse', { transactionId: adjustment.id, comment: 'Ajustare corectată separat' }, reopened);
+  assert.equal(reopened.getState().children[0].contributions[0].remainingMinor, 1000);
 });
 
 test('a saved partial cash collection can be followed by a standalone rounding adjustment', t => {
