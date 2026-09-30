@@ -25,12 +25,16 @@ if command -v loginctl >/dev/null; then
   fi
 fi
 
-# The private invitation console (Caddy route + console entry) exists only on the
-# original host; elsewhere invitations are issued with scripts/admin.mjs.
-if [ -f /etc/caddy/Caddyfile ] && [ -f /var/www/pwa-invite-console/apps.json ]; then
-  sudo -n python3 "$PROJECT_DIR/deploy/install-console.py" "$HOME/.config/casierul-clasei/app.env"
+# Optional companion: the invitation console (https://github.com/zandaulion/pwa-invite-console)
+# behind a private Caddy listener. When both are present the app's route and console entry are
+# installed; otherwise invitations are issued with scripts/admin.mjs. See docs/operations.md.
+CASIERUL_CADDYFILE="${CASIERUL_CADDYFILE:-/etc/caddy/Caddyfile}"
+CASIERUL_CONSOLE_APPS="${CASIERUL_CONSOLE_APPS:-/var/www/pwa-invite-console/apps.json}"
+if [ -f "$CASIERUL_CADDYFILE" ] && [ -f "$CASIERUL_CONSOLE_APPS" ]; then
+  sudo -n --preserve-env=CASIERUL_CADDYFILE,CASIERUL_CONSOLE_APPS,CASIERUL_CONSOLE_ANCHOR \
+    python3 "$PROJECT_DIR/deploy/install-console.py" "$HOME/.config/casierul-clasei/app.env"
 else
-  printf 'Private invitation console not present; use scripts/admin.mjs for invitations.\n'
+  printf 'Invitation console not present; use scripts/admin.mjs for invitations.\n'
 fi
 systemctl --user disable --now casierul-clasei-preview.service 2>/dev/null || true
 systemctl --user enable "$SERVICE_NAME"

@@ -9,11 +9,14 @@ import shutil
 import subprocess
 import sys
 
-CADDY = Path('/etc/caddy/Caddyfile')
-APPS = Path('/var/www/pwa-invite-console/apps.json')
+# Where the console (https://github.com/zandaulion/pwa-invite-console) and the private
+# Caddy listener live; override for a different layout. The route is inserted before
+# CASIERUL_CONSOLE_ANCHOR, a line that exists exactly once inside the private site block.
+CADDY = Path(os.environ.get('CASIERUL_CADDYFILE', '/etc/caddy/Caddyfile'))
+APPS = Path(os.environ.get('CASIERUL_CONSOLE_APPS', '/var/www/pwa-invite-console/apps.json'))
 START = '\t# BEGIN Casierul clasei private console route'
 END = '\t# END Casierul clasei private console route'
-ANCHOR = '\t# The train API, tailnet-only.'
+ANCHOR = os.environ.get('CASIERUL_CONSOLE_ANCHOR', '\t# The train API, tailnet-only.')
 
 def replace_file(path, content):
     stat = path.stat()
@@ -46,7 +49,8 @@ def run():
         updated = re.sub(re.escape(START) + r'.*?' + re.escape(END), lambda _: route, current, count=1, flags=re.S)
     else:
         if current.count(ANCHOR) != 1:
-            raise RuntimeError('Cannot identify the existing private listener insertion point.')
+            raise RuntimeError('Cannot identify the private listener insertion point: set CASIERUL_CONSOLE_ANCHOR to a line '
+                               'that appears exactly once inside the private site block of ' + str(CADDY) + '.')
         updated = current.replace(ANCHOR, route + '\n\n' + ANCHOR, 1)
     apps = json.loads(APPS.read_text())
     entry = json.loads(entry_file.read_text())

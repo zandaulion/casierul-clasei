@@ -69,7 +69,7 @@ Datele afișate în capturi sunt integral sintetice. Setul surprinde și contact
 
 ## Începe
 
-1. Generează o invitație în consola PWA privată și activează telefonul. Același cod poate activa și un al doilea dispozitiv, de exemplu laptopul, în cele șapte zile de valabilitate.
+1. Generează o invitație cu `node scripts/admin.mjs invite` sau din [consola de invitații](https://github.com/zandaulion/pwa-invite-console) și activează telefonul. Același cod poate activa și un al doilea dispozitiv, de exemplu laptopul, în cele șapte zile de valabilitate.
 2. Configurează școala, clasa, anul școlar și eventualul sold inițial.
 3. Din **Copiii clasei → Gestionează copiii**, adaugă copiii individual sau lipește lista, câte un `Nume de familie; Prenume` pe linie.
 4. Creează cheltuielile și selectează participanții: sumă fixă/copil, total împărțit sau cantitate/copil × preț unitar.
@@ -128,7 +128,7 @@ Salvarea necesită internet. La pierderea răspunsului, **Verifică / reîncearc
 
 ## Tehnic și operare
 
-Node.js 24+ și `node:sqlite`; PDF-urile sunt generate cu PDFKit, iar previzualizarea folosește o copie locală PDF.js. Interfața nu încarcă biblioteci, fonturi sau alte resurse de pe CDN-uri. Aplicația folosește mecanismul de actualizări din `../pwa-kit` și administrarea invitațiilor/dispozitivelor din `../pwa-invite-console`.
+Node.js 24+ și `node:sqlite`; PDF-urile sunt generate cu PDFKit, iar previzualizarea folosește o copie locală PDF.js. Interfața nu încarcă biblioteci, fonturi sau alte resurse de pe CDN-uri. Mecanismul de actualizare a workerului provine din [pwa-kit](https://github.com/zandaulion/pwa-kit) (`web/pwa-update.js`, `web/sw-update.js`, copiate în repo). Invitațiile și dispozitivele se administrează din `scripts/admin.mjs` sau, opțional, din [pwa-invite-console](https://github.com/zandaulion/pwa-invite-console), o pagină comună pentru mai multe aplicații cu același mecanism de invitații; conectarea ei este descrisă în [operare](docs/operations.md#consola-de-invitații-opțional).
 
 Ilustrațiile rapoartelor sunt vectoriale: SVG în interfață și desen direct cu PDFKit în PDF, fără dependențe sau servicii externe suplimentare.
 
@@ -137,7 +137,7 @@ npm test
 ./deploy.sh https://casierul-clasei.zandaulion.com
 ```
 
-Cloudflare Tunnel folosește `http://127.0.0.1:8018`. API-ul privat de administrare ascultă separat pe `127.0.0.1:8118`. Publicarea instalează serviciul systemd, integrarea consolei și copii de siguranță locale zilnice.
+Cloudflare Tunnel folosește `http://127.0.0.1:8018`. API-ul privat de administrare ascultă separat pe `127.0.0.1:8118`. Publicarea instalează serviciul systemd, copii de siguranță locale zilnice și, dacă există, integrarea consolei de invitații.
 
 Detalii: [fluxurile implementate](docs/current-flows.md), [ghidul vizual al fluxurilor](docs/visual-flow-guide.md), [planșele SVG](docs/workflows/README.md), [roadmap-ul de produs](docs/roadmap.md), [mai multe clase și drepturi](docs/multiple-classrooms.md), [operare și backup](docs/operations.md), [contract API](docs/api.md), [planul de criptare](docs/encryption.md).
 
