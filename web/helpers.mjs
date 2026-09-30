@@ -29,6 +29,14 @@ export function whatsappUrl(phone, message) {
   if (!/^[1-9]\d{7,14}$/u.test(digits)) return '';
   return `https://wa.me/${digits}?text=${encodeURIComponent(message)}`;
 }
+export function reportShareMessage(report, className = '') {
+  const classSuffix = className ? ` pentru ${className}` : '';
+  const description = report.type === 'class' ? `situația fondului clasei${className ? ` ${className}` : ''}`
+    : report.type === 'expense' ? `situația cheltuielii „${report.subjectLabel}”${classSuffix}`
+      : report.type === 'matrix' ? `tabelul contribuțiilor${classSuffix}, pentru verificare`
+        : `fișa individuală pentru ${report.subjectLabel}`;
+  return `Bună ziua,\n\nVă trimit ${description}.\nRaport ${report.code}. Documentul reflectă situația de la momentul emiterii.\n\nMulțumesc!`;
+}
 export function automaticAllocations(contributions, available, target = 'all') {
   return contributions.map(e => {
     const amountMinor = target === 'all' || target === e.expenseId ? Math.min(available, e.remainingMinor) : 0;

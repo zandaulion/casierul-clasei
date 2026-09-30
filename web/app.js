@@ -1,5 +1,5 @@
 import { installUpdates } from '/pwa-update.js';
-import { name, money, decimal, parseMoney, sortChildren, unpaid, roundUp, automaticAllocations, collectionResult, expensePreview, whatsappReminder, whatsappUrl } from './helpers.mjs';
+import { name, money, decimal, parseMoney, sortChildren, unpaid, roundUp, automaticAllocations, collectionResult, expensePreview, whatsappReminder, whatsappUrl, reportShareMessage } from './helpers.mjs';
 import { icon } from './icons.mjs';
 
 const $ = selector => document.querySelector(selector);
@@ -438,16 +438,17 @@ async function createReport(form) {
   } catch (error) { $('#modal-error').textContent = error.message; $('#modal-error').hidden = false; }
   finally { saving = false; updateNotices(); }
 }
-async function shareReport(reportId, message = '') {
+async function shareReport(reportId, message = null) {
   const report = (state.reports || []).find(item => item.id === reportId);
   if (!report) return;
+  const shareMessage = message ?? reportShareMessage(report, state.settings.className);
   saving = true; updateNotices();
   try {
     const response = await fetch(scopedUrl(`/api/reports/${encodeURIComponent(report.id)}/pdf`), { credentials: 'same-origin', cache: 'no-store', signal: AbortSignal.timeout(20000) });
     if (!response.ok) throw new Error('PDF-ul nu a putut fi descărcat.');
     const file = new File([await response.blob()], report.filename, { type: 'application/pdf' });
     if (navigator.share && (!navigator.canShare || navigator.canShare({ files: [file] }))) {
-      await navigator.share({ title: `${report.code} · ${reportTypeLabels[report.type]}`, ...(message ? { text: message } : {}), files: [file] });
+      await navigator.share({ title: `${report.code} · ${reportTypeLabels[report.type]}`, text: shareMessage, files: [file] });
     } else {
       const url = URL.createObjectURL(file), link = document.createElement('a');
       link.href = url; link.download = report.filename; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
