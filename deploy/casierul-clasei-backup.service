@@ -4,6 +4,6 @@ Description=Back up Casierul clasei SQLite databases
 [Service]
 Type=oneshot
 EnvironmentFile=%h/.config/casierul-clasei/app.env
-ExecStart=/usr/bin/node /home/opc/projects/casierul-clasei/scripts/backup.mjs
+ExecStart=/usr/bin/node %h/projects/casierul-clasei/scripts/backup.mjs
 UMask=0077
 NoNewPrivileges=true

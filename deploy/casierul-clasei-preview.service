@@ -4,8 +4,8 @@ After=network.target
 
 [Service]
 Type=simple
-WorkingDirectory=/home/opc/projects/casierul-clasei
-ExecStart=/usr/bin/python3 -m http.server 8018 --bind 127.0.0.1 --directory /home/opc/projects/casierul-clasei/preview
+WorkingDirectory=%h/projects/casierul-clasei
+ExecStart=/usr/bin/python3 -m http.server 8018 --bind 127.0.0.1 --directory %h/projects/casierul-clasei/preview
 Restart=on-failure
 RestartSec=3
 NoNewPrivileges=true

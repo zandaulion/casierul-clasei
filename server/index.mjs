@@ -26,7 +26,7 @@ export function loadConfig(env = process.env) {
   const publicPort = port(env.PORT, 8018);
   if (env.COOKIE_SECURE != null && !['true', 'false'].includes(env.COOKIE_SECURE)) throw new Error('COOKIE_SECURE trebuie să fie true sau false.');
   return {
-    host, port: publicPort, adminPort: port(env.ADMIN_PORT, 8118),
+    host, port: publicPort, adminHost: env.ADMIN_HOST || '127.0.0.1', adminPort: port(env.ADMIN_PORT, 8118),
     dataDir: env.DATA_DIR || path.join(ROOT, 'data'),
     publicBaseUrl: env.PUBLIC_BASE_URL || `http://${host}:${publicPort}`,
     adminToken: env.ADMIN_TOKEN || '', cookieSecure: env.COOKIE_SECURE !== 'false', webDir: path.join(ROOT, 'web'),
@@ -582,13 +582,14 @@ export function createApp(options = {}) {
 
 export async function start(options = {}) {
   const app = createApp(options);
-  const listen = (server, portNumber) => new Promise((resolve, reject) => {
+  const listen = (server, portNumber, host) => new Promise((resolve, reject) => {
     server.once('error', reject);
-    server.listen(portNumber, app.config.host, () => { server.off('error', reject); resolve(); });
+    server.listen(portNumber, host, () => { server.off('error', reject); resolve(); });
   });
   try {
-    await listen(app.publicServer, app.config.port);
-    await listen(app.adminServer, app.config.adminPort);
+    await listen(app.publicServer, app.config.port, app.config.host);
+    // The admin API stays on loopback even when the public server listens on all interfaces.
+    await listen(app.adminServer, app.config.adminPort, app.config.adminHost);
     return app;
   } catch (error) {
     await app.close();
@@ -598,6 +599,6 @@ export async function start(options = {}) {
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const app = await start();
-  console.log(`Casierul clasei: ${app.config.host}:${app.config.port}; admin: ${app.config.host}:${app.config.adminPort}`);
+  console.log(`Casierul clasei: ${app.config.host}:${app.config.port}; admin: ${app.config.adminHost}:${app.config.adminPort}`);
   for (const signal of ['SIGINT', 'SIGTERM']) process.once(signal, async () => { await app.close(); process.exit(0); });
 }

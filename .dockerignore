@@ -1,0 +1,16 @@
+node_modules
+data
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+.env
+.env.*
+.git
+.github
+coverage
+__pycache__
+deploy
+design
+docs
+preview
+test
