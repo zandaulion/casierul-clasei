@@ -49,6 +49,110 @@ const accessBanner = () => canWrite() ? '' : `<div class="access-indicator"><spa
 const welcomeBanner = (title = 'Lucruri frumoase, împreună.', subtitle = 'Fondul clasei, cu grijă pentru fiecare.') => `<section class="welcome-banner" aria-label="Clasa noastră"><div class="welcome-copy"><h2>${esc(title)}</h2><p>${esc(subtitle)}</p></div><img src="/illustrations/school-community.webp" width="384" height="256" alt="" decoding="async"></section>`;
 const pageHeading = (title, subtitle, type) => `<div class="page-heading"><span class="section-icon tone-${type}">${icon(type)}</span><div><h1>${esc(title)}</h1><p class="caption">${esc(subtitle)}</p></div></div>`;
 const helpArrow = '<div class="help-arrow" aria-hidden="true">↓</div>';
+const simpleHelpFlows = {
+  access: { label: 'Activarea și accesul la clasă', steps: [
+    ['Primești invitația', 'Codul este emis pentru o clasă, un rol și, pentru părinte, un copil.'],
+    ['Introduci codul', 'Dispozitivul primește acces fără ca aplicația să păstreze codul în clar.'],
+    ['Deschizi registrul', 'Același cod poate activa încă un dispozitiv în cele șapte zile de valabilitate.'],
+    ['Adaugi alte accesuri', '„Adaugă acces din invitație” păstrează clasele deja existente pe dispozitiv.'],
+    ['Alegi clasa', 'Selectorul din antet apare când ai acces la mai multe clase.'],
+  ] },
+  settings: { label: 'Configurarea clasei', steps: [
+    ['Deschizi Setări', 'Completezi școala, clasa și anul școlar.'],
+    ['Introduci soldul inițial', 'Poate fi schimbat numai înainte de prima operațiune financiară.'],
+    ['Adaugi detaliile de plată', 'Link Revolut.me, beneficiar și IBAN.'],
+    ['Alegi siglele', 'Sigla școlii și a clasei vor apărea în rapoartele emise ulterior.'],
+    ['Salvezi configurația', 'Clasa este pregătită pentru copii și cheltuieli.'],
+  ] },
+  children: { label: 'Copiii și contactele', steps: [
+    ['Deschizi Copii', 'Lista este ordonată alfabetic și poate fi căutată.'],
+    ['Adaugi copilul sau lista', 'Individual ori în bloc, câte un copil pe rând.'],
+    ['Verifici fișa copilului', 'Contribuții, sume de achitat, avans și istoric.'],
+    ['Adaugi contactele', 'Zero, unul sau două numere WhatsApp, vizibile numai casierilor.'],
+    ['Editezi sau arhivezi', 'Istoricul și soldurile copilului rămân păstrate.'],
+  ] },
+  expenses: { label: 'Crearea și administrarea cheltuielilor', steps: [
+    ['Alegi „Cheltuială nouă”', 'Scrii denumirea, data și termenul.'],
+    ['Alegi calculul', 'Sumă fixă/copil, total împărțit sau cantitate × preț.'],
+    ['Selectezi participanții', 'Pentru cantități, completezi și valoarea fiecărui copil.'],
+    ['Verifici previzualizarea', 'Aplicația distribuie exact inclusiv ultimii bani.'],
+    ['Salvezi cheltuiala', 'Contribuțiile apar imediat în fișele copiilor.'],
+    ['Editezi sau anulezi explicit', 'Operațiunile existente protejează sumele deja confirmate.'],
+  ] },
+  credit: { label: 'Avansul copilului', steps: [
+    ['Primești mai mult decât este datorat', 'Alegi „Păstrez în avans” pentru diferență.'],
+    ['Avansul apare în fișă', 'Numerarul a intrat deja în fond o singură dată.'],
+    ['Îl folosești la o contribuție', 'Din încasare sau prin „Folosește avansul”.'],
+    ['Sau îl restitui', 'Restituirea scade avansul copilului și numerarul fondului.'],
+    ['Verifici istoricul', 'Fiecare folosire sau restituire rămâne o operațiune separată.'],
+  ] },
+  ledger: { label: 'Plățile și sumele avansate fondului', steps: [
+    ['Deschizi Registru', 'Vezi numerarul, datoriile și soldul net.'],
+    ['Alegi operațiunea', '„Bani dați mai departe” sau „Sumă avansată fondului”.'],
+    ['Completezi suma și persoana', 'Poți asocia opțional o cheltuială.'],
+    ['Salvezi', 'Plata scade numerarul; avansul personal adaugă numerar și o datorie egală.'],
+    ['Stingi avansul personal', 'Îl restitui sau îl folosești pentru a acoperi contribuții.'],
+  ] },
+  corrections: { label: 'Corectarea unei operațiuni', steps: [
+    ['Deschizi istoricul', 'Alegi operațiunea introdusă greșit.'],
+    ['Alegi „Corectează”', 'Operațiunea originală nu este ștearsă.'],
+    ['Scrii motivul', 'Motivul devine parte din istoricul verificabil.'],
+    ['Confirmi inversarea', 'Efectele financiare sunt anulate o singură dată.'],
+    ['Înregistrezi varianta corectă', 'Noua operațiune păstrează registrul reconciliat.'],
+  ] },
+  documents: { label: 'Documentele justificative', steps: [
+    ['Deschizi cheltuiala sau plata', 'Documentele se atașează în contextul operațiunii.'],
+    ['Alegi „Atașează document”', 'PDF, JPG, PNG sau WebP.'],
+    ['Stabilești vizibilitatea', 'Intern pentru casier/auditor sau vizibil clasei.'],
+    ['Încarci fișierul', 'Aplicația verifică tipul, limita și amprenta SHA-256.'],
+    ['Consulți documentul', 'Fișierul rămâne imuabil și inclus în backup-ul SQLite.'],
+  ] },
+  whatsapp: { label: 'WhatsApp și detaliile de plată', steps: [
+    ['Configurezi contactele și plata', 'Numerele copilului, Revolut.me, beneficiar și IBAN.'],
+    ['Deschizi reminderul', 'Mesajul include situația copilului și detaliile de plată.'],
+    ['Verifici mesajul', 'Aplicația nu îl trimite și nu pretinde că a fost livrat.'],
+    ['Alegi conversația', 'Contact direct pentru copil sau selectorul telefonului pentru raport.'],
+    ['Apeși Trimite în WhatsApp', 'Expedierea rămâne sub controlul tău.'],
+  ] },
+  reports: { label: 'Emiterea și partajarea rapoartelor', steps: [
+    ['Deschizi Rapoarte', 'Alegi situația clasei, tabelul, cheltuiala sau copilul.'],
+    ['Alegi subiectul', 'Pentru raportul unei cheltuieli sau al unui copil.'],
+    ['Generezi PDF-ul', 'Datele, siglele și revizia sunt înghețate la emitere.'],
+    ['Previzualizezi', 'Verifici sumele și procentul de acoperire.'],
+    ['Partajezi sau descarci', 'Mesajul potrivit raportului este deja completat.'],
+    ['Emiți corecție dacă este nevoie', 'Raportul nou rămâne legat de cel înlocuit.'],
+  ] },
+  classrooms: { label: 'Mai multe clase și roluri', steps: [
+    ['Primești sau creezi accesul', 'Fiecare permisiune are o clasă și un rol.'],
+    ['Adaugi accesul pe dispozitiv', 'Accesurile existente nu sunt eliminate.'],
+    ['Schimbi clasa din antet', 'Copiii, registrul și rapoartele rămân izolate.'],
+    ['Lucrezi în limitele rolului', 'Casierul modifică, părintele și auditorul doar consultă.'],
+    ['Revoci dispozitivul când este necesar', 'Fiecare sesiune poate fi oprită separat.'],
+  ] },
+  reliability: { label: 'Conexiunea, reîncercarea și actualizarea PWA', steps: [
+    ['Deschizi pe telefon, tabletă sau laptop', 'Listele, formularele și previzualizarea PDF folosesc automat spațiul disponibil.'],
+    ['Lucrezi cu datele încărcate', 'Interfața semnalează când conexiunea lipsește.'],
+    ['Salvezi numai online', 'Operațiunile financiare nu intră într-o coadă offline.'],
+    ['Răspunsul se pierde?', '„Verifică / reîncearcă” folosește aceeași cerere și nu dublează operațiunea.'],
+    ['Datele s-au schimbat?', 'Actualizezi și verifici sumele înainte de o nouă salvare.'],
+    ['Actualizezi aplicația', 'PWA așteaptă închiderea formularelor modificate și a salvărilor în curs.'],
+  ] },
+  export: { label: 'Exportul și copiile de siguranță', steps: [
+    ['Deschizi Registru sau Setări', 'Casierul poate descărca exportul JSON.'],
+    ['Păstrezi exportul pentru inspecție', 'Conține datele de business, fără contacte și fără conținutul documentelor.'],
+    ['Backup-ul rulează zilnic', 'Bazele SQLite păstrează registrul, contactele și documentele.'],
+    ['Restaurezi administrativ', 'Restaurarea completă folosește backup-ul SQLite și procedura de operare.'],
+  ] },
+};
+
+function simpleHelpFlow(id, compact = false) {
+  const flow = simpleHelpFlows[id];
+  if (!flow) return '';
+  return `<div class="help-flow ${compact ? 'compact' : ''}" aria-label="${esc(flow.label)}">${flow.steps.map((step, index) => {
+    const last = index === flow.steps.length - 1;
+    return `<div class="help-step ${index === 0 ? 'tone-green' : ''} ${last ? 'help-finish' : ''}"><span>${last ? icon('check') : index + 1}</span><div><strong>${esc(step[0])}</strong><small>${esc(step[1])}</small></div></div>${last ? '' : helpArrow}`;
+  }).join('')}</div>`;
+}
 
 function collectionHelpFlow(compact = false) {
   return `<div class="help-flow ${compact ? 'compact' : ''}" aria-label="Pașii pentru încasarea banilor de la un copil">
@@ -83,8 +187,8 @@ function stopCollectionHelpFlow(compact = false, { canRecalculate = true, canCov
   </div>`;
 }
 
-function helpTopic(title, subtitle, content, open = false) {
-  return `<details class="help-topic" ${open ? 'open' : ''}><summary><span>${icon('help')}</span><span><strong>${esc(title)}</strong><small>${esc(subtitle)}</small></span></summary>${content}</details>`;
+function helpTopic(title, subtitle, content, open = false, id = '') {
+  return `<details class="help-topic" ${id ? `id="help-topic-${esc(id)}"` : ''} ${open ? 'open' : ''}><summary><span>${icon('help')}</span><span><strong>${esc(title)}</strong><small>${esc(subtitle)}</small></span></summary>${content}</details>`;
 }
 
 function helpModal(topic = 'overview') {
@@ -100,9 +204,30 @@ function helpModal(topic = 'overview') {
     openModal('help', 'Ajutor', `<section class="help-intro"><span class="help-intro-icon">${icon('help')}</span><div><strong>${title}</strong><p>Informația disponibilă este adaptată rolului acestui dispozitiv.</p></div></section><div class="help-journey" aria-label="Traseul principal">${journey}</div><div class="help-topics">${topics}</div>`, null, { closeLabel: 'Închide' });
     return;
   }
-  const collectionFirst = topic !== 'stop-collection';
-  const collectionTopic = helpTopic('Cum încasez bani?', 'Suma primită, rotunjire, rest și avans.', collectionHelpFlow(), topic === 'overview' || topic === 'collection');
-  const stopTopic = helpTopic('Ce face „Nu mai colectez”?', 'Excluderea unui participant sau acoperirea din fond.', stopCollectionHelpFlow(), topic === 'stop-collection');
+  const openTopic = topic === 'overview' ? 'access' : topic;
+  const topics = [
+    ['Pornire și organizare', 'access', 'Cum activez un dispozitiv?', 'Invitație, două activări și selectorul clasei.', simpleHelpFlow('access')],
+    ['Pornire și organizare', 'settings', 'Cum configurez clasa?', 'Identitate, sold inițial, plată și sigle.', simpleHelpFlow('settings')],
+    ['Pornire și organizare', 'children', 'Cum gestionez copiii?', 'Adăugare, contacte, căutare și arhivare.', simpleHelpFlow('children')],
+    ['Pornire și organizare', 'expenses', 'Cum creez o cheltuială?', 'Calcul, participanți, previzualizare și editare.', simpleHelpFlow('expenses')],
+    ['Bani și corecții', 'collection', 'Cum încasez bani?', 'Suma primită, rotunjire, rest și avans.', collectionHelpFlow()],
+    ['Bani și corecții', 'stop-collection', 'Ce face „Nu mai colectez”?', 'Excluderea unui participant sau acoperirea din fond.', stopCollectionHelpFlow()],
+    ['Bani și corecții', 'credit', 'Cum folosesc avansul copilului?', 'Păstrare, repartizare și restituire.', simpleHelpFlow('credit')],
+    ['Bani și corecții', 'ledger', 'Cum înregistrez plățile și avansurile personale?', 'Numerar, datorii și restituiri.', simpleHelpFlow('ledger')],
+    ['Bani și corecții', 'corrections', 'Cum corectez o greșeală?', 'Inversare explicită și istoric păstrat.', simpleHelpFlow('corrections')],
+    ['Documente și comunicare', 'documents', 'Cum atașez un document?', 'Fișier, vizibilitate și verificare.', simpleHelpFlow('documents')],
+    ['Documente și comunicare', 'whatsapp', 'Cum trimit prin WhatsApp?', 'Contacte, mesaje și detalii de plată.', simpleHelpFlow('whatsapp')],
+    ['Documente și comunicare', 'reports', 'Cum emit și partajez un raport?', 'PDF imuabil, previzualizare și corecție.', simpleHelpFlow('reports')],
+    ['Acces și siguranță', 'classrooms', 'Cum lucrez cu mai multe clase și roluri?', 'Permisiuni izolate și schimbarea clasei.', simpleHelpFlow('classrooms')],
+    ['Acces și siguranță', 'reliability', 'Ce se întâmplă fără conexiune?', 'Reîncercare sigură, conflicte și actualizare PWA.', simpleHelpFlow('reliability')],
+    ['Acces și siguranță', 'export', 'Cum păstrez și recuperez datele?', 'Export JSON și backup SQLite.', simpleHelpFlow('export')],
+  ];
+  let previousGroup = '';
+  const topicContent = topics.map(([group, id, title, subtitle, content]) => {
+    const heading = group === previousGroup ? '' : `<h3 class="help-group-title">${esc(group)}</h3>`;
+    previousGroup = group;
+    return `${heading}${helpTopic(title, subtitle, content, id === openTopic, id)}`;
+  }).join('');
   openModal('help', 'Ajutor', `<section class="help-intro"><span class="help-intro-icon">${icon('help')}</span><div><strong>Ghidul Casierului clasei</strong><p>Urmează pașii în ritmul tău. Denumirile sunt aceleași ca în aplicație.</p></div></section>
     <div class="help-journey" aria-label="Fluxul general al aplicației">
       <div><span>1</span><strong>Copii</strong><small>Adaugi copiii</small></div>
@@ -111,11 +236,8 @@ function helpModal(topic = 'overview') {
       <div><span>4</span><strong>Registru</strong><small>Urmărești banii</small></div>
       <div><span>5</span><strong>Rapoarte</strong><small>Comunici situația</small></div>
     </div>
-    <div class="help-topics">${collectionFirst ? collectionTopic + stopTopic : stopTopic + collectionTopic}
-      ${helpTopic('Termeni care se confundă ușor', 'Avansul copilului și suma avansată fondului.', '<dl class="help-definitions"><div><dt>Avansul copilului</dt><dd>Bani primiți în plus de la părinte, disponibili pentru contribuții viitoare sau restituire.</dd></div><div><dt>Sumă avansată fondului</dt><dd>Bani puși temporar de o persoană pentru clasă; apar ca datorie de restituit.</dd></div><div><dt>Acoperit din fond</dt><dd>Parte dintr-o contribuție stinsă voluntar dintr-o sumă avansată, fără a o prezenta ca plată a părintelui.</dd></div></dl>')}
-      ${helpTopic('Corecții și siguranță', 'Cum repari o greșeală fără să pierzi istoricul.', '<p>Operațiunile confirmate nu se editează în tăcere. Deschide operațiunea din Registru, alege <strong>Corectează</strong>, scrie motivul și apoi înregistrează varianta corectă.</p><p class="caption">Dacă răspunsul serverului se pierde, folosește „Verifică / reîncearcă”. Aceeași încasare nu va fi dublată.</p>')}
-      ${helpTopic('WhatsApp și rapoarte', 'Mesaje pregătite, trimitere sub controlul tău.', '<p>Aplicația completează mesajul și poate atașa raportul individual. Tu alegi conversația și apeși Trimite în WhatsApp. Rapoartele agregate se partajează prin selectorul telefonului.</p><p class="caption">Aplicația nu trimite automat și nu marchează mesajele ca livrate.</p>')}
-    </div>`, null, { closeLabel: 'Închide' });
+    <div class="help-topics">${topicContent}</div>`, null, { closeLabel: 'Închide' });
+  if (topic !== 'overview') requestAnimationFrame(() => $(`#help-topic-${topic}`)?.scrollIntoView({ block: 'start' }));
 }
 
 // Reserve only fixed controls; wide-screen rails and panels stay in the layout.
@@ -244,6 +366,7 @@ function openModal(type, title, content, submit = 'Salvează', extra = {}) {
   const alreadyOpen = $('#dialog').open;
   modal = { type, ...extra }; modalDirty = false;
   $('#dialog').classList.toggle('pdf-dialog', type === 'report-preview');
+  $('#dialog').classList.toggle('help-dialog', type === 'help');
   $('#dialog-title').textContent = title; $('#modal-content').innerHTML = content;
   $('#modal-error').hidden = true; $('#modal-submit').textContent = submit; $('#modal-submit').hidden = !submit;
   $('.dialog-actions [data-action="close-modal"]').textContent = extra.closeLabel || (submit ? 'Renunță' : 'Închide');
@@ -254,7 +377,7 @@ function openModal(type, title, content, submit = 'Salvează', extra = {}) {
 function renderGate(message = '') {
   state = null; classrooms = []; classroomId = null; $('.app').classList.remove('collecting', 'child-detail'); $('.app').dataset.screen = 'welcome'; $('#tabs').hidden = true; $('#help-button').hidden = true; $('#settings-button').hidden = true; $('#header-logos').hidden = true; $('#classroom-selector').hidden = true; $('#class-label').hidden = false; $('#class-label').textContent = 'Fondul clasei, la îndemână';
   if ($('.brand-mark')) $('.brand-mark').hidden = false;
-  $('#main').innerHTML = `${welcomeBanner()}<div class="empty"><h1>Bine ai venit în clasa ta!</h1><p>Introdu codul din invitația primită pentru a deschide registrul clasei pe acest dispozitiv.</p></div><form id="invite-form">${field('Cod de invitație', 'code', inviteCode, 'required autocomplete="off" autocapitalize="none" spellcheck="false"')}${field('Numele dispozitivului (opțional)', 'label', '', 'maxlength="120" placeholder="De exemplu: telefonul meu sau laptopul meu"')}<p class="caption">Un cod poate activa două dispozitive, de exemplu telefonul și laptopul tău, în cele 7 zile de la emitere.</p><p id="invite-error" class="error" role="alert">${esc(message)}</p><button class="primary wide" type="submit">Deschide registrul clasei</button></form>`;
+  $('#main').innerHTML = `${welcomeBanner()}<div class="empty"><h1>Bine ai venit în clasa ta!</h1><p>Introdu codul din invitația primită pentru a deschide registrul clasei pe acest dispozitiv.</p></div><form id="invite-form">${field('Cod de invitație', 'code', inviteCode, 'required autocomplete="off" autocapitalize="none" spellcheck="false"')}${field('Numele dispozitivului (opțional)', 'label', '', 'maxlength="120" placeholder="De exemplu: telefonul meu sau laptopul meu"')}<p class="caption">Un cod poate activa două dispozitive, de exemplu telefonul și laptopul tău, în cele 7 zile de la emitere.</p><p id="invite-error" class="error" role="alert">${esc(message)}</p><button class="primary wide" type="submit">Deschide registrul clasei</button><details class="context-help"><summary>${icon('help')}Cum funcționează activarea?</summary>${simpleHelpFlow('access', true)}</details></form>`;
   observeCollectionDock();
   updateNotices();
 }
@@ -317,7 +440,7 @@ function render() {
 }
 function renderRoster() {
   const parent = classroomAccess()?.role === 'parent', hasChildren = state.children.length > 0;
-  $('#main').innerHTML = `${welcomeBanner()}<div class="roster-heading"><div><h1>${parent ? 'Situația copilului' : 'Copiii clasei'}</h1><p class="caption">${canWrite() ? 'Alege un copil pentru a înregistra o contribuție.' : 'Contribuții, sume de achitat și avansuri.'}</p></div>${canWrite() ? `<details class="roster-tools" ${hasChildren ? '' : 'open'}><summary>${icon('plus')}<span>Gestionează copiii</span></summary><div class="toolbar"><button data-action="add-child">+ Adaugă un copil</button><button data-action="bulk-children">Adaugă lista</button></div></details>` : ''}</div>
+  $('#main').innerHTML = `${welcomeBanner()}<div class="roster-heading"><div><h1>${parent ? 'Situația copilului' : 'Copiii clasei'}</h1><p class="caption">${canWrite() ? 'Alege un copil pentru a înregistra o contribuție.' : 'Contribuții, sume de achitat și avansuri.'}</p>${canWrite() ? `<button type="button" class="context-help-link" data-action="help" data-help-topic="children">${icon('help')}Cum gestionez copiii?</button>` : ''}</div>${canWrite() ? `<details class="roster-tools" ${hasChildren ? '' : 'open'}><summary>${icon('plus')}<span>Gestionează copiii</span></summary><div class="toolbar"><button data-action="add-child">+ Adaugă un copil</button><button data-action="bulk-children">Adaugă lista</button></div></details>` : ''}</div>
   ${hasChildren ? `${canWrite() ? `<button class="reminder-queue-button" data-action="whatsapp-reminders" ${state.children.some(item => item.active && item.dueMinor > 0) ? '' : 'disabled'}>${icon('message')}<span><strong>Remindere WhatsApp</strong><small>Copiii cu sume de achitat</small></span></button>` : ''}<label class="caption" for="child-search">Caută un copil</label><div class="roster-search">${icon('search')}<input id="child-search" type="search" placeholder="Nume sau prenume" value="${esc(search)}" autocomplete="off"></div><div id="roster-list" class="children"></div>${canWrite() ? `<label class="check caption"><input id="show-archived" type="checkbox" ${showArchived ? 'checked' : ''}>Arată și copiii arhivați</label>` : ''}` : `<div class="empty"><h2>${canWrite() ? 'Începem cu copiii clasei' : 'Situația copilului va apărea aici'}</h2><p>${canWrite() ? 'Adaugă primul copil sau lipește lista clasei folosind butoanele de mai sus.' : 'Nu există încă un copil disponibil pentru acest acces. Casierul clasei te poate ajuta.'}</p></div>`}`;
   renderRosterList();
 }
@@ -348,7 +471,7 @@ function contactPanel(c) {
   const reportAction = report
     ? `<div class="child-report-option"><div><strong>Mesaj + raport individual</strong><span class="caption">${esc(report.code)} · emis ${dateText(report.createdAt)}. Alegi WhatsApp și contactul din selectorul telefonului.</span></div><div class="report-actions"><button type="button" class="primary" data-action="share-child-report" data-id="${esc(report.id)}">Partajează mesajul + PDF</button><button type="button" data-action="create-child-report">Generează unul actualizat</button></div></div>`
     : `<div class="child-report-option"><div><strong>Mesaj + raport individual</strong><span class="caption">${latestReport ? `${esc(latestReport.code)} este dintr-o versiune anterioară a registrului. Generează fișa actuală înainte de partajare.` : 'Generează întâi fișa actuală; apoi o poți partaja împreună cu același mesaj.'}</span></div><button type="button" data-action="create-child-report">Generează raportul PDF</button></div>`;
-  return `<section class="contact-panel" aria-labelledby="contact-panel-title"><div class="row"><div><h2 id="contact-panel-title">Contacte WhatsApp</h2><p class="caption">Conversația se deschide cu mesajul completat. Verifici și apeși Trimite în WhatsApp.</p></div><button type="button" data-action="edit-contacts">${contacts.length ? 'Editează' : 'Adaugă'}</button></div>${contacts.length ? `<div class="whatsapp-actions">${whatsappLinks(c)}</div>` : '<p class="caption">Poți salva până la două contacte pentru acest copil.</p>'}${reportAction}</section>`;
+  return `<section class="contact-panel" aria-labelledby="contact-panel-title"><div class="row"><div><h2 id="contact-panel-title">Contacte WhatsApp</h2><p class="caption">Conversația se deschide cu mesajul completat. Verifici și apeși Trimite în WhatsApp.</p><button type="button" class="context-help-link" data-action="help" data-help-topic="whatsapp">${icon('help')}Cum trimit?</button></div><button type="button" data-action="edit-contacts">${contacts.length ? 'Editează' : 'Adaugă'}</button></div>${contacts.length ? `<div class="whatsapp-actions">${whatsappLinks(c)}</div>` : '<p class="caption">Poți salva până la două contacte pentru acest copil.</p>'}${reportAction}</section>`;
 }
 function renderChild() {
   const c = child(); if (!draft) resetDraft(c);
@@ -440,6 +563,7 @@ function renderExpenses() {
     </button>`;
   }).join('');
   $('#main').innerHTML = `${pageHeading('Cheltuieli pentru clasa noastră', 'Contribuții, termene și plăți, într-un singur loc.', 'expenses')}
+    ${canWrite() ? `<button type="button" class="context-help-link page-help-link" data-action="help" data-help-topic="expenses">${icon('help')}Cum creez o cheltuială?</button>` : ''}
     ${canWrite() ? `<button class="primary wide" data-action="add-expense" ${activeChildren().length ? '' : 'disabled'}>+ Cheltuială nouă</button>${activeChildren().length ? '' : '<p class="caption">Adaugă întâi copiii clasei, apoi poți crea prima cheltuială.</p>'}` : ''}
     <div class="expense-grid">${expenseCards || `<div class="empty"><h2>Ce pregătim pentru clasă?</h2><p>${canWrite() ? 'Adaugă prima cheltuială și alege copiii care participă.' : 'Cheltuielile vor apărea aici după ce sunt adăugate de casier.'}</p></div>`}</div>`;
 }
@@ -458,6 +582,7 @@ function renderLedger() {
     return `<article class="card"><div class="row"><strong>${esc(item.person)}</strong><span class="amount">${money(item.outstandingMinor)}</span></div><div class="caption">Avansat ${money(item.amountMinor)} · restituit ${money(item.repaidMinor)}${item.waivedMinor ? ` · acoperit din fond ${money(item.waivedMinor)}` : ''}${expense ? ` · ${esc(expense.title)}` : ''}</div>${canWrite() ? `<button type="button" class="primary wide" style="margin-top:14px" data-action="repay-advance" data-id="${esc(item.id)}">Restituie</button>` : ''}</article>`;
   }).join('')}</div>` : '';
   $('#main').innerHTML = `${pageHeading('Registrul clasei', 'O imagine clară a banilor din fond.', 'ledger')}
+    ${canWrite() ? `<button type="button" class="context-help-link page-help-link" data-action="help" data-help-topic="ledger">${icon('help')}Cum funcționează registrul?</button>` : ''}
     <div class="ledger-layout"><section class="ledger-overview" aria-label="Situația fondului">
       <div class="balance"><span>Numerar disponibil în fond</span><strong class="amount">${money(s.balanceMinor)}</strong>
         <div class="balance-grid"><div><span class="caption">De restituit pentru sume avansate</span><span class="amount">${money(s.totalAdvanceOutstandingMinor || 0)}</span></div><div><span class="caption">Sold după restituirea sumelor avansate</span><span class="amount">${money(s.netBalanceMinor ?? s.balanceMinor)}</span></div></div>
@@ -491,7 +616,7 @@ function renderReports() {
     <path d="m67 10 2 5 5 2-5 2-2 5-2-5-5-2 5-2Z" fill="var(--sunshine)" stroke="currentColor" stroke-width="1.2"/>
     <circle cx="140" cy="87" r="4" fill="var(--peach)"/>
   </svg>`;
-  $('#main').innerHTML = `<section class="reports-intro" aria-labelledby="reports-title"><div class="reports-intro-copy"><h1 id="reports-title">Rapoarte de împărtășit</h1><p>Fiecare contribuție, la locul ei. Situații clare, pregătite pentru consultare și partajare.</p></div>${stationery}</section>
+  $('#main').innerHTML = `<section class="reports-intro" aria-labelledby="reports-title"><div class="reports-intro-copy"><h1 id="reports-title">Rapoarte de împărtășit</h1><p>Fiecare contribuție, la locul ei. Situații clare, pregătite pentru consultare și partajare.</p>${canWrite() ? `<button type="button" class="context-help-link" data-action="help" data-help-topic="reports">${icon('help')}Cum emit un raport?</button>` : ''}</div>${stationery}</section>
     ${canWrite() ? `<section class="payment-details card" aria-labelledby="payment-details-title"><div class="row"><div><h2 id="payment-details-title">Detalii de plată</h2><p class="caption">Trimite fiecare informație separat, ca părinții să poată deschide linkul sau copia ușor datele bancare.</p></div><button data-action="settings">${paymentItems.length ? 'Editează' : 'Configurează'}</button></div>${paymentItems.length ? `<div class="payment-detail-list">${paymentItems.map(item => `<article class="payment-detail"><div><strong>${esc(item.label)}</strong>${item.key === 'revolut' ? `<a href="${esc(item.value)}" target="_blank" rel="noopener noreferrer">${esc(item.value)}</a>` : `<span class="payment-detail-value">${esc(item.value)}</span>`}</div><div class="payment-detail-actions"><a class="whatsapp-link compact" href="${esc(whatsappShareUrl(item.message))}" target="_blank" rel="noopener noreferrer" aria-label="Trimite ${esc(item.label)} prin WhatsApp">${icon('message')}WhatsApp</a><button type="button" data-copy-payment="${esc(item.key)}">Copiază</button></div></article>`).join('')}</div>` : '<div class="empty"><p>Adaugă linkul Revolut.me, numele beneficiarului și IBAN-ul în setările clasei.</p></div>'}</section>` : ''}
     ${canWrite() ? `<div class="report-types">${reportTypes.map(item => `<button class="card card-button report-type report-type-${item.type}" data-action="report-${item.type}" ${item.available ? '' : 'disabled'}><span class="report-icon">${icon(item.icon)}</span><span class="report-type-copy"><h3>${item.title}</h3><span class="caption">${item.description}</span></span></button>`).join('')}</div>` : '<p>Consultă, descarcă sau partajează rapoartele emise de casier la care ai acces.</p>'}
     <section class="report-archive" aria-labelledby="report-archive-title"><div class="report-archive-heading"><h2 id="report-archive-title">${icon('reports')}Rapoarte emise</h2></div><p class="caption">„Partajează PDF” deschide selectorul telefonului; de acolo poți alege WhatsApp și grupul părinților.</p>
@@ -515,7 +640,7 @@ function reportModal(type, replacesId = null, subjectId = null) {
     selector = fixedSubject ? `<p><strong>${esc(replaced?.subjectLabel || (fixedChild ? name(fixedChild) : 'Copil'))}</strong></p>` : `<label>Filtrează lista<select name="debtFilter"><option value="due">Doar copiii cu sume de achitat</option><option value="all">Toți copiii</option><option value="paid">Doar copiii cu totul achitat</option></select></label><label>Copilul<select name="subjectId" required></select></label><p id="report-child-count" class="caption"></p>`;
   }
   const privacy = type === 'child' ? 'Fișa conține numele copilului și este destinată trimiterii private.' : type === 'matrix' ? 'Raportul conține numele tuturor copiilor și este destinat verificării interne de către tine și dirigintă.' : 'Restanțele apar doar ca număr de copii și sumă totală, fără nume sau inițiale.';
-  openModal('report', replaced ? 'Emite raport corectiv' : reportTypeLabels[type], `${selector}<div class="summary"><strong>Situație la momentul emiterii</strong><p class="caption">PDF-ul va păstra exact datele și revizia actuală a registrului.</p></div><p class="caption">${privacy}</p>${replaced ? `<p class="caption">Noul raport va marca faptul că înlocuiește ${esc(replaced.code)}. Raportul vechi rămâne în arhivă.</p>` : ''}`, 'Generează PDF', {
+  openModal('report', replaced ? 'Emite raport corectiv' : reportTypeLabels[type], `${selector}<div class="summary"><strong>Situație la momentul emiterii</strong><p class="caption">PDF-ul va păstra exact datele și revizia actuală a registrului.</p></div><p class="caption">${privacy}</p>${replaced ? `<p class="caption">Noul raport va marca faptul că înlocuiește ${esc(replaced.code)}. Raportul vechi rămâne în arhivă.</p>` : ''}<details class="context-help"><summary>${icon('help')}Cum se emite raportul?</summary>${simpleHelpFlow('reports', true)}</details>`, 'Generează PDF', {
     reportType: type, replacesId, subjectId: fixedSubject, requestId: crypto.randomUUID(),
   });
   if (type === 'child' && !replaced) updateChildReportOptions();
@@ -706,14 +831,14 @@ function settingsModal() {
   }
   const year = new Date().getFullYear() - (new Date().getMonth() < 8 ? 1 : 0);
   const logoPicker = (kind, label, exists) => `<div class="logo-picker"><div class="logo-preview"><img id="${kind}-logo-preview" ${exists ? `src="${esc(scopedUrl(`/api/branding/${kind}?v=${encodeURIComponent(s[`${kind}LogoVersion`] || '')}`))}"` : 'hidden'} alt="${esc(label)}"><span id="${kind}-logo-empty" ${exists ? 'hidden' : ''}>Fără siglă</span></div><strong>${esc(label)}</strong><label class="file-button">Alege imaginea<input type="file" accept="image/png,image/jpeg,image/webp" data-logo-input="${kind}" class="visually-hidden"></label><button type="button" data-action="remove-logo" data-logo-kind="${kind}" ${exists ? '' : 'hidden'}>Elimină</button></div>`;
-  openModal('settings', s.className ? 'Setările clasei' : 'Configurează clasa', `${field('Școala', 'schoolName', s.schoolName, 'required maxlength="160"')}${field('Clasa', 'className', s.className, 'required maxlength="80"')}${field('An școlar', 'schoolYear', s.schoolYear || `${year}–${year + 1}`, 'required maxlength="40"')}<div class="section-label">Detalii de plată</div>${field('Link Revolut.me', 'paymentRevolutUrl', s.paymentRevolutUrl || '', 'inputmode="url" maxlength="240" autocomplete="url" placeholder="https://revolut.me/nume"')}${field('Numele beneficiarului', 'paymentBeneficiary', s.paymentBeneficiary || '', 'maxlength="160" autocomplete="name"')}${field('IBAN', 'paymentIban', s.paymentIban || '', 'maxlength="64" autocapitalize="characters" spellcheck="false" placeholder="RO00 BANK 0000 0000 0000 0000"')}<p class="caption">În Rapoarte, fiecare valoare va avea propriul buton WhatsApp și propriul buton de copiere. Pentru detaliile transferului, părintele va folosi numele elevului.</p><div class="section-label">Sigle pentru rapoarte</div><div class="logo-grid">${logoPicker('school', 'Sigla școlii', s.hasSchoolLogo)}${logoPicker('class', 'Sigla clasei', s.hasClassLogo)}</div><p class="caption">Poți alege PNG, JPG sau WebP. Imaginea este redimensionată pe dispozitiv și apare în antetul PDF-urilor emise de acum înainte.</p>${field('Sold inițial (lei)', 'openingBalance', decimal(s.openingBalanceMinor), `inputmode="decimal" required ${state.transactions.length ? 'readonly' : ''}`)}<p class="caption">Banii deja existenți în fond înainte să începi evidența. ${state.transactions.length ? 'Soldul inițial nu mai poate fi schimbat după înregistrarea operațiunilor.' : 'Avansurile individuale se înregistrează separat, prin încasări.'}</p>${state.settings.className ? `<div class="toolbar"><a href="${esc(scopedUrl('/api/export'))}" download="casierul-clasei.json">Exportă datele JSON</a><button type="button" data-action="logout">Deconectează dispozitivul</button></div>` : ''}<div class="section-label">Drepturi pe alte clase</div><button type="button" class="wide" data-action="add-access">+ Adaugă acces din invitație</button>${device?.is_owner ? '<div class="section-label">Mai multe clase</div><button type="button" class="wide" data-action="add-classroom">+ Adaugă altă clasă</button><p class="caption">Fiecare clasă are registru, rapoarte și drepturi de acces separate.</p>' : ''}`, 'Salvează', { logoChanges: {} });
+  openModal('settings', s.className ? 'Setările clasei' : 'Configurează clasa', `${field('Școala', 'schoolName', s.schoolName, 'required maxlength="160"')}${field('Clasa', 'className', s.className, 'required maxlength="80"')}${field('An școlar', 'schoolYear', s.schoolYear || `${year}–${year + 1}`, 'required maxlength="40"')}<div class="section-label">Detalii de plată</div>${field('Link Revolut.me', 'paymentRevolutUrl', s.paymentRevolutUrl || '', 'inputmode="url" maxlength="240" autocomplete="url" placeholder="https://revolut.me/nume"')}${field('Numele beneficiarului', 'paymentBeneficiary', s.paymentBeneficiary || '', 'maxlength="160" autocomplete="name"')}${field('IBAN', 'paymentIban', s.paymentIban || '', 'maxlength="64" autocapitalize="characters" spellcheck="false" placeholder="RO00 BANK 0000 0000 0000 0000"')}<p class="caption">În Rapoarte, fiecare valoare va avea propriul buton WhatsApp și propriul buton de copiere. Pentru detaliile transferului, părintele va folosi numele elevului.</p><div class="section-label">Sigle pentru rapoarte</div><div class="logo-grid">${logoPicker('school', 'Sigla școlii', s.hasSchoolLogo)}${logoPicker('class', 'Sigla clasei', s.hasClassLogo)}</div><p class="caption">Poți alege PNG, JPG sau WebP. Imaginea este redimensionată pe dispozitiv și apare în antetul PDF-urilor emise de acum înainte.</p>${field('Sold inițial (lei)', 'openingBalance', decimal(s.openingBalanceMinor), `inputmode="decimal" required ${state.transactions.length ? 'readonly' : ''}`)}<p class="caption">Banii deja existenți în fond înainte să începi evidența. ${state.transactions.length ? 'Soldul inițial nu mai poate fi schimbat după înregistrarea operațiunilor.' : 'Avansurile individuale se înregistrează separat, prin încasări.'}</p>${state.settings.className ? `<div class="toolbar"><a href="${esc(scopedUrl('/api/export'))}" download="casierul-clasei.json">Exportă datele JSON</a><button type="button" data-action="logout">Deconectează dispozitivul</button></div>` : ''}<div class="section-label">Drepturi pe alte clase</div><button type="button" class="wide" data-action="add-access">+ Adaugă acces din invitație</button>${device?.is_owner ? '<div class="section-label">Mai multe clase</div><button type="button" class="wide" data-action="add-classroom">+ Adaugă altă clasă</button><p class="caption">Fiecare clasă are registru, rapoarte și drepturi de acces separate.</p>' : ''}<details class="context-help"><summary>${icon('help')}Cum configurez clasa?</summary>${simpleHelpFlow('settings', true)}</details>`, 'Salvează', { logoChanges: {} });
 }
 function accessModal() {
-  openModal('add-access', 'Adaugă acces la o clasă', `${field('Cod de invitație', 'code', '', 'required autocomplete="off" autocapitalize="none" spellcheck="false"')}<p class="caption">Folosește invitația emisă pentru clasa și rolul dorite. Accesul existent pe acest dispozitiv rămâne activ.</p>`, 'Adaugă accesul');
+  openModal('add-access', 'Adaugă acces la o clasă', `${field('Cod de invitație', 'code', '', 'required autocomplete="off" autocapitalize="none" spellcheck="false"')}<p class="caption">Folosește invitația emisă pentru clasa și rolul dorite. Accesul existent pe acest dispozitiv rămâne activ.</p><details class="context-help"><summary>${icon('help')}Cum se adaugă accesul?</summary>${simpleHelpFlow('access', true)}</details>`, 'Adaugă accesul');
 }
 function classroomModal() {
   const year = new Date().getFullYear() - (new Date().getMonth() < 8 ? 1 : 0);
-  openModal('add-classroom', 'Adaugă o clasă', `${field('Școala', 'schoolName', state.settings.schoolName, 'required maxlength="160"')}${field('Clasa', 'className', '', 'required maxlength="80"')}${field('An școlar', 'schoolYear', `${year}–${year + 1}`, 'required maxlength="40"')}<p class="caption">Clasa nouă pornește cu un registru gol și drepturi de acces independente. Vei avea automat acces de casier.</p>`, 'Creează clasa', { requestId: crypto.randomUUID() });
+  openModal('add-classroom', 'Adaugă o clasă', `${field('Școala', 'schoolName', state.settings.schoolName, 'required maxlength="160"')}${field('Clasa', 'className', '', 'required maxlength="80"')}${field('An școlar', 'schoolYear', `${year}–${year + 1}`, 'required maxlength="40"')}<p class="caption">Clasa nouă pornește cu un registru gol și drepturi de acces independente. Vei avea automat acces de casier.</p><details class="context-help"><summary>${icon('help')}Cum funcționează clasele și rolurile?</summary>${simpleHelpFlow('classrooms', true)}</details>`, 'Creează clasa', { requestId: crypto.randomUUID() });
 }
 
 function updateLogoPreview(kind, data) {
@@ -763,7 +888,7 @@ function contactsModal(targetId = childId) {
     const contact = contacts[index];
     return `<fieldset class="contact-slot"><legend>Contact ${index + 1}</legend>${field('Nume sau rol', `contactLabel${index + 1}`, contact?.label || '', 'maxlength="80" placeholder="Mama, tata, tutore…"')}${field('Număr WhatsApp', `contactPhone${index + 1}`, contact?.phone || '', 'type="tel" inputmode="tel" autocomplete="tel" maxlength="40" placeholder="07xx xxx xxx"')}</fieldset>`;
   };
-  openModal('contacts', `Contacte pentru ${name(c)}`, `${slot(0)}${slot(1)}<p class="caption">Datele sunt vizibile numai casierilor. Nu apar în rapoarte, exportul JSON sau accesul părinților și auditorilor.</p>`, 'Salvează contactele', { childId: c.id });
+  openModal('contacts', `Contacte pentru ${name(c)}`, `${slot(0)}${slot(1)}<p class="caption">Datele sunt vizibile numai casierilor. Nu apar în rapoarte, exportul JSON sau accesul părinților și auditorilor.</p><details class="context-help"><summary>${icon('help')}Cum folosesc contactele?</summary>${simpleHelpFlow('whatsapp', true)}</details>`, 'Salvează contactele', { childId: c.id });
 }
 function remindersModal() {
   const debtors = sortChildren(state.children.filter(item => item.active && item.dueMinor > 0));
@@ -806,7 +931,7 @@ function expenseModal(expense = null) {
     return `<div class="participant"><label class="check"><input type="checkbox" data-participant="${esc(c.id)}" ${checked ? 'checked' : ''} ${participantLockedAttribute}>${esc(name(c))}${c.active ? '' : ' · Arhivat'}</label><input type="number" data-quantity="${esc(c.id)}" min="1" max="10000" step="1" value="${contribution?.quantity || 1}" aria-label="Cantitate pentru ${esc(name(c))}" ${quantityLocked} hidden></div>`;
   }).join('');
   openModal(expense ? 'edit-expense' : 'expense', expense ? 'Editează cheltuiala' : 'Cheltuială nouă',
-    `${field('Denumire', 'title', expense?.title || '', 'required maxlength="200"')}<label>Calculul contribuției<select name="type" ${formulaLockedAttribute}>${typeOptions}</select></label>${field('<span id="expense-amount-label">Suma (lei)</span>', 'amount', expense ? decimal(expense.amountMinor) : '', `inputmode="decimal" autocomplete="off" required ${formulaLockedAttribute}`)}<label>Termen de plată (opțional)<input name="dueDate" type="date" value="${esc(expense?.dueDate || '')}"></label>${timestampField(expense ? localDateTime(expense.occurredAt) : localNow())}<div class="section-label">Cine participă?</div><label class="check"><input type="checkbox" id="all-participants" ${allParticipantsLocked ? 'disabled data-locked' : ''}>Toți copiii</label><div class="participants">${participantFields}</div><p class="caption">${linked && type === 'split' && splitParticipantsEditable ? 'Poți adăuga sau exclude copii până la prima contribuție încasată. Totalul rămâne neschimbat, iar contribuțiile se recalculează automat.' : linked && type === 'quantity' ? 'Poți adăuga participanți, elimina participanții fără sume achitate și corecta cantitățile fără a coborî contribuția sub suma deja achitată.' : linked && type === 'fixed' ? 'Poți adăuga participanți și îi poți elimina pe cei fără sume achitate. Suma și participanții care au plătit rămân protejați.' : linked ? 'Participanții sunt protejați deoarece există contribuții încasate pentru această cheltuială. Denumirea, datele și comentariile pot fi editate.' : 'Copiii nebifați nu au contribuție la această cheltuială. Modificările recalculează contribuțiile înainte de salvare.'}</p><div id="expense-preview" class="summary" aria-live="polite"></div>${comments(expense?.comment || '')}`,
+    `${field('Denumire', 'title', expense?.title || '', 'required maxlength="200"')}<label>Calculul contribuției<select name="type" ${formulaLockedAttribute}>${typeOptions}</select></label>${field('<span id="expense-amount-label">Suma (lei)</span>', 'amount', expense ? decimal(expense.amountMinor) : '', `inputmode="decimal" autocomplete="off" required ${formulaLockedAttribute}`)}<label>Termen de plată (opțional)<input name="dueDate" type="date" value="${esc(expense?.dueDate || '')}"></label>${timestampField(expense ? localDateTime(expense.occurredAt) : localNow())}<div class="section-label">Cine participă?</div><label class="check"><input type="checkbox" id="all-participants" ${allParticipantsLocked ? 'disabled data-locked' : ''}>Toți copiii</label><div class="participants">${participantFields}</div><p class="caption">${linked && type === 'split' && splitParticipantsEditable ? 'Poți adăuga sau exclude copii până la prima contribuție încasată. Totalul rămâne neschimbat, iar contribuțiile se recalculează automat.' : linked && type === 'quantity' ? 'Poți adăuga participanți, elimina participanții fără sume achitate și corecta cantitățile fără a coborî contribuția sub suma deja achitată.' : linked && type === 'fixed' ? 'Poți adăuga participanți și îi poți elimina pe cei fără sume achitate. Suma și participanții care au plătit rămân protejați.' : linked ? 'Participanții sunt protejați deoarece există contribuții încasate pentru această cheltuială. Denumirea, datele și comentariile pot fi editate.' : 'Copiii nebifați nu au contribuție la această cheltuială. Modificările recalculează contribuțiile înainte de salvare.'}</p><div id="expense-preview" class="summary" aria-live="polite"></div>${comments(expense?.comment || '')}<details class="context-help"><summary>${icon('help')}Cum funcționează cheltuiala?</summary>${simpleHelpFlow('expenses', true)}</details>`,
     expense ? 'Salvează modificările' : 'Creează cheltuiala', expense ? { expenseId: expense.id } : {});
   updateExpensePreview();
 }
@@ -848,7 +973,7 @@ function attachmentModal(entityType, entityId) {
   const label = entityType === 'expense' ? state.expenses.find(item => item.id === entityId)?.title
     : state.transactions.find(item => item.id === entityId)?.destination;
   if (!label) return;
-  openModal('attachment', 'Atașează documente', `<p><strong>${esc(label)}</strong></p><label>Fișiere<input type="file" name="files" accept="application/pdf,image/jpeg,image/png,image/webp" multiple required></label><p class="caption">PDF, JPG, PNG sau WebP, maximum 10 MB pentru fiecare fișier și 25 de documente per înregistrare. După încărcare, documentele devin parte imuabilă a evidenței.</p><label>Cine poate vedea documentele<select name="visibility"><option value="internal">Doar casierul și auditorii</option><option value="class">Și părinții cu acces la clasă</option></select></label><p class="caption">Documentele pot conține date personale. Alege accesul părinților numai pentru acte potrivite transparenței clasei.</p>`, 'Încarcă documentele', { entityType, entityId, requestIds: new Map(), completed: new Set() });
+  openModal('attachment', 'Atașează documente', `<p><strong>${esc(label)}</strong></p><label>Fișiere<input type="file" name="files" accept="application/pdf,image/jpeg,image/png,image/webp" multiple required></label><p class="caption">PDF, JPG, PNG sau WebP, maximum 10 MB pentru fiecare fișier și 25 de documente per înregistrare. După încărcare, documentele devin parte imuabilă a evidenței.</p><label>Cine poate vedea documentele<select name="visibility"><option value="internal">Doar casierul și auditorii</option><option value="class">Și părinții cu acces la clasă</option></select></label><p class="caption">Documentele pot conține date personale. Alege accesul părinților numai pentru acte potrivite transparenței clasei.</p><details class="context-help"><summary>${icon('help')}Cum sunt păstrate documentele?</summary>${simpleHelpFlow('documents', true)}</details>`, 'Încarcă documentele', { entityType, entityId, requestIds: new Map(), completed: new Set() });
 }
 function expenseDetails(id) {
   const e = state.expenses.find(e => e.id === id);
@@ -858,10 +983,10 @@ function expenseDetails(id) {
   openModal('expense-detail', e.title, `<p class="caption">${typeLabels[e.type]} · ${e.cancelled ? 'Anulată' : `${e.participantCount ?? e.contributions.length} participanți`}</p><div class="summary"><dl><div><dt>Total contribuții</dt><dd>${money(e.totalMinor)}</dd></div><div><dt>Încasat de la părinți</dt><dd>${money(e.collectedMinor)}</dd></div>${e.coveredMinor ? `<div><dt>Acoperit din fond</dt><dd>${money(e.coveredMinor)}</dd></div>` : ''}${e.adjustedMinor ? `<div><dt>Ajustări de rotunjire</dt><dd>${money(e.adjustedMinor)}</dd></div>` : ''}<div><dt>Bani dați mai departe</dt><dd>${money(e.paidOutMinor)}</dd></div>${financing.length ? `<div><dt>Avansat temporar fondului</dt><dd>${money(financedMinor)}</dd></div><div><dt>De restituit</dt><dd>${money(outstandingMinor)}</dd></div>` : ''}</dl></div><p>${e.dueDate ? `Termen: ${dateText(e.dueDate)}` : 'Fără termen de plată'}</p><p class="caption">Data cheltuielii: ${dateText(e.occurredAt)}</p>${e.comment ? `<p>${esc(e.comment)}</p>` : ''}<div class="preview-list">${sortChildren(state.children.filter(c => e.contributions.some(p => p.childId === c.id))).map(c => { const p = e.contributions.find(p => p.childId === c.id); const contribution = c.contributions.find(p => p.expenseId === e.id); return `<div class="row"><span>${esc(name(c))}${e.type === 'quantity' ? ` × ${p.quantity}` : ''}<small style="display:block">De achitat ${money(contribution?.remainingMinor || 0)}${contribution?.coveredMinor ? ` · Acoperit din fond ${money(contribution.coveredMinor)}` : ''}${contribution?.adjustedMinor ? ` · Ajustare ${money(contribution.adjustedMinor)}` : ''}</small></span><span class="amount">${money(p.amountMinor)}</span></div>`; }).join('')}</div>${attachmentSection('expense', e.id)}${e.cancelled || !canWrite() ? '' : `<div class="toolbar"><button type="button" data-action="edit-expense" data-id="${esc(e.id)}">Editează</button><button type="button" data-action="expense-payment" data-id="${esc(e.id)}">Înregistrează bani dați</button></div>${!e.collectedMinor && !e.coveredMinor && !e.adjustedMinor && !e.paidOutMinor && !financing.length ? `<button type="button" class="danger" data-action="cancel-expense" data-id="${esc(e.id)}">Anulează cheltuiala</button><p class="caption">Anularea este posibilă doar dacă nu mai există încasări sau plăți legate de cheltuială.</p>` : ''}`}`, null);
 }
 function paymentModal(expenseId = '') {
-  openModal('payment', 'Bani dați mai departe', `${moneyField('Suma dată (lei)', 'amount')}${field('Cui ai dat banii', 'destination', '', 'required maxlength="200" placeholder="De exemplu: dirigintă, profesoară, fotograf"')}<label>Cheltuială asociată (opțional)<select name="expenseId"><option value="">Fără asociere</option>${state.expenses.filter(e => !e.cancelled).map(e => `<option value="${esc(e.id)}" ${e.id === expenseId ? 'selected' : ''}>${esc(e.title)}</option>`).join('')}</select></label>${timestampField()}${comments()}<p class="caption">Suma scade din soldul fondului. Contribuțiile copiilor rămân neschimbate.</p>`, 'Înregistrează');
+  openModal('payment', 'Bani dați mai departe', `${moneyField('Suma dată (lei)', 'amount')}${field('Cui ai dat banii', 'destination', '', 'required maxlength="200" placeholder="De exemplu: dirigintă, profesoară, fotograf"')}<label>Cheltuială asociată (opțional)<select name="expenseId"><option value="">Fără asociere</option>${state.expenses.filter(e => !e.cancelled).map(e => `<option value="${esc(e.id)}" ${e.id === expenseId ? 'selected' : ''}>${esc(e.title)}</option>`).join('')}</select></label>${timestampField()}${comments()}<p class="caption">Suma scade din soldul fondului. Contribuțiile copiilor rămân neschimbate.</p><details class="context-help"><summary>${icon('help')}Cum apare în registru?</summary>${simpleHelpFlow('ledger', true)}</details>`, 'Înregistrează');
 }
 function fundAdvanceModal() {
-  openModal('fund-advance', 'Sumă avansată fondului', `${moneyField('Suma avansată (lei)', 'amount')}${field('Cine a avansat banii', 'person', '', 'required maxlength="200" placeholder="De exemplu: numele casierului"')}<label>Cheltuială asociată (opțional)<select name="expenseId"><option value="">Fără asociere</option>${state.expenses.filter(e => !e.cancelled).map(e => `<option value="${esc(e.id)}">${esc(e.title)}</option>`).join('')}</select></label>${timestampField()}${comments()}<p class="caption">Suma intră temporar în numerarul clasei și apare separat ca datorie față de persoana care a avansat-o.</p>`, 'Înregistrează suma avansată');
+  openModal('fund-advance', 'Sumă avansată fondului', `${moneyField('Suma avansată (lei)', 'amount')}${field('Cine a avansat banii', 'person', '', 'required maxlength="200" placeholder="De exemplu: numele casierului"')}<label>Cheltuială asociată (opțional)<select name="expenseId"><option value="">Fără asociere</option>${state.expenses.filter(e => !e.cancelled).map(e => `<option value="${esc(e.id)}">${esc(e.title)}</option>`).join('')}</select></label>${timestampField()}${comments()}<p class="caption">Suma intră temporar în numerarul clasei și apare separat ca datorie față de persoana care a avansat-o.</p><details class="context-help"><summary>${icon('help')}Cum funcționează suma avansată?</summary>${simpleHelpFlow('ledger', true)}</details>`, 'Înregistrează suma avansată');
 }
 function repayAdvanceModal(id) {
   const advance = (state.advances || []).find(item => item.id === id && !item.reversed);
@@ -912,7 +1037,7 @@ function updateStopCollectionModal() {
 }
 function creditModal() {
   const c = child(), defaults = automaticAllocations(unpaid(c), c.creditMinor);
-  openModal('credit', 'Folosește avansul', `<p>${esc(name(c))} · Avans disponibil <strong>${money(c.creditMinor)}</strong></p>${unpaid(c).map(e => `<label class="allocation"><span>${esc(e.title)}<small style="display:block">De achitat ${money(e.remainingMinor)}</small></span><input name="credit-${esc(e.expenseId)}" data-credit-expense="${esc(e.expenseId)}" inputmode="decimal" value="${decimal(defaults.find(a => a.expenseId === e.expenseId)?.amountMinor || 0)}" aria-label="${esc(e.title)}: avans repartizat în lei"></label>`).join('')}<div id="credit-preview" class="summary" aria-live="polite"></div>${timestampField()}${comments()}<p class="caption">Se folosesc banii deja primiți. Soldul fondului nu se schimbă.</p>`, 'Repartizează avansul', { childId: c.id }); updateCreditPreview();
+  openModal('credit', 'Folosește avansul', `<p>${esc(name(c))} · Avans disponibil <strong>${money(c.creditMinor)}</strong></p>${unpaid(c).map(e => `<label class="allocation"><span>${esc(e.title)}<small style="display:block">De achitat ${money(e.remainingMinor)}</small></span><input name="credit-${esc(e.expenseId)}" data-credit-expense="${esc(e.expenseId)}" inputmode="decimal" value="${decimal(defaults.find(a => a.expenseId === e.expenseId)?.amountMinor || 0)}" aria-label="${esc(e.title)}: avans repartizat în lei"></label>`).join('')}<div id="credit-preview" class="summary" aria-live="polite"></div>${timestampField()}${comments()}<p class="caption">Se folosesc banii deja primiți. Soldul fondului nu se schimbă.</p><details class="context-help"><summary>${icon('help')}Cum funcționează avansul copilului?</summary>${simpleHelpFlow('credit', true)}</details>`, 'Repartizează avansul', { childId: c.id }); updateCreditPreview();
 }
 function readCredit() {
   const c = state.children.find(c => c.id === modal.childId);
@@ -925,7 +1050,7 @@ function readCredit() {
 function updateCreditPreview() { try { const data = readCredit(); $('#credit-preview').textContent = `Acoperă ${money(data.total)} · Avans rămas ${money(state.children.find(c => c.id === modal.childId).creditMinor - data.total)}`; } catch (error) { $('#credit-preview').textContent = error.message; } }
 function refundModal() {
   const c = child();
-  openModal('refund', 'Restituie din avans', `<p>${esc(name(c))} · Avans disponibil <strong>${money(c.creditMinor)}</strong></p>${moneyField('Suma restituită (lei)', 'amount', decimal(c.creditMinor))}${timestampField()}${comments()}<p class="caption">Banii restituiți scad avansul copilului și soldul fondului.</p>`, 'Înregistrează restituirea', { childId: c.id });
+  openModal('refund', 'Restituie din avans', `<p>${esc(name(c))} · Avans disponibil <strong>${money(c.creditMinor)}</strong></p>${moneyField('Suma restituită (lei)', 'amount', decimal(c.creditMinor))}${timestampField()}${comments()}<p class="caption">Banii restituiți scad avansul copilului și soldul fondului.</p><details class="context-help"><summary>${icon('help')}Cum funcționează avansul copilului?</summary>${simpleHelpFlow('credit', true)}</details>`, 'Înregistrează restituirea', { childId: c.id });
 }
 function transactionDetails(id) {
   const t = state.transactions.find(t => t.id === id), c = state.children.find(c => c.id === t.childId);
