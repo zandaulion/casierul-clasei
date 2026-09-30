@@ -73,6 +73,7 @@ Inventarul descrie comportamentul disponibil în aplicație la 30 septembrie 202
 
 - Se emit PDF-uri imuabile pentru situația clasei, o cheltuială, un copil și **Tabelul contribuțiilor**.
 - Situația clasei, raportul cheltuielii și tabelul arată procentul de acoperire. Banii încasați de la părinți și sumele acoperite din fond apar separat.
+- Dacă toate contribuțiile unei cheltuieli sunt identice, situația clasei și raportul cheltuielii afișează explicit **Contribuție per copil**. O împărțire cu diferențe de un ban nu este prezentată ca sumă egală.
 - Tabelul contribuțiilor afișează lângă numele fiecărui copil totalul rămas de plată pentru toate contribuțiile active.
 - Detaliile de plată apar în rapoartele clasei, cheltuielii și copilului. Tabelul intern al contribuțiilor le omite.
 - Fiecare raport păstrează datele, siglele și culorile de la emitere. O corecție de raport creează o versiune nouă legată de cea înlocuită.
