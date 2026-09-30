@@ -39,6 +39,13 @@ function expenseStatus(state, expense) {
   return { count: outstanding.length, amountMinor: sum(outstanding.map(item => item.remainingMinor)) };
 }
 
+function equalContributionMinor(expense) {
+  if (!expense.contributions.length) return null;
+  const amountMinor = expense.contributions[0].amountMinor;
+  if (amountMinor <= 0) return null;
+  return expense.contributions.every(contribution => contribution.amountMinor === amountMinor) ? amountMinor : null;
+}
+
 export function reportSubject(state, type, subjectId) {
   if (type === 'class' || type === 'matrix') return { id: null, label: state.settings.className || 'Clasa' };
   if (type === 'expense') {
@@ -321,9 +328,10 @@ export async function renderReportPdf(report, state, branding = {}) {
     section('Cheltuieli');
     for (const expense of state.expenses.filter(entry => !entry.cancelled).reverse()) {
       const due = expenseStatus(state, expense);
+      const contributionMinor = equalContributionMinor(expense);
       const tone = due.amountMinor === 0 ? 'positive' : expense.collectedMinor > 0 ? 'warning' : 'negative';
       item(expense.title, money(expense.totalMinor),
-        `Încasat ${money(expense.collectedMinor)} · Acoperit din fond ${money(expense.coveredMinor ?? 0)} · Ajustări ${money(expense.adjustedMinor ?? 0)} · Dat mai departe ${money(expense.paidOutMinor)} · De achitat: ${due.count} copii · ${money(due.amountMinor)} · Documente partajate: ${sharedAttachments(state, 'expense', expense.id).length}`,
+        `${contributionMinor === null ? '' : `Contribuție per copil ${money(contributionMinor)} · `}Încasat ${money(expense.collectedMinor)} · Acoperit din fond ${money(expense.coveredMinor ?? 0)} · Ajustări ${money(expense.adjustedMinor ?? 0)} · Dat mai departe ${money(expense.paidOutMinor)} · De achitat: ${due.count} copii · ${money(due.amountMinor)} · Documente partajate: ${sharedAttachments(state, 'expense', expense.id).length}`,
         expense.comment, tone, expense);
     }
     const payments = transactions.filter(tx => tx.type === 'payment');
@@ -349,6 +357,8 @@ export async function renderReportPdf(report, state, branding = {}) {
     const partiallyPaid = childContributions.filter(entry => entry.paidMinor + (entry.coveredMinor ?? 0) > 0 && entry.remainingMinor > 0).length;
     section('Rezumat');
     metric('Necesar total', money(expense.totalMinor));
+    const contributionMinor = equalContributionMinor(expense);
+    if (contributionMinor !== null) metric('Contribuție per copil', money(contributionMinor), 'info');
     metric('Încasat de la părinți', money(expense.collectedMinor), expense.collectedMinor ? 'positive' : null);
     metric('Acoperit din fond', money(expense.coveredMinor ?? 0), expense.coveredMinor ? 'info' : null);
     metric('Ajustări de rotunjire', money(expense.adjustedMinor ?? 0), expense.adjustedMinor ? 'info' : null);

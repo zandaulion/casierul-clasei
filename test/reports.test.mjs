@@ -197,8 +197,10 @@ test('all four PDF reports preserve financial values, privacy, branding and read
       assertMetric(result, 'Sold după restituirea sumelor avansate', money(27845));
       assertMetric(result, 'Total de încasat', money(35750));
       assertMetric(result, 'Acoperire totală', '45,8%');
+      assertText(result, `Contribuție per copil ${money(3000)}`, 'class report states equal per-child contribution');
     } else if (type === 'expense') {
       assertMetric(result, 'Necesar total', money(12000));
+      assertMetric(result, 'Contribuție per copil', money(3000));
       assertMetric(result, 'Încasat de la părinți', money(5500));
       assertMetric(result, 'Bani dați mai departe', money(2000));
       assertMetric(result, 'De achitat', `3 copii · ${money(6500)}`);
@@ -218,6 +220,19 @@ test('all four PDF reports preserve financial values, privacy, branding and read
       assert.match(result.filename, /^raport-exhaustiv-/u, 'published matrix filename convention remains unchanged');
     }
   }
+});
+
+test('reports state a per-child contribution only when every participant owes the same amount', async t => {
+  const data = await fixture(t);
+  const equalReport = await inspectPdf(data, 'expense', 'equal-per-child');
+  assertMetric(equalReport, 'Contribuție per copil', money(3000));
+
+  data.post('expense.create', { title: 'Împărțire cu diferență de un ban', type: 'split', amountMinor: 100,
+    participants: data.ledger.getState().children.slice(0, 3).map(child => ({ childId: child.id })) });
+  const unequal = data.ledger.getState().expenses.find(expense => expense.title === 'Împărțire cu diferență de un ban');
+  const unequalReport = await inspectPdf({ ...data, primary: unequal.id }, 'expense', 'unequal-per-child');
+  assert.equal(unequalReport.text.includes('Contribuție per copil'), false,
+    'a 0,34 / 0,33 / 0,33 split is not described as equal');
 });
 
 test('multipage PDFs keep long titles, comments and histories without clipping or overlap', async t => {
