@@ -386,6 +386,8 @@ try {
   await until('!document.getElementById("dialog").open', 'close PDF preview');
   await evaluate(`(() => {
     window.__sharedReport = null;
+    window.__copiedText = '';
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async text => { window.__copiedText = text; } } });
     Object.defineProperty(navigator, 'canShare', { configurable: true, value: () => true });
     Object.defineProperty(navigator, 'share', { configurable: true, value: async data => { const file=data.files?.[0]; window.__sharedReport = { name: file?.name || '', type: file?.type || '', size: file?.size || 0, text: data.text || '', title: data.title || '' }; } });
   })()`);
@@ -404,13 +406,15 @@ try {
   const childReport = snapshot().reports.find(report => report.type === 'child' && report.subjectId === anaId);
   assert.ok(childReport);
   assert.match(await evaluate('document.querySelector(".child-report-option").textContent'), new RegExp(childReport.code));
-  assert.match(await evaluate('document.querySelector(".child-report-option").textContent'), /Doar mesajul[\s\S]*Mesajul \+ PDF/u);
+  assert.match(await evaluate('document.querySelector(".child-report-option").textContent'), /Doar mesajul[\s\S]*Copiază mesajul \+ PDF/u);
   await click('[data-action=share-child-text]');
   await until('window.__sharedReport?.text && !window.__sharedReport?.name', 'individual text shared without PDF');
   assert.match(await evaluate('window.__sharedReport.text'), /Avram Ana din III A[\s\S]*Total de achitat: 37,50 lei/u);
   assert.match(await evaluate('window.__sharedReport.title'), /Situația contribuțiilor · Avram Ana/u);
+  assert.equal(await evaluate('window.__copiedText'), '', 'text-only sharing does not need a clipboard workaround');
   await click('[data-action=share-child-report]');
   await until('window.__sharedReport?.name === ' + JSON.stringify(childReport.filename), 'individual PDF and message shared together');
+  assert.equal(await evaluate('window.__copiedText'), await evaluate('window.__sharedReport.text'), 'the full message is copied before the PDF share sheet opens');
   assert.match(await evaluate('window.__sharedReport.text'), /Avram Ana din III A[\s\S]*Total de achitat: 37,50 lei/u);
   assert.match(await evaluate('window.__sharedReport.text'), /Poți plăti și cu cardul direct din link, fără cont Revolut[\s\S]*IBAN: RO15REVO0000194617944482/u);
   assert.match(await evaluate('window.__sharedReport.title'), /Fișa copilului/u);
@@ -532,7 +536,7 @@ try {
     assert.equal(await evaluate('fetch("/api/auth/me").then(r => r.status)'), 200, 'phone remains signed in independently');
   }
   assert.equal(exceptions.length, 0, JSON.stringify(exceptions));
-  console.log('Browser checks passed: invitation/setup, two-device activation with independent sessions and third-device rejection, logo upload, classroom creation/switching, navigation, roster, direct WhatsApp reminders with two contacts, separate WhatsApp payment details, individual text-only and message-plus-PDF sharing, split opt-out recalculation before the first contribution, expense editing before and after linked money, manual allocation, quick collection with existing child credit and small-difference settlement, lost-response retry across reauthentication, temporary fund advances and repayments, expense/payment document attachments, payment/refund/credit/correction, PDF report generation, in-app viewing and sharing, stale-data protection, reload, offline protection, mobile/dark layout, and PWA worker.');
+  console.log('Browser checks passed: invitation/setup, two-device activation with independent sessions and third-device rejection, logo upload, classroom creation/switching, navigation, roster, direct WhatsApp reminders with two contacts, separate WhatsApp payment details, individual text-only sharing and copied-message PDF fallback, split opt-out recalculation before the first contribution, expense editing before and after linked money, manual allocation, quick collection with existing child credit and small-difference settlement, lost-response retry across reauthentication, temporary fund advances and repayments, expense/payment document attachments, payment/refund/credit/correction, PDF report generation, in-app viewing and sharing, stale-data protection, reload, offline protection, mobile/dark layout, and PWA worker.');
 } finally {
   if (contextId) await send('Target.disposeBrowserContext', { browserContextId: contextId });
   socket.close();
