@@ -352,6 +352,7 @@ try {
   await until('window.__sharedReport?.type === "application/pdf"', 'PDF shared through native share');
   assert.match(await evaluate('window.__sharedReport.name'), /\.pdf$/u);
   assert.ok(await evaluate('window.__sharedReport.size > 1000'));
+  assert.match(await evaluate('window.__sharedReport.text'), /situația fondului clasei III A[\s\S]*Raport R-0001/u);
   await screenshot('reports');
   await click('[data-tab=children]'); await click('[data-child="' + anaId + '"]');
   assert.ok(await evaluate('document.querySelector("[data-action=create-child-report]")'));

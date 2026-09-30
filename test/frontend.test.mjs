@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { money, parseMoney, roundUp, collectionResult, expensePreview, sortChildren, unpaid, whatsappReminder, whatsappUrl } from '../web/helpers.mjs';
+import { money, parseMoney, roundUp, collectionResult, expensePreview, sortChildren, unpaid, whatsappReminder, whatsappUrl, reportShareMessage } from '../web/helpers.mjs';
 const child = { dueMinor: 8500, contributions: [
   { expenseId: 'books', title: 'Culegeri', dueDate: '2026-10-02', remainingMinor: 6000 },
   { expenseId: 'trip', title: 'Excursie', dueDate: '2026-10-01', remainingMinor: 2500 },
@@ -68,4 +68,14 @@ test('WhatsApp reminders contain only the selected child situation and use a dir
   assert.match(message, /Avans disponibil: 5 lei/u);
   assert.equal(whatsappUrl('+40722111222', message), `https://wa.me/40722111222?text=${encodeURIComponent(message)}`);
   assert.equal(whatsappUrl('număr invalid', message), '');
+});
+test('report sharing messages describe aggregate and private PDFs without inventing live values', () => {
+  assert.equal(reportShareMessage({ type: 'class', code: 'R-0012', subjectLabel: 'III B' }, 'III B'),
+    'Bună ziua,\n\nVă trimit situația fondului clasei III B.\nRaport R-0012. Documentul reflectă situația de la momentul emiterii.\n\nMulțumesc!');
+  assert.match(reportShareMessage({ type: 'expense', code: 'R-0013', subjectLabel: 'Echipament sportiv' }, 'III B'),
+    /situația cheltuielii „Echipament sportiv” pentru III B/u);
+  assert.match(reportShareMessage({ type: 'matrix', code: 'R-0014', subjectLabel: 'III B' }, 'III B'),
+    /tabelul contribuțiilor pentru III B, pentru verificare/u);
+  assert.match(reportShareMessage({ type: 'child', code: 'R-0015', subjectLabel: 'Avram Ana' }, 'III B'),
+    /fișa individuală pentru Avram Ana/u);
 });
