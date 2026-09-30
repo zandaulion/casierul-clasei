@@ -429,3 +429,22 @@ test('a zero-total expense has no misleading percentage or non-finite financial 
     else assertText(result, 'Fără sumă de acoperit', `${type}: zero-total expense is explicitly described`);
   }
 });
+
+test('a report renders outside the write transaction, so a mutation during rendering neither fails nor goes unnoticed', async t => {
+  const ledger = new Ledger(':memory:');
+  t.after(() => ledger.close());
+  const post = (op, fields) => ledger.dispatch(op, { requestId: randomUUID(), expectedRevision: ledger.getState().revision, ...fields }, actor);
+  post('settings.update', { schoolName: 'Școala', className: 'IV B', schoolYear: '2026–2027', openingBalanceMinor: 0 });
+  const childId = post('child.create', { firstName: 'Ana', lastName: 'Avram' }).state.children[0].id;
+  post('expense.create', { title: 'Caiete', type: 'fixed', amountMinor: 2500, participants: [{ childId }] });
+  const before = ledger.getState().revision;
+  const [result, mutation] = await Promise.all([
+    ledger.createReport({ requestId: randomUUID(), type: 'class' }, actor),
+    (async () => post('child.create', { firstName: 'David', lastName: 'Bălan' }))(),
+  ]);
+  assert.equal(mutation.state.revision, before + 1);
+  assert.equal(result.report.stateRevision, before + 1, 'the stored report reflects the ledger it was rendered from');
+  assert.equal(result.report.code, 'R-0001');
+  const again = await ledger.createReport({ requestId: randomUUID(), type: 'class' }, actor);
+  assert.equal(again.report.code, 'R-0002');
+});

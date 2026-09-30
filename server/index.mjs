@@ -128,6 +128,15 @@ function checkOrigin(req, publicOrigin) {
   if (site != null && site !== 'same-origin') throw httpError(403, 'Cererea trebuie trimisă din aplicație.');
 }
 
+// The app is meant to sit behind a local reverse proxy (Cloudflare Tunnel, Caddy), so a forwarded
+// address is trusted only when the connection itself comes from this machine.
+function clientAddress(req) {
+  const socketAddress = req.socket?.remoteAddress || '';
+  const loopback = ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(socketAddress);
+  const forwarded = req.headers['cf-connecting-ip'] || String(req.headers['x-forwarded-for'] || '').split(',')[0].trim();
+  return loopback && forwarded ? forwarded : socketAddress;
+}
+
 function pathnameOf(req) {
   let name;
   try { name = decodeURIComponent((req.url || '/').split('?')[0]); }
@@ -332,7 +341,7 @@ export function createApp(options = {}) {
       const body = await readJson(req);
       exactKeys(body, ['code', 'label'], ['code']);
       if (Object.hasOwn(body, 'label') && typeof body.label !== 'string') throw httpError(400, 'Eticheta dispozitivului trebuie să fie text.');
-      const result = auth.redeemInvite(body.code, body.label);
+      const result = auth.redeemInvite(body.code, body.label, clientAddress(req));
       res.setHeader('Set-Cookie', sessionCookie(result.token, config.cookieSecure));
       return sendJson(res, 200, { device: result.device });
     }
@@ -355,7 +364,7 @@ export function createApp(options = {}) {
         checkOrigin(req, config.publicBaseUrl);
         const body = await readJson(req);
         exactKeys(body, ['code'], ['code']);
-        const permission = auth.addAccess(body.code, device.id);
+        const permission = auth.addAccess(body.code, device.id, clientAddress(req));
         return sendJson(res, 200, { device: auth.getDevice(token), classrooms: classroomsFor(device), classroomId: permission.classroom_id });
       }
       if (pathname === '/api/auth/logout') {

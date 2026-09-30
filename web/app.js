@@ -1424,7 +1424,8 @@ document.addEventListener('click', async event => {
     }
     case 'reverse': {
       const transaction = state.transactions.find(t => t.id === button.dataset.id);
-      openModal('reverse', 'Corectează operațiunea', `<p>Se inversează efectele operațiunii „${labels[transaction.type]}” de ${money(transaction.amountMinor)}. Istoricul se păstrează.</p><label>Motivul corecției<textarea name="comment" required maxlength="2000"></textarea></label><p class="caption">Pentru o sumă greșită, anulează operațiunea și înregistrează apoi suma corectă. O încasare al cărei avans a fost folosit poate necesita întâi corectarea operațiunilor ulterioare.</p>`, 'Confirmă corecția', { transactionId: transaction.id }); break;
+      const companions = state.transactions.filter(t => t.settlesId === transaction.id && !t.reversed);
+      openModal('reverse', 'Corectează operațiunea', `<p>Se inversează efectele operațiunii „${labels[transaction.type]}” de ${money(transaction.amountMinor)}. Istoricul se păstrează.</p>${companions.length ? `<p>Se corectează odată cu ea și ${companions.map(t => `${labels[t.type].toLowerCase()} de ${money(t.amountMinor)}`).join(', ')}, înregistrată la aceeași încasare.</p>` : ''}<label>Motivul corecției<textarea name="comment" required maxlength="2000"></textarea></label><p class="caption">Pentru o sumă greșită, anulează operațiunea și înregistrează apoi suma corectă. O încasare al cărei avans a fost folosit poate necesita întâi corectarea operațiunilor ulterioare.</p>`, 'Confirmă corecția', { transactionId: transaction.id }); break;
     }
     case 'cancel-expense': openModal('cancel-expense', 'Anulează cheltuiala', '<p>Contribuțiile acestei cheltuieli nu vor mai fi datorate. Cheltuiala rămâne vizibilă în istoric.</p><label>Motiv (opțional)<textarea name="comment" maxlength="2000"></textarea></label>', 'Anulează cheltuiala', { expenseId: button.dataset.id }); break;
     case 'logout':

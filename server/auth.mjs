@@ -9,6 +9,11 @@ export const INVITE_MAX_USES = 2;
 export const DEFAULT_CLASSROOM_ID = 'default';
 const ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 export const DEVICE_ROLES = new Set(['treasurer', 'parent', 'auditor']);
+// Failed activations are counted per client so one guessing client cannot lock everyone out;
+// the global ceiling still bounds distributed guessing against the 80-bit codes.
+export const FAILURE_WINDOW_MS = 10 * 60000;
+export const CLIENT_FAILURE_LIMIT = 10;
+export const GLOBAL_FAILURE_LIMIT = 250;
 const hash = (value) => createHash('sha256').update(value).digest('hex');
 
 export function httpError(status, message) {
@@ -51,7 +56,7 @@ export class AuthStore {
     this.db = new DatabaseSync(dbPath);
     this.publicBaseUrl = publicBaseUrl.replace(/\/+$/u, '');
     this.now = now;
-    this.failures = [];
+    this.failures = new Map();
     this.db.exec(`
       PRAGMA journal_mode = WAL;
       PRAGMA foreign_keys = ON;
@@ -134,6 +139,23 @@ export class AuthStore {
     return false;
   }
 
+  #activationGuard(client) {
+    const now = this.now();
+    const key = typeof client === 'string' && client ? client : '';
+    let total = 0;
+    for (const [entry, times] of this.failures) {
+      const recent = times.filter((at) => at > now - FAILURE_WINDOW_MS);
+      if (recent.length) { this.failures.set(entry, recent); total += recent.length; } else this.failures.delete(entry);
+    }
+    if ((this.failures.get(key)?.length ?? 0) >= CLIENT_FAILURE_LIMIT || total >= GLOBAL_FAILURE_LIMIT) {
+      throw httpError(429, 'Prea multe încercări. Încearcă din nou peste câteva minute.');
+    }
+    return (status, message) => {
+      this.failures.set(key, [...(this.failures.get(key) ?? []), now]);
+      return httpError(status, message);
+    };
+  }
+
   createInvite(label, { role = 'treasurer', childId = null, accessExpiresAt = null, classroomId = DEFAULT_CLASSROOM_ID } = {}) {
     label = validLabel(label, '');
     if (!DEVICE_ROLES.has(role)) throw httpError(400, 'Tipul de acces nu este valid.');
@@ -184,14 +206,9 @@ export class AuthStore {
     if (claimed.changes !== 1) throw httpError(409, 'Invitația nu mai are activări disponibile. Cere un cod nou.');
   }
 
-  redeemInvite(rawCode, initialLabel) {
+  redeemInvite(rawCode, initialLabel, client = '') {
     const now = this.now();
-    this.failures = this.failures.filter((at) => at > now - 10 * 60000);
-    if (this.failures.length >= 25) throw httpError(429, 'Prea multe încercări. Încearcă din nou peste câteva minute.');
-    const fail = (status, message) => {
-      this.failures.push(now);
-      return httpError(status, message);
-    };
+    const fail = this.#activationGuard(client);
     if (typeof rawCode !== 'string' || rawCode.length > 64) throw fail(400, 'Codul invitației nu este valid.');
     const code = rawCode.toUpperCase().replace(/[-\s]/gu, '');
     if (!/^[A-Z2-9]{16}$/u.test(code)) throw fail(400, 'Codul invitației nu este valid.');
@@ -232,14 +249,9 @@ export class AuthStore {
     }
   }
 
-  addAccess(rawCode, deviceId) {
+  addAccess(rawCode, deviceId, client = '') {
     const now = this.now();
-    this.failures = this.failures.filter((at) => at > now - 10 * 60000);
-    if (this.failures.length >= 25) throw httpError(429, 'Prea multe încercări. Încearcă din nou peste câteva minute.');
-    const fail = (status, message) => {
-      this.failures.push(now);
-      return httpError(status, message);
-    };
+    const fail = this.#activationGuard(client);
     if (typeof rawCode !== 'string' || rawCode.length > 64) throw fail(400, 'Codul invitației nu este valid.');
     const code = rawCode.toUpperCase().replace(/[-\s]/gu, '');
     if (!/^[A-Z2-9]{16}$/u.test(code)) throw fail(400, 'Codul invitației nu este valid.');

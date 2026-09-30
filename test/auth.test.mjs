@@ -6,7 +6,7 @@ import os from 'node:os';
 import http from 'node:http';
 import { createHash } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
-import { AuthStore, COOKIE_NAME, adminTokenMatches, readSessionCookie } from '../server/auth.mjs';
+import { AuthStore, CLIENT_FAILURE_LIMIT, COOKIE_NAME, GLOBAL_FAILURE_LIMIT, adminTokenMatches, readSessionCookie } from '../server/auth.mjs';
 import { projectState } from '../server/index.mjs';
 
 function temporary(t) {
@@ -298,14 +298,30 @@ test('parent state exposes class totals and only the associated child', () => {
   assert.deepEqual(projectState(state, { role: 'treasurer' }).contacts, state.contacts);
 });
 
-test('redeem attempts are rate limited and recover after the window', (t) => {
+test('redeem attempts are rate limited per client and recover after the window', (t) => {
   let time = Date.parse('2026-09-28T12:00:00Z');
   const { auth } = authStore(t, { now: () => time });
   const invite = auth.createInvite();
-  for (let count = 0; count < 25; count++) assert.throws(() => auth.redeemInvite('invalid'), { status: 400 });
-  assert.throws(() => auth.redeemInvite(invite.code), { status: 429 });
+  for (let count = 0; count < CLIENT_FAILURE_LIMIT; count++) assert.throws(() => auth.redeemInvite('invalid', undefined, '203.0.113.7'), { status: 400 });
+  assert.throws(() => auth.redeemInvite(invite.code, undefined, '203.0.113.7'), { status: 429 });
+  // Another client is unaffected by a stranger's failed guesses.
+  const other = auth.redeemInvite(invite.code, undefined, '198.51.100.9');
+  assert.ok(other.token);
+  assert.throws(() => auth.addAccess('invalid', other.device.id, '203.0.113.7'), { status: 429 });
   time += 10 * 60000 + 1;
-  assert.ok(auth.redeemInvite(invite.code).token);
+  assert.ok(auth.redeemInvite(invite.code, undefined, '203.0.113.7').token);
+});
+
+test('activation failures across all clients are capped by a global ceiling', (t) => {
+  const time = Date.parse('2026-09-28T12:00:00Z');
+  const { auth } = authStore(t, { now: () => time });
+  const invite = auth.createInvite();
+  for (let client = 0; client * (CLIENT_FAILURE_LIMIT - 1) < GLOBAL_FAILURE_LIMIT; client++) {
+    for (let count = 0; count < CLIENT_FAILURE_LIMIT - 1; count++) {
+      try { auth.redeemInvite('invalid', undefined, `client-${client}`); } catch (error) { if (error.status === 429) break; assert.equal(error.status, 400); }
+    }
+  }
+  assert.throws(() => auth.redeemInvite(invite.code, undefined, 'fresh-client'), { status: 429 });
 });
 
 test('token gates fail closed and duplicate session cookies are rejected', () => {

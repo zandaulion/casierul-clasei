@@ -51,7 +51,7 @@ Business endpoints accept `?classroom=<id>`. Omitting it selects `default` when 
 | POST /api/fund-advances | fund_advance.create | amountMinor, person, expenseId?, occurredAt?, comment?; adds cash and records an equal class liability |
 | POST /api/fund-advances/:id/repayments | fund_advance.repay | amountMinor, occurredAt?, comment?; partial or full repayment, never above the outstanding amount |
 | POST /api/fund-advances/:id/waivers | fund_advance.waive | childId, expenseId, amountMinor, occurredAt?, comment?; partially or fully covers an unpaid contribution from the advance's outstanding liability without moving cash |
-| POST /api/transactions/:id/reverse | transaction.reverse | comment (required); server adds transactionId; append correction, never erase financial history |
+| POST /api/transactions/:id/reverse | transaction.reverse | comment (required); server adds transactionId; append correction, never erase financial history. Reversing a collection also reverses the credit_apply/rounding_adjustment saved with it (`settlesId`) |
 
 `POST /api/expenses/:id/attachments` and `POST /api/payments/:id/attachments` upload one raw PDF/JPG/PNG/WebP body per request. They require treasurer access, `X-Request-Id`, `X-Expected-Revision`, URI-encoded `X-Filename`, `X-Visibility: internal|class`, and the file MIME type in `Content-Type`. A file must be non-empty and at most 10 MB; each expense or payment accepts at most 25 documents, with 200 MB total attachment storage per class. The declared MIME type and file signature must agree. Uploads are idempotent and immutable. `GET /api/attachments/:id` opens the document; `?download=1` downloads it. Parents can retrieve only documents marked `class`; auditors and treasurers can retrieve both visibility levels.
 
@@ -75,7 +75,7 @@ Business endpoints accept `?classroom=<id>`. Omitting it selects `default` when 
    occurredAt,dueDate,comment,cancelled,
    contributions:[{childId,amountMinor,quantity}]}],
  transactions: [{id,type,occurredAt,createdAt,childId,expenseId,destination,comment,
-   amountMinor,changeMinor,advanceId,allocations:[{expenseId,amountMinor}],reversed,reversesId,actorLabel}],
+   amountMinor,changeMinor,advanceId,settlesId,allocations:[{expenseId,amountMinor}],reversed,reversesId,actorLabel}],
  advances: [{id,person,expenseId,occurredAt,createdAt,comment,amountMinor,repaidMinor,waivedMinor,outstandingMinor,reversed}],
  attachments: [{id,entityType,entityId,filename,mimeType,size,sha256,visibility,createdAt,createdByLabel}],
  reports: [{id,serial,code,type,subjectId,subjectLabel,createdAt,stateRevision,createdByLabel,
