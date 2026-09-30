@@ -175,6 +175,19 @@ try {
   await evaluate('history.back()');
   await until('!document.getElementById("dialog").open && document.getElementById("collection-form")', 'back gesture closes dialog first');
   assert.equal(await getValue('#received'), '127,50');
+  await fill('#received', '127');
+  assert.equal(await evaluate('document.getElementById("small-settlement").hidden'), false);
+  assert.deepEqual(await evaluate('[...document.getElementById("small-settlement-choice").options].map(option => option.value)'), ['none', 'rounding']);
+  await fill('#small-settlement-choice', 'rounding');
+  assert.match(await evaluate('document.getElementById("collection-dock-summary").textContent'), /Ajustare de rotunjire\s*0,50 lei[\s\S]*Rămâne de achitat\s*0 lei/u);
+  await screenshot('small-settlement');
+  await page('Emulation.setDeviceMetricsOverride', { width: 320, height: 480, deviceScaleFactor: 1, mobile: true });
+  assert.equal(await evaluate('(() => { const r=document.querySelector(".collection-dock").getBoundingClientRect(); return r.top >= 0 && r.bottom <= innerHeight; })()'), true, 'small-difference settlement fits a short phone');
+  await page('Emulation.setDeviceMetricsOverride', { width: 412, height: 600, deviceScaleFactor: 1, mobile: true });
+  await fill('#received', '126,50');
+  assert.equal(await getValue('#small-settlement-choice'), 'none', 'editing the cash amount requires a fresh settlement choice');
+  await fill('#received', '127,50');
+  assert.equal(await evaluate('document.getElementById("small-settlement").hidden'), true);
   await evaluate('document.getElementById("allocation-details").open = true');
   await click('#manual');
   assert.equal(await evaluate('document.getElementById("manual").checked'), true);
@@ -492,7 +505,7 @@ try {
     assert.equal(await evaluate('fetch("/api/auth/me").then(r => r.status)'), 200, 'phone remains signed in independently');
   }
   assert.equal(exceptions.length, 0, JSON.stringify(exceptions));
-  console.log('Browser checks passed: invitation/setup, two-device activation with independent sessions and third-device rejection, logo upload, classroom creation/switching, navigation, roster, direct WhatsApp reminders with two contacts, personalized message plus individual PDF sharing, split opt-out recalculation before the first contribution, expense editing before and after linked money, manual allocation, quick collection, lost-response retry across reauthentication, temporary fund advances and repayments, expense/payment document attachments, payment/refund/credit/correction, PDF report generation, in-app viewing and sharing, stale-data protection, reload, offline protection, mobile/dark layout, and PWA worker.');
+  console.log('Browser checks passed: invitation/setup, two-device activation with independent sessions and third-device rejection, logo upload, classroom creation/switching, navigation, roster, direct WhatsApp reminders with two contacts, personalized message plus individual PDF sharing, split opt-out recalculation before the first contribution, expense editing before and after linked money, manual allocation, quick collection with small-difference settlement, lost-response retry across reauthentication, temporary fund advances and repayments, expense/payment document attachments, payment/refund/credit/correction, PDF report generation, in-app viewing and sharing, stale-data protection, reload, offline protection, mobile/dark layout, and PWA worker.');
 } finally {
   if (contextId) await send('Target.disposeBrowserContext', { browserContextId: contextId });
   socket.close();

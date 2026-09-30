@@ -181,7 +181,7 @@ const BUSINESS_ROUTES = [
   [/^\/api\/expenses$/u, 'expense.create', ['title', 'type', 'amountMinor', 'participants', 'occurredAt', 'dueDate', 'comment']],
   [/^\/api\/expenses\/([A-Za-z0-9_-]{1,100})$/u, 'expense.update', ['title', 'type', 'amountMinor', 'participants', 'occurredAt', 'dueDate', 'comment'], 'expenseId'],
   [/^\/api\/expenses\/([A-Za-z0-9_-]{1,100})\/cancel$/u, 'expense.cancel', ['comment'], 'expenseId'],
-  [/^\/api\/collections$/u, 'collection.create', ['childId', 'receivedMinor', 'changeMinor', 'allocations', 'occurredAt', 'comment']],
+  [/^\/api\/collections$/u, 'collection.create', ['childId', 'receivedMinor', 'changeMinor', 'allocations', 'settlement', 'occurredAt', 'comment']],
   [/^\/api\/credit\/apply$/u, 'credit.apply', ['childId', 'allocations', 'occurredAt', 'comment']],
   [/^\/api\/refunds$/u, 'refund.create', ['childId', 'amountMinor', 'occurredAt', 'comment']],
   [/^\/api\/payments$/u, 'payment.create', ['amountMinor', 'destination', 'expenseId', 'occurredAt', 'comment']],
@@ -223,6 +223,22 @@ function validateMutation(body, fields) {
         if (!Object.hasOwn(entry, name)) continue;
         const valid = ['quantity', 'amountMinor'].includes(name) ? Number.isSafeInteger(entry[name]) : typeof entry[name] === 'string';
         if (!valid) throw httpError(400, `Lista ${key} conține o valoare invalidă.`);
+      }
+    }
+  }
+  if (Object.hasOwn(body, 'settlement')) {
+    if (!body.settlement || typeof body.settlement !== 'object' || Array.isArray(body.settlement)) {
+      throw httpError(400, 'Închiderea diferenței nu este validă.');
+    }
+    exactKeys(body.settlement, ['type', 'allocations'], ['type', 'allocations']);
+    if (!['credit', 'rounding'].includes(body.settlement.type) || !Array.isArray(body.settlement.allocations)
+      || !body.settlement.allocations.length || body.settlement.allocations.length > 1000) {
+      throw httpError(400, 'Închiderea diferenței nu este validă.');
+    }
+    for (const allocation of body.settlement.allocations) {
+      exactKeys(allocation, ['expenseId', 'amountMinor'], ['expenseId', 'amountMinor']);
+      if (typeof allocation.expenseId !== 'string' || !Number.isSafeInteger(allocation.amountMinor)) {
+        throw httpError(400, 'Închiderea diferenței conține o repartizare invalidă.');
       }
     }
   }
