@@ -1,0 +1,18 @@
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8018:8018"
+    environment:
+      # The HTTPS origin your reverse proxy serves the app on, e.g. https://casierul.example.com
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:?set PUBLIC_BASE_URL to the public HTTPS origin}
+      # Secret for the admin API; generate one with: openssl rand -hex 32
+      ADMIN_TOKEN: ${ADMIN_TOKEN:?set ADMIN_TOKEN to a long random secret}
+      # Set to "false" only for a plain-HTTP trial on localhost.
+      COOKIE_SECURE: ${COOKIE_SECURE:-true}
+    volumes:
+      - data:/data
+
+volumes:
+  data:
