@@ -62,7 +62,7 @@ Proprietarul poate adăuga alte clase din setări. Fiecare clasă are bază de d
 
 ## Încasare rapidă
 
-Atinge copilul din lista alfabetică, apoi alege totalul de achitat sau o singură cheltuială. Butoanele mari rotunjesc în sus la multiplu de 10, 50 sau 100 lei, pornind mereu de la suma selectată. Un multiplu exact rămâne neschimbat.
+Atinge copilul din lista alfabetică, apoi alege totalul de achitat sau o singură cheltuială. Totalul și rotunjirea apar primele, înaintea contribuțiilor individuale; contactele WhatsApp și partajarea raportului sunt mai jos, după formularul de încasare. Butoanele mari rotunjesc în sus la multiplu de 5, 10, 50 sau 100 lei, pornind mereu de la suma selectată. Un multiplu exact rămâne neschimbat.
 
 Pentru diferență, alege **Dau rest** sau **Păstrez în avans**. Dacă ai selectat o singură cheltuială, diferența nu se repartizează automat către alte datorii. Poți introduce suma primită și repartizarea manual. Rezumatul de lângă salvare arată suma primită, restul și suma înregistrată. Verifică-l și salvează; aplicația revine la lista copiilor și confirmă încasarea pentru copilul ales.
 
