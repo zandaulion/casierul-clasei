@@ -48,7 +48,7 @@ Datele afișate în capturi sunt integral sintetice.
 3. Din **Copiii clasei → Gestionează copiii**, adaugă copiii individual sau lipește lista, câte un `Nume de familie; Prenume` pe linie.
 4. Creează cheltuielile și selectează participanții: sumă fixă/copil, total împărțit sau cantitate/copil × preț unitar.
 
-Pentru remindere, deschide un copil și salvează unul sau două contacte WhatsApp. Butonul contactului deschide conversația directă cu situația copilului completată; mesajul rămâne sub controlul tău și se trimite numai după confirmarea din WhatsApp. Din lista copiilor, **Remindere WhatsApp** grupează toți copiii activi care au sume de achitat și arată contactele lipsă.
+Pentru remindere, deschide un copil și salvează unul sau două contacte WhatsApp. Butonul contactului deschide conversația directă cu situația copilului completată; mesajul rămâne sub controlul tău și se trimite numai după confirmarea din WhatsApp. Opțional, poți genera fișa individuală și folosi **Partajează mesajul + PDF**: selectorul telefonului primește același mesaj și raportul, iar tu alegi WhatsApp și părintele. Din lista copiilor, **Remindere WhatsApp** grupează toți copiii activi care au sume de achitat și arată contactele lipsă.
 
 La o cheltuială împărțită, poți exclude copiii care nu participă până la prima contribuție încasată. Totalul rămâne neschimbat, iar aplicația recalculează automat partea fiecărui copil, inclusiv dacă plata furnizorului sau un avans temporar au fost deja înregistrate.
 
@@ -73,7 +73,7 @@ Avansul poate acoperi ulterior alte contribuții sau poate fi restituit. Folosir
 ## Evidență
 
 - **Copii:** contribuții, restanțe, avansuri și istoricul fiecărui copil.
-- **Remindere WhatsApp:** până la două contacte numite pentru fiecare copil și deschiderea conversației directe cu un mesaj privat precompletat. Aplicația nu trimite automat și nu marchează mesajul ca livrat.
+- **Remindere WhatsApp:** până la două contacte numite pentru fiecare copil și deschiderea conversației directe cu un mesaj privat precompletat. Fișa individuală poate fi partajată opțional împreună cu mesajul prin selectorul sistemului; acesta nu permite aplicației să aleagă automat conversația. Aplicația nu trimite automat și nu marchează mesajul ca livrat.
 - **Cheltuieli:** participanți, contribuții calculate, termen, sume încasate și plătite. O cheltuială poate fi editată; suma, calculul și participanții se blochează cât timp are operațiuni financiare active, iar denumirea, datele și comentariile rămân editabile. Pentru calculul pe cantități, cantitatea unui participant existent poate fi corectată dacă noua contribuție nu scade sub suma deja achitată.
 - **Registru:** numerar disponibil, încasări, bani dați, restituiri, corecții și sume avansate temporar fondului. O sumă plătită personal poate fi asociată unei cheltuieli și restituită apoi parțial sau integral; aplicația arată separat cât îi mai datorează clasa persoanei care a avansat banii.
 - **Documente justificative:** atașează PDF-uri sau fotografii la cheltuieli și la plățile din registru. Fiecare document are amprentă SHA-256 și poate rămâne doar pentru casier/auditori sau poate fi făcut vizibil părinților cu acces la clasă. Limitele sunt 10 MB per fișier, 25 de documente per înregistrare și 200 MB per clasă.

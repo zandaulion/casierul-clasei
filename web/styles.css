@@ -351,6 +351,10 @@ main { min-width: 0; padding: 24px 20px; outline: none; }
 }
 .whatsapp-link small { color: var(--muted); font-weight: 400; }
 .whatsapp-link.compact { flex: 1 1 9em; }
+.child-report-option { margin-top: 15px; padding-top: 14px; border-top: 1px solid var(--line); }
+.child-report-option > div:first-child strong, .child-report-option > div:first-child span { display: block; }
+.child-report-option > button { width: 100%; margin-top: 10px; }
+.child-report-option .report-actions { margin-top: 10px; }
 .contact-slot { margin: 14px 0; padding: 8px 14px 14px; border: 1px solid var(--line); border-radius: 14px; }
 .contact-slot legend { padding: 0 6px; font-weight: 650; }
 .reminder-list { display: grid; gap: 10px; margin-top: 16px; }

@@ -346,14 +346,29 @@ try {
   await evaluate(`(() => {
     window.__sharedReport = null;
     Object.defineProperty(navigator, 'canShare', { configurable: true, value: () => true });
-    Object.defineProperty(navigator, 'share', { configurable: true, value: async data => { window.__sharedReport = { name: data.files[0].name, type: data.files[0].type, size: data.files[0].size }; } });
+    Object.defineProperty(navigator, 'share', { configurable: true, value: async data => { window.__sharedReport = { name: data.files[0].name, type: data.files[0].type, size: data.files[0].size, text: data.text || '', title: data.title || '' }; } });
   })()`);
   await click('[data-action=share-report]');
   await until('window.__sharedReport?.type === "application/pdf"', 'PDF shared through native share');
   assert.match(await evaluate('window.__sharedReport.name'), /\.pdf$/u);
   assert.ok(await evaluate('window.__sharedReport.size > 1000'));
   await screenshot('reports');
-  await click('[data-tab=children]'); await click('[data-child="' + davidId + '"]');
+  await click('[data-tab=children]'); await click('[data-child="' + anaId + '"]');
+  assert.ok(await evaluate('document.querySelector("[data-action=create-child-report]")'));
+  await click('[data-action=create-child-report]');
+  assert.equal(await evaluate('document.querySelector("#modal-form [name=subjectId]")'), null, 'child screen fixes the report subject');
+  assert.match(await evaluate('document.getElementById("modal-content").textContent'), /Avram Ana/u);
+  await saveModal();
+  const childReport = snapshot().reports.find(report => report.type === 'child' && report.subjectId === anaId);
+  assert.ok(childReport);
+  assert.match(await evaluate('document.querySelector(".child-report-option").textContent'), new RegExp(childReport.code));
+  await click('[data-action=share-child-report]');
+  await until('window.__sharedReport?.name === ' + JSON.stringify(childReport.filename), 'individual PDF and message shared together');
+  assert.match(await evaluate('window.__sharedReport.text'), /Avram Ana din III A[\s\S]*Total de achitat: 37,50 lei/u);
+  assert.match(await evaluate('window.__sharedReport.title'), /Fișa copilului/u);
+  await click('[data-action=back]');
+  await until('document.querySelector(".children")', 'return to roster after child report share');
+  await click('[data-child="' + davidId + '"]');
   for (const width of [320, 412, 736]) {
     await page('Emulation.setDeviceMetricsOverride', { width, height: 915, deviceScaleFactor: 1, mobile: true });
     assert.equal(await evaluate('document.documentElement.scrollWidth <= innerWidth'), true, 'horizontal overflow at ' + width);
@@ -469,7 +484,7 @@ try {
     assert.equal(await evaluate('fetch("/api/auth/me").then(r => r.status)'), 200, 'phone remains signed in independently');
   }
   assert.equal(exceptions.length, 0, JSON.stringify(exceptions));
-  console.log('Browser checks passed: invitation/setup, two-device activation with independent sessions and third-device rejection, logo upload, classroom creation/switching, navigation, roster, direct WhatsApp reminders with two contacts, split opt-out recalculation before the first contribution, expense editing before and after linked money, manual allocation, quick collection, lost-response retry across reauthentication, temporary fund advances and repayments, expense/payment document attachments, payment/refund/credit/correction, PDF report generation, in-app viewing and sharing, stale-data protection, reload, offline protection, mobile/dark layout, and PWA worker.');
+  console.log('Browser checks passed: invitation/setup, two-device activation with independent sessions and third-device rejection, logo upload, classroom creation/switching, navigation, roster, direct WhatsApp reminders with two contacts, personalized message plus individual PDF sharing, split opt-out recalculation before the first contribution, expense editing before and after linked money, manual allocation, quick collection, lost-response retry across reauthentication, temporary fund advances and repayments, expense/payment document attachments, payment/refund/credit/correction, PDF report generation, in-app viewing and sharing, stale-data protection, reload, offline protection, mobile/dark layout, and PWA worker.');
 } finally {
   if (contextId) await send('Target.disposeBrowserContext', { browserContextId: contextId });
   socket.close();
