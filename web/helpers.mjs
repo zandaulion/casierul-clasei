@@ -14,14 +14,22 @@ export function parseMoney(value) {
 export const roundUp = (minor, unitLei) => Math.ceil(minor / (unitLei * 100)) * unitLei * 100;
 export const unpaid = child => [...child.contributions].filter(e => e.remainingMinor > 0).sort((a, b) => (a.dueDate || '9999').localeCompare(b.dueDate || '9999') || a.expenseId.localeCompare(b.expenseId));
 const reminderDate = value => new Intl.DateTimeFormat('ro-RO', { dateStyle: 'medium', timeZone: 'UTC' }).format(new Date(`${value}T12:00:00Z`));
-export function whatsappReminder(child, className = '') {
+export function whatsappReminder(child, className = '', payment = {}) {
   const contributions = unpaid(child);
   const context = className ? ` din ${className}` : '';
   const lines = contributions.length
     ? contributions.map(item => `• ${item.title}: ${money(item.remainingMinor)}${item.dueDate ? ` (termen ${reminderDate(item.dueDate)})` : ''}`)
     : ['• Toate contribuțiile înregistrate sunt achitate.'];
+  const paymentLines = payment.paymentRevolutUrl || payment.paymentBeneficiary || payment.paymentIban ? [
+    '', 'Modalități de plată:',
+    payment.paymentRevolutUrl ? `Revolut: ${payment.paymentRevolutUrl}` : '',
+    payment.paymentRevolutUrl ? 'Poți plăti și cu cardul direct din link, fără cont Revolut.' : '',
+    payment.paymentBeneficiary ? `Beneficiar: ${payment.paymentBeneficiary}` : '',
+    payment.paymentIban ? `IBAN: ${payment.paymentIban}` : '',
+    'Detalii plată: numele elevului',
+  ] : [];
   return ['Bună ziua,', '', `Vă trimit situația contribuțiilor pentru ${name(child)}${context}:`, ...lines, '',
-    `Total de achitat: ${money(child.dueMinor)}`, child.creditMinor ? `Avans disponibil: ${money(child.creditMinor)}` : '', '', 'Mulțumesc!']
+    `Total de achitat: ${money(child.dueMinor)}`, child.creditMinor ? `Avans disponibil: ${money(child.creditMinor)}` : '', ...paymentLines, '', 'Mulțumesc!']
     .filter((line, index, values) => line || values[index - 1] !== '').join('\n');
 }
 export function whatsappUrl(phone, message) {

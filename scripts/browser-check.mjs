@@ -258,6 +258,7 @@ try {
   const directReminder = await evaluate('document.querySelector(".contact-panel .whatsapp-link").href');
   assert.match(directReminder, /^https:\/\/wa\.me\/40722111222\?text=/u);
   assert.match(decodeURIComponent(new URL(directReminder).searchParams.get('text')), /Avram Ana din III A[\s\S]*Total de achitat: 67,50 lei/u);
+  assert.match(decodeURIComponent(new URL(directReminder).searchParams.get('text')), /Revolut: https:\/\/revolut\.me\/danielxxv[\s\S]*Beneficiar: Daniel Valentin Marin[\s\S]*IBAN: RO15REVO0000194617944482/u);
   await click('[data-action=back]');
   await until('document.querySelector("[data-action=whatsapp-reminders]")', 'return to reminder queue');
   assert.deepEqual(await evaluate(`(() => { const status=document.querySelector('[data-child="${anaId}"] .child-contact-status'); return [status.dataset.contactCount,status.textContent.trim()]; })()`), ['2', '2 telefoane']);
@@ -403,6 +404,7 @@ try {
   await click('[data-action=share-child-report]');
   await until('window.__sharedReport?.name === ' + JSON.stringify(childReport.filename), 'individual PDF and message shared together');
   assert.match(await evaluate('window.__sharedReport.text'), /Avram Ana din III A[\s\S]*Total de achitat: 37,50 lei/u);
+  assert.match(await evaluate('window.__sharedReport.text'), /Poți plăti și cu cardul direct din link, fără cont Revolut[\s\S]*IBAN: RO15REVO0000194617944482/u);
   assert.match(await evaluate('window.__sharedReport.title'), /Fișa copilului/u);
   await click('[data-action=back]');
   await until('document.querySelector(".children")', 'return to roster after child report share');

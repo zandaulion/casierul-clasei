@@ -266,7 +266,7 @@ function resetDraft(c) {
   dirty = false;
 }
 function whatsappLinks(c, compact = false) {
-  const message = whatsappReminder(c, state.settings.className);
+  const message = whatsappReminder(c, state.settings.className, state.settings);
   return contactsFor(c.id).map(contact => `<a class="whatsapp-link ${compact ? 'compact' : ''}" href="${esc(whatsappUrl(contact.phone, message))}" target="_blank" rel="noopener noreferrer" aria-label="Deschide conversația WhatsApp cu ${esc(contact.label)} pentru ${esc(name(c))}">${icon('message')}<span>${esc(contact.label)}<small>${esc(contact.phone)}</small></span></a>`).join('');
 }
 function contactPanel(c) {
@@ -488,7 +488,7 @@ async function shareChildReport(reportId) {
   const report = (state.reports || []).find(item => item.id === reportId && item.type === 'child');
   const c = report ? state.children.find(item => item.id === report.subjectId) : null;
   if (!c) return;
-  await shareReport(report.id, whatsappReminder(c, state.settings.className));
+  await shareReport(report.id, whatsappReminder(c, state.settings.className, state.settings));
 }
 async function copyPaymentDetail(key) {
   const item = paymentShareItems(state.settings).find(entry => entry.key === key);
