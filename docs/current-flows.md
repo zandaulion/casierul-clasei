@@ -93,9 +93,11 @@ Inventarul descrie comportamentul disponibil în aplicație la 30 septembrie 202
 ## 13. Ajutorul general și contextual
 
 - Semnul întrebării din antet deschide ghidul general pentru toate rolurile. Acesta arată traseul principal prin Copii, Cheltuieli, Încasări, Registru și Rapoarte.
-- Ghidul include fluxuri vizuale pentru încasarea banilor și pentru **Nu mai colectez**, plus explicații despre tipurile de avans, corecții, WhatsApp și rapoarte.
-- În fișa copilului, **Cum încasez?** deschide direct fluxul relevant fără să șteargă suma sau repartizarea deja introduse.
-- În formularul **Nu mai colectez**, ajutorul contextual este inclus în aceeași fereastră și explică efectele recalculării și acoperirii din fond.
+- Ghidul casierului desenează toate cele 15 fluxuri: activare, configurare, copii, cheltuieli, încasare, **Nu mai colectez**, avansul copilului, registru, corecții, documente, WhatsApp, rapoarte, mai multe clase și roluri, funcționarea cu probleme de conexiune și exportul/backup-ul.
+- Fiecare ecran principal deschide direct fluxul său. Formularele pentru activare, configurare, cheltuieli, contacte, documente, avansuri și rapoarte includ ajutorul contextual în aceeași fereastră.
+- **Cum încasez?** deschide fluxul relevant fără să șteargă suma sau repartizarea deja introduse. În **Nu mai colectez**, diagrama afișează numai variantele disponibile în acel moment.
+- Părintele și auditorul primesc ghiduri distincte, potrivite accesului lor doar pentru citire.
+- Diagramele pentru toate fluxurile sunt păstrate și în [ghidul vizual](visual-flow-guide.md).
 
 ## 14. Exportul, backup-ul și operarea
 

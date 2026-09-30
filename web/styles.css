@@ -414,6 +414,7 @@ main { min-width: 0; padding: 24px 20px; outline: none; }
   text-underline-offset: 3px;
 }
 .context-help-link svg { width: 17px; height: 17px; }
+.page-help-link { margin: -4px 0 12px; }
 .choice {
   display: flex;
   flex-wrap: wrap;
@@ -767,6 +768,14 @@ summary { min-height: 44px; padding: 10px 0; color: var(--muted); cursor: pointe
 .help-journey strong { font-size: 14px; }
 .help-journey small { margin-top: 2px; font-size: 11px; }
 .help-topics { display: grid; gap: 10px; }
+.help-group-title {
+  margin: 13px 3px 0;
+  padding-bottom: 7px;
+  border-bottom: 2px solid var(--lavender);
+  color: var(--brand);
+  font-size: 16px;
+}
+.help-topics > .help-group-title:first-child { margin-top: 0; }
 .help-topic, .context-help {
   margin: 0;
   padding: 0 14px;
@@ -921,6 +930,7 @@ dialog::backdrop { background: #13271e88; }
 .dialog-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 22px; }
 .dialog-actions button { min-height: 50px; }
 .pdf-dialog { width: min(960px, calc(100vw - 20px)); padding: 14px; }
+.help-dialog { width: min(760px, calc(100vw - 20px)); }
 .pdf-dialog .dialog-heading { position: sticky; top: -14px; z-index: 2; margin: -14px -14px 10px; padding: 14px; border-bottom: 1px solid var(--line); background: var(--bg); }
 .pdf-dialog .dialog-actions { position: sticky; bottom: -14px; z-index: 2; margin: 12px -14px -14px; padding: 10px 14px 14px; border-top: 1px solid var(--line); background: var(--bg); }
 .pdf-preview-status { padding: 18px; text-align: center; }
