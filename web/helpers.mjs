@@ -1,6 +1,10 @@
 export const collator = new Intl.Collator('ro', { sensitivity: 'base', numeric: true });
 export const name = child => `${child.lastName} ${child.firstName}`;
 export const sortChildren = children => [...children].sort((a, b) => collator.compare(a.lastName, b.lastName) || collator.compare(a.firstName, b.firstName) || a.id.localeCompare(b.id));
+export const sortTransactionsNewestFirst = transactions => [...transactions].sort((a, b) =>
+  b.occurredAt.localeCompare(a.occurredAt)
+  || b.createdAt.localeCompare(a.createdAt)
+  || b.id.localeCompare(a.id));
 const formatter = new Intl.NumberFormat('ro-RO', { maximumFractionDigits: 2 });
 const fractionalFormatter = new Intl.NumberFormat('ro-RO', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 export const money = minor => `${(minor % 100 ? fractionalFormatter : formatter).format(minor / 100)} lei`;
