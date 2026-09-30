@@ -345,20 +345,10 @@ function migrateSettlements(db) {
   if (db.prepare("PRAGMA table_info('transactions')").all().some(column => column.name === 'settles_id')) return;
   db.exec('BEGIN IMMEDIATE');
   try {
-    // Link each settlement to the collection it was saved with, so a correction can undo both together.
-    // Before this column existed, the settlement row was inserted immediately after its collection.
-    db.exec(`ALTER TABLE transactions ADD COLUMN settles_id TEXT REFERENCES transactions(id);
-      DROP TRIGGER IF EXISTS transactions_no_update;
-      UPDATE transactions SET settles_id = (
-        SELECT c.id FROM transactions AS c WHERE c.rowid = transactions.rowid - 1 AND c.type = 'collection'
-          AND c.child_id = transactions.child_id AND c.actor_id = transactions.actor_id
-          AND c.occurred_at = transactions.occurred_at AND c.comment = transactions.comment
-          AND abs(julianday(c.created_at) - julianday(transactions.created_at)) * 86400 < 1)
-        WHERE type IN ('credit_apply', 'rounding_adjustment');
-      CREATE TRIGGER transactions_no_update BEFORE UPDATE ON transactions BEGIN
-        SELECT RAISE(ABORT, 'Financial history is immutable');
-      END;
-      COMMIT;`);
+    // Historical rows do not record which request created a settlement. Do not guess: a standalone
+    // adjustment can immediately follow a collection and look identical to an atomic companion.
+    // New combined settlements are linked explicitly when they are written.
+    db.exec('ALTER TABLE transactions ADD COLUMN settles_id TEXT REFERENCES transactions(id); COMMIT;');
   } catch (error) {
     try { db.exec('ROLLBACK'); } catch { /* Transaction may already be closed. */ }
     throw error;
