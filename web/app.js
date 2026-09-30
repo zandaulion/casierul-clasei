@@ -12,12 +12,12 @@ const localDateTime = (value = new Date()) => { const date = new Date(value); re
 const localNow = () => localDateTime();
 const timestampField = (value = localNow()) => field('Data și ora', 'occurredAt', value, 'type="datetime-local" required');
 const dateText = value => value ? new Intl.DateTimeFormat('ro-RO', { dateStyle: 'medium', ...(value.includes('T') ? { timeStyle: 'short' } : {}) }).format(new Date(value.includes('T') ? value : `${value}T12:00:00`)) : 'Fără termen';
-const labels = { collection: 'Încasare', payment: 'Bani dați', credit_apply: 'Avans repartizat', rounding_adjustment: 'Ajustare de rotunjire', refund: 'Avans restituit',
+const labels = { collection: 'Încasare', direct_payment: 'Plată directă beneficiarului', payment: 'Bani dați', credit_apply: 'Avans repartizat', rounding_adjustment: 'Ajustare de rotunjire', refund: 'Avans restituit',
   fund_advance: 'Sumă avansată fondului', advance_repayment: 'Restituire sumă avansată',
   advance_waiver: 'Acoperire din sumă avansată', reversal: 'Corecție' };
 const typeLabels = { fixed: 'Sumă fixă / copil', split: 'Total împărțit', quantity: 'Cantitate × preț' };
 const reportTypeLabels = { class: 'Situația clasei', matrix: 'Tabelul contribuțiilor', expense: 'Situația unei cheltuieli', child: 'Fișa copilului' };
-const writeActions = new Set(['add-child', 'edit-child', 'edit-contacts', 'edit-reminder-contact', 'whatsapp-reminders', 'create-child-report', 'bulk-children', 'add-expense', 'edit-expense', 'payment', 'fund-advance', 'repay-advance', 'attach-document',
+const writeActions = new Set(['add-child', 'edit-child', 'edit-contacts', 'edit-reminder-contact', 'whatsapp-reminders', 'create-child-report', 'bulk-children', 'add-expense', 'edit-expense', 'payment', 'direct-payment', 'fund-advance', 'repay-advance', 'attach-document',
   'expense-payment', 'stop-collection', 'apply-credit', 'refund', 'report-class', 'report-matrix', 'report-expense', 'report-child',
   'replace-report', 'reverse', 'cancel-expense', 'remove-logo', 'add-classroom']);
 const pendingKey = 'casierul.pending.v1';
@@ -85,6 +85,13 @@ const simpleHelpFlows = {
     ['Îl folosești la o contribuție', 'Din încasare sau prin „Folosește avansul”.'],
     ['Sau îl restitui', 'Restituirea scade avansul copilului și numerarul fondului.'],
     ['Verifici istoricul', 'Fiecare folosire sau restituire rămâne o operațiune separată.'],
+  ] },
+  directPayment: { label: 'Plata directă către beneficiar', steps: [
+    ['Deschizi fișa copilului', 'Alegi „A plătit direct beneficiarului”.'],
+    ['Alegi contribuția', 'Poți înregistra suma integrală sau o plată parțială.'],
+    ['Completezi beneficiarul', 'De exemplu, doamna dirigintă sau fotograful.'],
+    ['Confirmi plata', 'Contribuția scade, iar numerarul clasei rămâne neschimbat.'],
+    ['Verifici registrul', 'Plata directă apare separat și poate fi corectată.'],
   ] },
   ledger: { label: 'Plățile și sumele avansate fondului', steps: [
     ['Deschizi Registru', 'Vezi numerarul, datoriile și soldul net.'],
@@ -210,6 +217,7 @@ function helpModal(topic = 'overview') {
     ['Pornire și organizare', 'children', 'Cum gestionez copiii?', 'Adăugare, contacte, căutare și arhivare.', simpleHelpFlow('children')],
     ['Pornire și organizare', 'expenses', 'Cum creez o cheltuială?', 'Calcul, participanți, previzualizare și editare.', simpleHelpFlow('expenses')],
     ['Bani și corecții', 'collection', 'Cum încasez bani?', 'Suma primită, rotunjire, rest și avans.', collectionHelpFlow()],
+    ['Bani și corecții', 'directPayment', 'Cum înregistrez o plată directă?', 'Contribuția se stinge fără să intre bani în fond.', simpleHelpFlow('directPayment')],
     ['Bani și corecții', 'stop-collection', 'Ce face „Nu mai colectez”?', 'Recalculare, diferență mică sau acoperire din fond.', stopCollectionHelpFlow()],
     ['Bani și corecții', 'credit', 'Cum folosesc avansul copilului?', 'Păstrare, repartizare și restituire.', simpleHelpFlow('credit')],
     ['Bani și corecții', 'ledger', 'Cum înregistrez plățile și avansurile personale?', 'Numerar, datorii și restituiri.', simpleHelpFlow('ledger')],
@@ -477,7 +485,7 @@ function renderChild() {
   if (!canWrite()) {
     const parent = classroomAccess()?.role === 'parent';
     const nextContribution = unpaid(c).find(item => item.dueDate);
-    const contributionRows = c.contributions.map(item => `<div class="card"><div class="row"><h3>${esc(item.title)}</h3><span class="amount">${money(item.paidMinor)} din bani</span></div>${item.coveredMinor ? `<div class="caption">Acoperită din fond: ${money(item.coveredMinor)}</div>` : ''}${item.adjustedMinor ? `<div class="caption">Ajustare de rotunjire: ${money(item.adjustedMinor)}</div>` : ''}<div class="caption">${item.remainingMinor ? `De achitat ${money(item.remainingMinor)}` : item.coveredMinor ? `<span class="paid-status">${icon('check')}Nu se mai colectează</span>` : `<span class="paid-status">${icon('check')}Achitat</span>`}${item.dueDate ? ` · termen ${dateText(item.dueDate)}` : ''}</div></div>`).join('');
+    const contributionRows = c.contributions.map(item => `<div class="card"><div class="row"><h3>${esc(item.title)}</h3><span class="amount">${money(item.paidMinor)} în fond</span></div>${item.directMinor ? `<div class="caption">Plătit direct beneficiarului: ${money(item.directMinor)}</div>` : ''}${item.coveredMinor ? `<div class="caption">Acoperită din fond: ${money(item.coveredMinor)}</div>` : ''}${item.adjustedMinor ? `<div class="caption">Ajustare de rotunjire: ${money(item.adjustedMinor)}</div>` : ''}<div class="caption">${item.remainingMinor ? `De achitat ${money(item.remainingMinor)}` : item.coveredMinor ? `<span class="paid-status">${icon('check')}Nu se mai colectează</span>` : `<span class="paid-status">${icon('check')}Achitat</span>`}${item.dueDate ? ` · termen ${dateText(item.dueDate)}` : ''}</div></div>`).join('');
     $('#main').innerHTML = `${parent ? welcomeBanner('Aproape de clasa ta', 'Contribuțiile și noutățile din registru, la îndemână.') : '<button class="back" data-action="back">‹ Copii</button>'}<div class="child-layout"><section class="child-overview" aria-labelledby="child-title"><h1 id="child-title">${esc(name(c))}</h1><p class="caption">Situația contribuțiilor</p><div class="summary parent-summary"><dl><div><dt>De achitat</dt><dd><strong>${money(c.dueMinor)}</strong></dd></div><div><dt>Avans disponibil</dt><dd>${money(c.creditMinor)}</dd></div></dl>${nextContribution ? `<p class="caption">Primul termen de achitat: ${dateText(nextContribution.dueDate)} · ${esc(nextContribution.title)}</p>` : c.dueMinor ? '' : '<p class="caption">Nu mai sunt contribuții de achitat.</p>'}</div></section><section class="child-contributions" aria-labelledby="contributions-title"><h2 id="contributions-title">Contribuții</h2><div class="stack">${contributionRows || '<p class="caption">Contribuțiile vor apărea aici după ce sunt adăugate de casier.</p>'}</div><details class="history"><summary>Istoricul copilului</summary><div class="stack">${transactionRows(state.transactions.filter(t => t.childId === c.id))}</div></details></section></div>`;
     return;
   }
@@ -487,7 +495,7 @@ function renderChild() {
     const matchingAdvance = (state.advances || []).some(item => !item.reversed && item.outstandingMinor > 0
       && (!item.expenseId || item.expenseId === e.expenseId));
     const canRecalculate = expense?.type === 'split' && expense.contributions.length > 1
-      && expense.collectedMinor === 0 && (expense.adjustedMinor || 0) === 0 && (expense.coveredMinor || 0) === 0;
+      && expense.collectedMinor === 0 && (expense.directMinor || 0) === 0 && (expense.adjustedMinor || 0) === 0 && (expense.coveredMinor || 0) === 0;
     const canRound = e.remainingMinor <= 100 && e.paidMinor > 0;
     return `<div class="contribution-choice"><button type="button" class="choice" data-target="${esc(e.expenseId)}" aria-pressed="false"><span>${esc(e.title)}<span class="caption" style="display:block">${e.dueDate ? `Termen ${dateText(e.dueDate)}` : 'Fără termen'}${e.coveredMinor ? ` · acoperit din fond ${money(e.coveredMinor)}` : ''}</span></span><span class="choice-money">${money(e.remainingMinor)}</span></button>${matchingAdvance || canRecalculate || canRound ? `<button type="button" class="stop-collection" data-action="stop-collection" data-id="${esc(e.expenseId)}">Nu mai colectez</button>` : ''}</div>`;
   }).join('');
@@ -501,6 +509,7 @@ function renderChild() {
   ${c.creditMinor && c.dueMinor ? `<button type="button" class="use-credit" data-use-credit aria-pressed="${draft.useCredit}"><span>${icon('check')}Folosește avansul copilului</span><strong data-use-credit-amount>${money(Math.min(c.creditMinor, c.dueMinor))}</strong></button>` : ''}
   <fieldset class="excess" id="excess" hidden><legend id="excess-label"></legend><div class="switch"><button type="button" data-excess="change" aria-pressed="true">Dau rest</button><button type="button" data-excess="credit" aria-pressed="false">Păstrez în avans</button></div></fieldset>
   <div id="collection-dock-summary" class="collection-dock-summary"></div><div id="small-settlement" class="small-settlement" hidden></div><p class="error" id="collection-error" role="alert" hidden></p><button type="submit" class="primary wide" id="collection-save">Înregistrează încasarea</button></section></div></form>
+  ${c.dueMinor ? `<section class="summary direct-payment-prompt"><div><strong>A plătit direct altcuiva?</strong><p class="caption">Stinge contribuția fără să modifici numerarul clasei.</p></div><button type="button" data-action="direct-payment">Înregistrează plata directă</button></section>` : ''}
   ${contactPanel(c)}
   <details class="history"><summary>Istoricul copilului</summary><div class="stack">${transactionRows(state.transactions.filter(t => t.childId === c.id))}</div></details>`;
   updateCollection();
@@ -549,14 +558,14 @@ function updateCollection() {
 function renderExpenses() {
   const expenses = [...state.expenses].reverse();
   const expenseCards = expenses.map(e => {
-    const coveredTotal = e.collectedMinor + (e.coveredMinor || 0);
+    const coveredTotal = e.collectedMinor + (e.directMinor || 0) + (e.coveredMinor || 0);
     const progress = e.totalMinor > 0 ? Math.min(100, Math.max(0, coveredTotal / e.totalMinor * 100)) : 0;
     return `<button class="card card-button expense-card ${e.cancelled ? 'transaction-muted' : ''}" data-expense="${esc(e.id)}">
       <div class="row"><h3>${esc(e.title)}</h3>${e.cancelled ? '<span class="badge">Anulată</span>' : ''}</div>
       <div class="caption">${e.dueDate ? `Termen ${dateText(e.dueDate)}` : 'Fără termen de plată'}</div>
       <div class="expense-totals">Acoperit <strong class="amount">${money(coveredTotal)}</strong> din <span class="amount">${money(e.totalMinor)}</span></div>
       ${e.cancelled ? '' : `<div class="expense-progress" aria-hidden="true"><span class="expense-progress-fill" style="width:${progress}%"></span></div>`}
-      ${e.coveredMinor ? `<div class="caption">Din fond: <span class="amount">${money(e.coveredMinor)}</span> · din contribuții: <span class="amount">${money(e.collectedMinor)}</span></div>` : ''}
+      ${e.directMinor || e.coveredMinor ? `<div class="caption">În fond: <span class="amount">${money(e.collectedMinor)}</span>${e.directMinor ? ` · direct beneficiarului: <span class="amount">${money(e.directMinor)}</span>` : ''}${e.coveredMinor ? ` · acoperit din fond: <span class="amount">${money(e.coveredMinor)}</span>` : ''}</div>` : ''}
       ${e.adjustedMinor ? `<div class="caption">Ajustări de rotunjire: <span class="amount">${money(e.adjustedMinor)}</span></div>` : ''}
       <div class="caption">Plătit mai departe: <span class="amount">${money(e.paidOutMinor)}</span></div>
       <div class="caption">${typeLabels[e.type]} · ${e.participantCount ?? e.contributions.length} participanți</div>
@@ -570,7 +579,8 @@ function renderExpenses() {
 function transactionRows(transactions) {
   return sortTransactionsNewestFirst(transactions).map(t => {
     const c = state.children.find(c => c.id === t.childId);
-    return `<button class="card ${t.reversed ? 'transaction-muted' : ''}" data-transaction="${esc(t.id)}"><div class="row"><strong>${labels[t.type] || esc(t.type)}</strong><span class="amount">${money(t.amountMinor)}</span></div><div>${esc(c ? name(c) : t.destination || '')}</div><div class="caption">${dateText(t.occurredAt)}${t.reversed ? ' · Corectată' : ''}${t.changeMinor ? ` · Rest ${money(t.changeMinor)}` : ''}</div>${t.comment ? `<div class="caption">${esc(t.comment)}</div>` : ''}</button>`;
+    const directRecipient = t.type === 'direct_payment' && t.destination ? ` · Beneficiar: ${esc(t.destination)}` : '';
+    return `<button class="card ${t.reversed ? 'transaction-muted' : ''}" data-transaction="${esc(t.id)}"><div class="row"><strong>${labels[t.type] || esc(t.type)}</strong><span class="amount">${money(t.amountMinor)}</span></div><div>${esc(c ? name(c) : t.destination || '')}</div><div class="caption">${dateText(t.occurredAt)}${directRecipient}${t.reversed ? ' · Corectată' : ''}${t.changeMinor ? ` · Rest ${money(t.changeMinor)}` : ''}</div>${t.comment ? `<div class="caption">${esc(t.comment)}</div>` : ''}</button>`;
   }).join('') || '<p class="caption">Nu există operațiuni înregistrate.</p>';
 }
 function renderLedger() {
@@ -588,7 +598,7 @@ function renderLedger() {
         <div class="balance-grid"><div><span class="caption">De restituit pentru sume avansate</span><span class="amount">${money(s.totalAdvanceOutstandingMinor || 0)}</span></div><div><span class="caption">Sold după restituirea sumelor avansate</span><span class="amount">${money(s.netBalanceMinor ?? s.balanceMinor)}</span></div></div>
         <p class="caption">Soldul include ${money(s.totalCreditMinor)} primiți în avans de la copii.</p>
       </div>
-      <div class="summary"><dl><div><dt>De încasat de la copii</dt><dd>${money(s.totalDueMinor)}</dd></div><div><dt>Încasări de la copii</dt><dd>${money(s.totalReceivedMinor)}</dd></div><div><dt>Acoperit din fond</dt><dd>${money(s.totalCoveredMinor || 0)}</dd></div><div><dt>Bani ieșiți</dt><dd>${money(s.totalPaidMinor)}</dd></div><div><dt>Sold inițial</dt><dd>${money(state.settings.openingBalanceMinor)}</dd></div></dl></div>
+      <div class="summary"><dl><div><dt>De încasat de la copii</dt><dd>${money(s.totalDueMinor)}</dd></div><div><dt>Încasări în fond</dt><dd>${money(s.totalReceivedMinor)}</dd></div><div><dt>Plătit direct beneficiarilor</dt><dd>${money(s.totalDirectMinor || 0)}</dd></div><div><dt>Acoperit din fond</dt><dd>${money(s.totalCoveredMinor || 0)}</dd></div><div><dt>Bani ieșiți</dt><dd>${money(s.totalPaidMinor)}</dd></div><div><dt>Sold inițial</dt><dd>${money(state.settings.openingBalanceMinor)}</dd></div></dl></div>
       ${canWrite() ? '<div class="toolbar"><button class="primary" data-action="payment">+ Bani dați mai departe</button><button data-action="fund-advance">+ Sumă avansată fondului</button></div>' : ''}
       ${advances}
       <div class="toolbar"><button data-action="refresh">Actualizează</button>${canWrite() ? `<a href="${esc(scopedUrl('/api/export'))}" download="casierul-clasei.json">Export JSON</a>` : ''}</div>
@@ -938,14 +948,14 @@ function expenseModal(expense = null) {
   const type = expense?.type || 'fixed';
   const formulaLockedAttribute = linked ? 'disabled data-locked' : '';
   const splitParticipantsEditable = type === 'split' && expense?.collectedMinor === 0
-    && (expense?.adjustedMinor || 0) === 0 && (expense?.coveredMinor || 0) === 0;
+    && (expense?.directMinor || 0) === 0 && (expense?.adjustedMinor || 0) === 0 && (expense?.coveredMinor || 0) === 0;
   const allParticipantsLocked = linked && !splitParticipantsEditable;
   const typeOptions = [['fixed', 'Sumă fixă pentru fiecare copil'], ['split', 'Total împărțit între participanți'], ['quantity', 'Cantitate pentru fiecare copil × preț']]
     .map(([value, label]) => `<option value="${value}" ${type === value ? 'selected' : ''}>${label}</option>`).join('');
   const participantFields = participants.map(c => {
     const contribution = existing.get(c.id), checked = expense ? !!contribution : c.active;
     const previous = c.contributions.find(item => item.expenseId === expense?.id);
-    const settledMinor = (previous?.paidMinor ?? 0) + (previous?.adjustedMinor ?? 0) + (previous?.coveredMinor ?? 0);
+    const settledMinor = (previous?.paidMinor ?? 0) + (previous?.directMinor ?? 0) + (previous?.adjustedMinor ?? 0) + (previous?.coveredMinor ?? 0);
     const participantLocked = linked && (settledMinor > 0 || (type === 'split' && !splitParticipantsEditable));
     const participantLockedAttribute = participantLocked ? 'disabled data-locked' : '';
     const quantityLocked = linked && type !== 'quantity' ? formulaLockedAttribute : '';
@@ -1001,10 +1011,22 @@ function expenseDetails(id) {
   const financing = (state.advances || []).filter(item => !item.reversed && item.expenseId === e.id);
   const financedMinor = financing.reduce((total, item) => total + item.amountMinor, 0);
   const outstandingMinor = financing.reduce((total, item) => total + item.outstandingMinor, 0);
-  openModal('expense-detail', e.title, `<p class="caption">${typeLabels[e.type]} · ${e.cancelled ? 'Anulată' : `${e.participantCount ?? e.contributions.length} participanți`}</p><div class="summary"><dl><div><dt>Total contribuții</dt><dd>${money(e.totalMinor)}</dd></div><div><dt>Încasat de la părinți</dt><dd>${money(e.collectedMinor)}</dd></div>${e.coveredMinor ? `<div><dt>Acoperit din fond</dt><dd>${money(e.coveredMinor)}</dd></div>` : ''}${e.adjustedMinor ? `<div><dt>Ajustări de rotunjire</dt><dd>${money(e.adjustedMinor)}</dd></div>` : ''}<div><dt>Bani dați mai departe</dt><dd>${money(e.paidOutMinor)}</dd></div>${financing.length ? `<div><dt>Avansat temporar fondului</dt><dd>${money(financedMinor)}</dd></div><div><dt>De restituit</dt><dd>${money(outstandingMinor)}</dd></div>` : ''}</dl></div><p>${e.dueDate ? `Termen: ${dateText(e.dueDate)}` : 'Fără termen de plată'}</p><p class="caption">Data cheltuielii: ${dateText(e.occurredAt)}</p>${e.comment ? `<p>${esc(e.comment)}</p>` : ''}<div class="preview-list">${sortChildren(state.children.filter(c => e.contributions.some(p => p.childId === c.id))).map(c => { const p = e.contributions.find(p => p.childId === c.id); const contribution = c.contributions.find(p => p.expenseId === e.id); return `<div class="row"><span>${esc(name(c))}${e.type === 'quantity' ? ` × ${p.quantity}` : ''}<small style="display:block">De achitat ${money(contribution?.remainingMinor || 0)}${contribution?.coveredMinor ? ` · Acoperit din fond ${money(contribution.coveredMinor)}` : ''}${contribution?.adjustedMinor ? ` · Ajustare ${money(contribution.adjustedMinor)}` : ''}</small></span><span class="amount">${money(p.amountMinor)}</span></div>`; }).join('')}</div>${attachmentSection('expense', e.id)}${e.cancelled || !canWrite() ? '' : `<div class="toolbar"><button type="button" data-action="edit-expense" data-id="${esc(e.id)}">Editează</button><button type="button" data-action="expense-payment" data-id="${esc(e.id)}">Înregistrează bani dați</button></div>${!e.collectedMinor && !e.coveredMinor && !e.adjustedMinor && !e.paidOutMinor && !financing.length ? `<button type="button" class="danger" data-action="cancel-expense" data-id="${esc(e.id)}">Anulează cheltuiala</button><p class="caption">Anularea este posibilă doar dacă nu mai există încasări sau plăți legate de cheltuială.</p>` : ''}`}`, null);
+  openModal('expense-detail', e.title, `<p class="caption">${typeLabels[e.type]} · ${e.cancelled ? 'Anulată' : `${e.participantCount ?? e.contributions.length} participanți`}</p><div class="summary"><dl><div><dt>Total contribuții</dt><dd>${money(e.totalMinor)}</dd></div><div><dt>Încasat în fond</dt><dd>${money(e.collectedMinor)}</dd></div>${e.directMinor ? `<div><dt>Plătit direct beneficiarilor</dt><dd>${money(e.directMinor)}</dd></div>` : ''}${e.coveredMinor ? `<div><dt>Acoperit din fond</dt><dd>${money(e.coveredMinor)}</dd></div>` : ''}${e.adjustedMinor ? `<div><dt>Ajustări de rotunjire</dt><dd>${money(e.adjustedMinor)}</dd></div>` : ''}<div><dt>Bani dați mai departe</dt><dd>${money(e.paidOutMinor)}</dd></div>${financing.length ? `<div><dt>Avansat temporar fondului</dt><dd>${money(financedMinor)}</dd></div><div><dt>De restituit</dt><dd>${money(outstandingMinor)}</dd></div>` : ''}</dl></div><p>${e.dueDate ? `Termen: ${dateText(e.dueDate)}` : 'Fără termen de plată'}</p><p class="caption">Data cheltuielii: ${dateText(e.occurredAt)}</p>${e.comment ? `<p>${esc(e.comment)}</p>` : ''}<div class="preview-list">${sortChildren(state.children.filter(c => e.contributions.some(p => p.childId === c.id))).map(c => { const p = e.contributions.find(p => p.childId === c.id); const contribution = c.contributions.find(p => p.expenseId === e.id); return `<div class="row"><span>${esc(name(c))}${e.type === 'quantity' ? ` × ${p.quantity}` : ''}<small style="display:block">De achitat ${money(contribution?.remainingMinor || 0)}${contribution?.directMinor ? ` · Plătit direct ${money(contribution.directMinor)}` : ''}${contribution?.coveredMinor ? ` · Acoperit din fond ${money(contribution.coveredMinor)}` : ''}${contribution?.adjustedMinor ? ` · Ajustare ${money(contribution.adjustedMinor)}` : ''}</small></span><span class="amount">${money(p.amountMinor)}</span></div>`; }).join('')}</div>${attachmentSection('expense', e.id)}${e.cancelled || !canWrite() ? '' : `<div class="toolbar"><button type="button" data-action="edit-expense" data-id="${esc(e.id)}">Editează</button><button type="button" data-action="expense-payment" data-id="${esc(e.id)}">Înregistrează bani dați</button></div>${!e.collectedMinor && !e.directMinor && !e.coveredMinor && !e.adjustedMinor && !e.paidOutMinor && !financing.length ? `<button type="button" class="danger" data-action="cancel-expense" data-id="${esc(e.id)}">Anulează cheltuiala</button><p class="caption">Anularea este posibilă doar dacă nu mai există încasări sau plăți legate de cheltuială.</p>` : ''}`}`, null);
 }
 function paymentModal(expenseId = '') {
   openModal('payment', 'Bani dați mai departe', `${moneyField('Suma dată (lei)', 'amount')}${field('Cui ai dat banii', 'destination', '', 'required maxlength="200" placeholder="De exemplu: dirigintă, profesoară, fotograf"')}<label>Cheltuială asociată (opțional)<select name="expenseId"><option value="">Fără asociere</option>${state.expenses.filter(e => !e.cancelled).map(e => `<option value="${esc(e.id)}" ${e.id === expenseId ? 'selected' : ''}>${esc(e.title)}</option>`).join('')}</select></label>${timestampField()}${comments()}<p class="caption">Suma scade din soldul fondului. Contribuțiile copiilor rămân neschimbate.</p><details class="context-help"><summary>${icon('help')}Cum apare în registru?</summary>${simpleHelpFlow('ledger', true)}</details>`, 'Înregistrează');
+}
+function directPaymentModal() {
+  const c = child(), contributions = unpaid(c);
+  if (!contributions.length) return;
+  const latestDestination = state.transactions.find(item => item.type === 'direct_payment' && !item.reversed)?.destination || '';
+  openModal('direct-payment', 'Plată directă beneficiarului', `<p><strong>${esc(name(c))}</strong></p><label>Contribuția<select name="expenseId">${contributions.map(item => `<option value="${esc(item.expenseId)}">${esc(item.title)} · de achitat ${money(item.remainingMinor)}</option>`).join('')}</select></label>${moneyField('Suma plătită direct (lei)', 'amount', decimal(contributions[0].remainingMinor))}${field('Cui i-au fost dați banii', 'destination', latestDestination, 'required maxlength="200" placeholder="De exemplu: doamna dirigintă"')}${timestampField()}${comments()}<div class="summary"><p><strong>Numerarul clasei nu se modifică.</strong></p><p class="caption">Suma stinge numai contribuția aleasă și apare separat în registru și rapoarte.</p></div><details class="context-help"><summary>${icon('help')}Cum funcționează plata directă?</summary>${simpleHelpFlow('directPayment', true)}</details>`, 'Înregistrează plata directă', { childId: c.id });
+}
+function updateDirectPaymentModal() {
+  if (modal?.type !== 'direct-payment') return;
+  const form = $('#modal-form'), c = state.children.find(item => item.id === modal.childId);
+  const contribution = c?.contributions.find(item => item.expenseId === form.elements.expenseId.value);
+  if (contribution) form.elements.amount.value = decimal(contribution.remainingMinor);
 }
 function fundAdvanceModal() {
   openModal('fund-advance', 'Sumă avansată fondului', `${moneyField('Suma avansată (lei)', 'amount')}${field('Cine a avansat banii', 'person', '', 'required maxlength="200" placeholder="De exemplu: numele casierului"')}<label>Cheltuială asociată (opțional)<select name="expenseId"><option value="">Fără asociere</option>${state.expenses.filter(e => !e.cancelled).map(e => `<option value="${esc(e.id)}">${esc(e.title)}</option>`).join('')}</select></label>${timestampField()}${comments()}<p class="caption">Suma intră temporar în numerarul clasei și apare separat ca datorie față de persoana care a avansat-o.</p><details class="context-help"><summary>${icon('help')}Cum funcționează suma avansată?</summary>${simpleHelpFlow('ledger', true)}</details>`, 'Înregistrează suma avansată');
@@ -1023,7 +1045,7 @@ function stopCollectionModal(expenseId) {
     && (!item.expenseId || item.expenseId === expense.id))
     .sort((a, b) => Number(b.expenseId === expense.id) - Number(a.expenseId === expense.id) || b.occurredAt.localeCompare(a.occurredAt));
   const canRecalculate = expense.type === 'split' && expense.contributions.length > 1
-    && expense.collectedMinor === 0 && (expense.adjustedMinor || 0) === 0 && (expense.coveredMinor || 0) === 0;
+    && expense.collectedMinor === 0 && (expense.directMinor || 0) === 0 && (expense.adjustedMinor || 0) === 0 && (expense.coveredMinor || 0) === 0;
   const canRound = contribution.remainingMinor <= 100 && contribution.paidMinor > 0;
   if (!advances.length && !canRecalculate && !canRound) {
     toast('Nu există încă o opțiune disponibilă pentru închiderea acestei contribuții.'); return;
@@ -1080,7 +1102,7 @@ function refundModal() {
 }
 function transactionDetails(id) {
   const t = state.transactions.find(t => t.id === id), c = state.children.find(c => c.id === t.childId);
-  const partyLabel = ['fund_advance', 'advance_repayment', 'advance_waiver'].includes(t.type) ? 'Persoană' : 'Destinație';
+  const partyLabel = t.type === 'direct_payment' ? 'Beneficiar' : ['fund_advance', 'advance_repayment', 'advance_waiver'].includes(t.type) ? 'Persoană' : 'Destinație';
   const documents = t.type === 'payment' ? attachmentSection('payment', t.id) : '';
   openModal('transaction-detail', labels[t.type], `<div class="summary"><strong class="total-number">${money(t.amountMinor)}</strong>${t.changeMinor ? `<p>Rest restituit: ${money(t.changeMinor)}</p>` : ''}</div>${c ? `<p>${esc(name(c))}</p>` : ''}${t.destination ? `<p>${partyLabel}: ${esc(t.destination)}</p>` : ''}${t.expenseId ? `<p>Cheltuială: ${esc(state.expenses.find(e => e.id === t.expenseId)?.title || '')}</p>` : ''}<p>Data și ora: ${dateText(t.occurredAt)}</p><p class="caption">Înregistrat: ${dateText(t.createdAt)}${t.actorLabel ? ` · ${esc(t.actorLabel)}` : ''}</p>${t.comment ? `<p>${esc(t.comment)}</p>` : ''}${t.allocations?.length ? `<h3>Repartizare</h3><div class="preview-list">${t.allocations.map(a => `<div class="row"><span>${esc(state.expenses.find(e => e.id === a.expenseId)?.title || 'Cheltuială')}</span><span>${money(a.amountMinor)}</span></div>`).join('')}</div>` : ''}${documents}${t.reversed ? '<p class="caption">Operațiune corectată. Înregistrarea originală rămâne în istoric.</p>' : t.type === 'reversal' ? '<p class="caption">Această înregistrare inversează efectele operațiunii corectate.</p>' : canWrite() ? `<button type="button" class="danger wide" style="margin-top:18px" data-action="reverse" data-id="${esc(t.id)}">Corectează prin anularea operațiunii</button>` : ''}`, null);
 }
@@ -1186,6 +1208,14 @@ async function submitModal() {
       body = { ...readExpense(), title: form.elements.title.value.trim(), dueDate: form.elements.dueDate.value || null, ...metadata(form) };
     }
     else if (modal.type === 'payment') { path = '/api/payments'; body = { amountMinor: positiveMoney(form.elements.amount.value), destination: form.elements.destination.value.trim(), ...(form.elements.expenseId.value ? { expenseId: form.elements.expenseId.value } : {}), ...metadata(form) }; }
+    else if (modal.type === 'direct-payment') {
+      const c = state.children.find(item => item.id === modal.childId);
+      const contribution = c?.contributions.find(item => item.expenseId === form.elements.expenseId.value);
+      const amountMinor = positiveMoney(form.elements.amount.value);
+      if (!contribution || amountMinor > contribution.remainingMinor) throw new Error('Suma depășește contribuția rămasă de achitat.');
+      path = '/api/direct-payments'; body = { childId: modal.childId, expenseId: contribution.expenseId,
+        amountMinor, destination: form.elements.destination.value.trim(), ...metadata(form) };
+    }
     else if (modal.type === 'fund-advance') { path = '/api/fund-advances'; body = { amountMinor: positiveMoney(form.elements.amount.value), person: form.elements.person.value.trim(), ...(form.elements.expenseId.value ? { expenseId: form.elements.expenseId.value } : {}), ...metadata(form) }; }
     else if (modal.type === 'repay-advance') {
       path = `/api/fund-advances/${encodeURIComponent(modal.advanceId)}/repayments`;
@@ -1368,6 +1398,7 @@ document.addEventListener('click', async event => {
     case 'add-expense': expenseModal(); break;
     case 'edit-expense': expenseModal(state.expenses.find(expense => expense.id === button.dataset.id)); break;
     case 'payment': paymentModal(); break;
+    case 'direct-payment': directPaymentModal(); break;
     case 'expense-payment': paymentModal(button.dataset.id); break;
     case 'attach-document': attachmentModal(button.dataset.entityType, button.dataset.id); break;
     case 'fund-advance': fundAdvanceModal(); break;
@@ -1455,6 +1486,7 @@ document.addEventListener('change', async event => {
   }
   if (input.name === 'debtFilter') { modalDirty = true; updateChildReportOptions(); return; }
   if (modal?.type === 'stop-collection' && ['method', 'advanceId'].includes(input.name)) { updateStopCollectionModal(); return; }
+  if (modal?.type === 'direct-payment' && input.name === 'expenseId') { updateDirectPaymentModal(); return; }
   if (input.id === 'show-archived') { showArchived = input.checked; renderRosterList(); }
   if (input.id === 'manual') {
     const result = collectionResult(child(), draft);

@@ -497,6 +497,29 @@ try {
   await page('Page.reload', { ignoreCache: true });
   await until('document.querySelector("[data-expense=\\"' + optOutExpenseId + '\\"]")', 'cleanup after opt-out check');
   assert.equal(snapshot().summary.balanceMinor, 15000);
+
+  await click('[data-tab=children]');
+  await click('[data-child="' + anaId + '"]');
+  assert.ok(await evaluate('document.querySelector("[data-action=direct-payment]")'));
+  await click('[data-action=direct-payment]');
+  assert.match(await evaluate('document.getElementById("modal-content").textContent'), /Numerarul clasei nu se modifică/u);
+  await fill('#modal-form [name=expenseId]', optOutExpenseId);
+  assert.equal(await getValue('#modal-form [name=amount]'), '50,00');
+  await fill('#modal-form [name=destination]', 'Doamna dirigintă');
+  await fill('#modal-form [name=comment]', 'Predat direct pentru atelier');
+  await saveModal();
+  const directPayment = snapshot().transactions.find(transaction => transaction.type === 'direct_payment');
+  assert.ok(directPayment);
+  assert.equal(directPayment.destination, 'Doamna dirigintă');
+  assert.equal(snapshot().summary.balanceMinor, 15000, 'direct payment does not change class cash');
+  assert.equal(snapshot().summary.totalDirectMinor, 5000);
+  const directContribution = snapshot().children.find(child => child.id === anaId).contributions.find(item => item.expenseId === optOutExpenseId);
+  assert.equal(directContribution.directMinor, 5000);
+  assert.equal(directContribution.remainingMinor, 0);
+  assert.match(await evaluate('document.body.textContent'), /Plată directă beneficiarului/u);
+  await click('[data-transaction="' + directPayment.id + '"]');
+  assert.match(await evaluate('document.getElementById("modal-content").textContent'), /Beneficiar:\s*Doamna dirigintă/u);
+  await click('[data-action=close-modal]');
   await until('navigator.serviceWorker.getRegistration().then(r => !!r?.active)', 'shared PWA worker installed');
 
   // Separate browser contexts model a phone and laptop with independent cookies.
@@ -536,7 +559,7 @@ try {
     assert.equal(await evaluate('fetch("/api/auth/me").then(r => r.status)'), 200, 'phone remains signed in independently');
   }
   assert.equal(exceptions.length, 0, JSON.stringify(exceptions));
-  console.log('Browser checks passed: invitation/setup, two-device activation with independent sessions and third-device rejection, logo upload, classroom creation/switching, navigation, roster, direct WhatsApp reminders with two contacts, separate WhatsApp payment details, individual text-only sharing and copied-message PDF fallback, split opt-out recalculation before the first contribution, expense editing before and after linked money, manual allocation, quick collection with existing child credit and small-difference settlement, lost-response retry across reauthentication, temporary fund advances and repayments, expense/payment document attachments, payment/refund/credit/correction, PDF report generation, in-app viewing and sharing, stale-data protection, reload, offline protection, mobile/dark layout, and PWA worker.');
+  console.log('Browser checks passed: invitation/setup, two-device activation with independent sessions and third-device rejection, logo upload, classroom creation/switching, navigation, roster, direct WhatsApp reminders with two contacts, separate WhatsApp payment details, individual text-only sharing and copied-message PDF fallback, direct beneficiary payment without cash movement, split opt-out recalculation before the first contribution, expense editing before and after linked money, manual allocation, quick collection with existing child credit and small-difference settlement, lost-response retry across reauthentication, temporary fund advances and repayments, expense/payment document attachments, payment/refund/credit/correction, PDF report generation, in-app viewing and sharing, stale-data protection, reload, offline protection, mobile/dark layout, and PWA worker.');
 } finally {
   if (contextId) await send('Target.disposeBrowserContext', { browserContextId: contextId });
   socket.close();

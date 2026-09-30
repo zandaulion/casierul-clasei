@@ -1,9 +1,9 @@
 # Planșele vizuale ale fluxurilor
 
-Acest director păstrează reprezentările SVG statice ale tuturor celor 15 fluxuri documentate și disponibile în Ajutorul aplicației:
+Acest director păstrează reprezentările SVG statice ale tuturor celor 16 fluxuri documentate și disponibile în Ajutorul aplicației:
 
 1. [Pornire și organizare](01-pornire-si-organizare.svg) — activare, configurarea clasei, copii și cheltuieli.
-2. [Bani și corecții](02-bani-si-corectii.svg) — încasare, **Nu mai colectez**, avansul copilului, registru și corecții.
+2. [Bani și corecții](02-bani-si-corectii.svg) — încasare, plată directă către beneficiar, **Nu mai colectez**, avansul copilului, registru și corecții.
 3. [Documente și comunicare](03-documente-si-comunicare.svg) — documente justificative, WhatsApp și rapoarte.
 4. [Acces, siguranță și date](04-acces-siguranta-si-date.svg) — clase și roluri, conexiune/PWA, export și backup.
 

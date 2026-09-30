@@ -371,6 +371,8 @@ main { min-width: 0; padding: 24px 20px; outline: none; }
 .child-report-option > div:first-child strong, .child-report-option > div:first-child span { display: block; }
 .child-report-option > button { width: 100%; margin-top: 10px; }
 .child-report-option .report-actions { margin-top: 10px; }
+.direct-payment-prompt { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 12px; margin: 18px 0; }
+.direct-payment-prompt p { margin: 3px 0 0; }
 .contact-slot { margin: 14px 0; padding: 8px 14px 14px; border: 1px solid var(--line); border-radius: 14px; }
 .contact-slot legend { padding: 0 6px; font-weight: 650; }
 .reminder-list { display: grid; gap: 10px; margin-top: 16px; }
@@ -1011,6 +1013,8 @@ dialog::backdrop { background: #13271e88; }
   .logo-grid { grid-template-columns: 1fr; }
 }
 @media (max-width: 520px) {
+  .direct-payment-prompt { grid-template-columns: 1fr; }
+  .direct-payment-prompt button { width: 100%; }
   .help-branches.two, .help-branches.three { grid-template-columns: 1fr; }
 }
 

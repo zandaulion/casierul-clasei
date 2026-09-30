@@ -73,6 +73,15 @@ flowchart TB
     E8 --> E9[Înregistrezi]
   end
 
+  subgraph DP["Plata directă beneficiarului"]
+    direction LR
+    DP1[Deschizi copilul] --> DP2[A plătit direct beneficiarului]
+    DP2 --> DP3[Alegi contribuția și suma]
+    DP3 --> DP4[Completezi beneficiarul]
+    DP4 --> DP5[Contribuția scade]
+    DP5 --> DP6[Numerarul clasei rămâne neschimbat]
+  end
+
   subgraph F["Nu mai colectez"]
     direction LR
     F1[Contribuție neachitată] --> F2[Nu mai colectez]
@@ -215,7 +224,8 @@ flowchart TB
 | Copii | Copiii, contactele și arhivarea |
 | Fișa copilului | Încasarea și WhatsApp |
 | Cheltuieli | Crearea, calculul și participanții |
-| Nu mai colectez | Recalcularea sau acoperirea din fond disponibilă în acel moment |
+| Plată directă beneficiarului | Contribuția, suma, beneficiarul și efectul nul asupra numerarului |
+| Nu mai colectez | Recalcularea, ajustarea mică sau acoperirea din fond disponibilă în acel moment |
 | Avansul copilului | Folosirea și restituirea avansului |
 | Registru | Plăți, avansuri personale și datorii |
 | Documente | Tipul fișierului și vizibilitatea |

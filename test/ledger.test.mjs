@@ -356,6 +356,40 @@ test('a saved partial cash collection can be followed by a standalone rounding a
   assert.throws(() => post('rounding_adjustment.create', { childId: ianis, expenseId: unpaid }), status(409));
 });
 
+test('a direct beneficiary payment settles a contribution without moving class cash', t => {
+  const { ledger, post, child, expense } = fixture(t);
+  const pupil = child('Ianis', 'Mirea');
+  const photos = expense([pupil], 5000, 'fixed', { title: 'Fotografii' });
+  const direct = post('direct_payment.create', { childId: pupil, expenseId: photos, amountMinor: 3000,
+    destination: 'Doamna dirigintă', comment: 'Predat direct' }).transactionId;
+
+  let state = ledger.getState();
+  let contribution = state.children[0].contributions[0];
+  assert.deepEqual({ paidMinor: contribution.paidMinor, directMinor: contribution.directMinor,
+    remainingMinor: contribution.remainingMinor }, { paidMinor: 0, directMinor: 3000, remainingMinor: 2000 });
+  assert.equal(state.expenses[0].collectedMinor, 0);
+  assert.equal(state.expenses[0].directMinor, 3000);
+  assert.equal(state.summary.totalDirectMinor, 3000);
+  assert.equal(state.summary.balanceMinor, 0);
+  assert.equal(state.transactions.find(item => item.id === direct).destination, 'Doamna dirigintă');
+
+  post('collection.create', { childId: pupil, receivedMinor: 2000, changeMinor: 0,
+    allocations: [{ expenseId: photos, amountMinor: 2000 }] });
+  state = ledger.getState();
+  contribution = state.children[0].contributions[0];
+  assert.equal(contribution.remainingMinor, 0);
+  assert.equal(state.summary.balanceMinor, 2000);
+  assert.equal(state.summary.totalDirectMinor, 3000);
+  assert.throws(() => post('direct_payment.create', { childId: pupil, expenseId: photos,
+    amountMinor: 1, destination: 'Doamna dirigintă' }), status(400));
+
+  post('transaction.reverse', { transactionId: direct, comment: 'A fost atribuit altui copil' });
+  state = ledger.getState();
+  assert.equal(state.children[0].dueMinor, 3000);
+  assert.equal(state.summary.balanceMinor, 2000);
+  assert.equal(state.summary.totalDirectMinor, 0);
+});
+
 test('a collection can use any available child credit alongside the received cash', t => {
   const { ledger, post, child, expense } = fixture(t);
   const id = child('Daria', 'Ion');
@@ -466,7 +500,7 @@ test('temporary fund advances reconcile cash, liability, vendor payment and part
   const advance = post('fund_advance.create', { amountMinor: 10000, person: 'Casier', expenseId: equipment,
     occurredAt: '2026-09-27T18:00:00+03:00', comment: 'Achitat personal la Decathlon' }).transactionId;
   let state = ledger.getState();
-  assert.deepEqual(state.summary, { balanceMinor: 10000, netBalanceMinor: 0, totalReceivedMinor: 0,
+  assert.deepEqual(state.summary, { balanceMinor: 10000, netBalanceMinor: 0, totalReceivedMinor: 0, totalDirectMinor: 0,
     totalPaidMinor: 0, totalCreditMinor: 0, totalDueMinor: 10000, totalAdjustedMinor: 0, totalCoveredMinor: 0, totalAdvancedMinor: 10000,
     totalAdvanceRepaidMinor: 0, totalAdvanceOutstandingMinor: 10000 });
   post('payment.create', { amountMinor: 10000, destination: 'Decathlon', expenseId: equipment,
@@ -664,6 +698,7 @@ test('deployed transaction schema gains newer settlement types without losing ad
   t.after(() => check.close());
   assert.match(check.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'transactions'").get().sql, /rounding_adjustment/u);
   assert.match(check.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'transactions'").get().sql, /advance_waiver/u);
+  assert.match(check.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'transactions'").get().sql, /direct_payment/u);
   assert.deepEqual(check.prepare('PRAGMA foreign_key_check').all(), []);
 });
 

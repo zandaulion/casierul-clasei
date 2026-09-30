@@ -48,19 +48,23 @@ const diagrams = [
         ['Atingi copilul'], ['Alegi totalul sau contribuția'], ['Introduci suma ori rotunjirea'],
         ['Mai puțin', 'Exact', 'Mai mult'], ['Verifici și înregistrezi'],
       ] },
-      { title: '6. Nu mai colectez', stages: [
+      { title: '6. Plata directă beneficiarului', stages: [
+        ['Atingi copilul'], ['A plătit direct'], ['Alegi contribuția și suma'],
+        ['Completezi beneficiarul'], ['Stingi contribuția fără numerar'],
+      ] },
+      { title: '7. Nu mai colectez', stages: [
         ['Deschizi contribuția'], ['Apeși „Nu mai colectez”'],
         ['Excluzi și recalculezi', 'Ajustezi diferența mică', 'Acoperi din avans personal'], ['Verifici efectul'], ['Confirmi'],
       ] },
-      { title: '7. Avansul copilului', stages: [
+      { title: '8. Avansul copilului', stages: [
         ['Primești surplus'], ['Păstrezi în avans'],
         ['Stingi contribuții', 'Restitui copilului'], ['Numerarul se mișcă o singură dată'], ['Istoric separat'],
       ] },
-      { title: '8. Registrul și avansurile personale', stages: [
+      { title: '9. Registrul și avansurile personale', stages: [
         ['Deschizi Registru'], ['Bani dați mai departe', 'Sumă avansată fondului'],
         ['Actualizezi numerarul și datoria'], ['Restitui sau acoperi contribuții'], ['Verifici soldul'],
       ] },
-      { title: '9. Corectarea', stages: [
+      { title: '10. Corectarea', stages: [
         ['Deschizi operațiunea'], ['Alegi Corectează'], ['Scrii motivul'],
         ['Confirmi inversarea'], ['Înregistrezi varianta corectă'],
       ] },
@@ -73,15 +77,15 @@ const diagrams = [
     subtitle: 'Dovezi, mesaje și rapoarte pregătite pentru părinți',
     palette: 'blue',
     workflows: [
-      { title: '10. Documentele justificative', stages: [
+      { title: '11. Documentele justificative', stages: [
         ['Deschizi cheltuiala sau plata'], ['Atașezi PDF ori fotografie'],
         ['Intern', 'Vizibil clasei'], ['Tip și amprentă verificate'], ['Document imuabil'],
       ] },
-      { title: '11. WhatsApp și detaliile de plată', stages: [
+      { title: '12. WhatsApp și detaliile de plată', stages: [
         ['Configurezi contactele și plata'], ['Copil', 'Grup', 'Date de plată'],
         ['Doar mesajul', 'Copie mesaj + PDF', 'Date separate'], ['Alegi conversația'], ['Verifici și trimiți'],
       ] },
-      { title: '12. Rapoartele', stages: [
+      { title: '13. Rapoartele', stages: [
         ['Deschizi Rapoarte'], ['Clasă', 'Tabel', 'Cheltuială', 'Copil'],
         ['Generezi PDF-ul imuabil'], ['Previzualizezi'], ['Partajezi ori descarci'],
       ] },
@@ -94,15 +98,15 @@ const diagrams = [
     subtitle: 'Roluri izolate, salvare sigură și recuperarea evidenței',
     palette: 'violet',
     workflows: [
-      { title: '13. Mai multe clase și roluri', stages: [
+      { title: '14. Mai multe clase și roluri', stages: [
         ['Primești sau creezi permisiunea'], ['Adaugi accesul'], ['Alegi clasa'],
         ['Casier', 'Părinte', 'Auditor'], ['Dispozitiv revocabil separat'],
       ] },
-      { title: '14. Conexiunea și actualizarea PWA', stages: [
+      { title: '15. Conexiunea și actualizarea PWA', stages: [
         ['Interfața se adaptează ecranului'], ['Salvezi online', 'Fără coadă offline'],
         ['Răspuns confirmat', 'Verifică / reîncearcă'], ['Păstrezi formularul activ'], ['Actualizezi aplicația'],
       ] },
-      { title: '15. Exportul și backup-ul', stages: [
+      { title: '16. Exportul și backup-ul', stages: [
         ['Export JSON pentru inspecție', 'Backup SQLite zilnic'], ['Date de business', 'Registru · contacte · documente'],
         ['Verifici integritatea'], ['Restaurezi setul complet'], ['Exportul nu înlocuiește backup-ul'],
       ] },

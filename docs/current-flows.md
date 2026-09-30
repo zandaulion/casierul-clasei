@@ -41,6 +41,12 @@ Inventarul descrie comportamentul disponibil în aplicație la 30 septembrie 202
    Dacă încasarea parțială a fost deja salvată, restul poate fi închis ulterior din **Nu mai colectez** ca ajustare de rotunjire.
 6. Salvarea este idempotentă. După pierderea răspunsului, **Verifică / reîncearcă** nu dublează încasarea; o modificare concurentă cere reîmprospătarea și verificarea sumelor.
 
+### Plata directă către beneficiar
+
+- Din fișa copilului, **Înregistrează plata directă** stinge integral sau parțial o singură contribuție atunci când părintele a predat banii direct doamnei diriginte, fotografului sau altui beneficiar.
+- Se păstrează contribuția, suma, beneficiarul, data și comentariul. Numerarul clasei nu se modifică și nu este creată o încasare fictivă urmată de o plată fictivă.
+- Operațiunea apare distinct în registru, situația cheltuielii, fișa copilului și tabelul contribuțiilor și poate fi anulată prin corecție.
+
 ## 6. Renunțarea la colectarea unei contribuții
 
 - Din **Nu mai colectez**, un copil poate fi scos dintr-o cheltuială împărțită atunci când recalcularea încă este permisă. Totalul cheltuielii rămâne același, iar părțile celorlalți participanți se refac automat.
@@ -74,7 +80,7 @@ Inventarul descrie comportamentul disponibil în aplicație la 30 septembrie 202
 ## 10. Rapoartele
 
 - Se emit PDF-uri imuabile pentru situația clasei, o cheltuială, un copil și **Tabelul contribuțiilor**.
-- Situația clasei, raportul cheltuielii și tabelul arată procentul de acoperire. Banii încasați de la părinți și sumele acoperite din fond apar separat.
+- Situația clasei, raportul cheltuielii și tabelul arată procentul de acoperire. Banii încasați în fond, plățile directe către beneficiari și sumele acoperite din fond apar separat.
 - Dacă toate contribuțiile unei cheltuieli sunt identice, situația clasei și raportul cheltuielii afișează explicit **Contribuție per copil**. Pentru un total împărțit cu diferență de un ban, raportul folosește suma de bază mai mică pentru toți, iar registrul păstrează repartizarea exactă.
 - Tabelul contribuțiilor afișează lângă numele fiecărui copil totalul rămas de plată pentru toate contribuțiile active.
 - Detaliile de plată apar în rapoartele clasei, cheltuielii și copilului. Tabelul intern al contribuțiilor le omite.
@@ -96,7 +102,7 @@ Inventarul descrie comportamentul disponibil în aplicație la 30 septembrie 202
 ## 13. Ajutorul general și contextual
 
 - Semnul întrebării din antet deschide ghidul general pentru toate rolurile. Acesta arată traseul principal prin Copii, Cheltuieli, Încasări, Registru și Rapoarte.
-- Ghidul casierului desenează toate cele 15 fluxuri: activare, configurare, copii, cheltuieli, încasare, **Nu mai colectez**, avansul copilului, registru, corecții, documente, WhatsApp, rapoarte, mai multe clase și roluri, funcționarea cu probleme de conexiune și exportul/backup-ul.
+- Ghidul casierului desenează toate cele 16 fluxuri: activare, configurare, copii, cheltuieli, încasare, plată directă beneficiarului, **Nu mai colectez**, avansul copilului, registru, corecții, documente, WhatsApp, rapoarte, mai multe clase și roluri, funcționarea cu probleme de conexiune și exportul/backup-ul.
 - Aceleași fluxuri sunt disponibile în repository ca patru [planșe SVG statice](workflows/README.md), alături de sursele Mermaid din [ghidul vizual](visual-flow-guide.md).
 - Fiecare ecran principal deschide direct fluxul său. Formularele pentru activare, configurare, cheltuieli, contacte, documente, avansuri și rapoarte includ ajutorul contextual în aceeași fereastră.
 - **Cum încasez?** deschide fluxul relevant fără să șteargă suma sau repartizarea deja introduse. În **Nu mai colectez**, diagrama afișează numai variantele disponibile în acel moment.
