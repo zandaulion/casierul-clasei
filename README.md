@@ -110,7 +110,7 @@ npm test
 
 Cloudflare Tunnel folosește `http://127.0.0.1:8018`. API-ul privat de administrare ascultă separat pe `127.0.0.1:8118`. Publicarea instalează serviciul systemd, integrarea consolei și copii de siguranță locale zilnice.
 
-Detalii: [mai multe clase și drepturi](docs/multiple-classrooms.md), [operare și backup](docs/operations.md), [contract API](docs/api.md), [planul de criptare](docs/encryption.md).
+Detalii: [fluxurile implementate](docs/current-flows.md), [roadmap-ul de produs](docs/roadmap.md), [mai multe clase și drepturi](docs/multiple-classrooms.md), [operare și backup](docs/operations.md), [contract API](docs/api.md), [planul de criptare](docs/encryption.md).
 
 Testele folosesc baze temporare și verifică registrul, autentificarea, calculele interfeței și integrarea HTTP. `scripts/browser-check.mjs` verifică fluxurile complete într-un context Chromium separat, cu server temporar pe portul 18018 și Chromium disponibil prin debugging pe portul 9222.
 
