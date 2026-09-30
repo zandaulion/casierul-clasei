@@ -420,6 +420,15 @@ main { min-width: 0; padding: 24px 20px; outline: none; }
 .total-choice { min-height: 86px; margin: 20px 0 0; border-radius: var(--radius); }
 .total-number { font-size: 29px; font-weight: 650; white-space: nowrap; }
 .choice-money { font-size: 19px; font-weight: 600; white-space: nowrap; }
+.contribution-choice { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: stretch; }
+.contribution-choice .stop-collection {
+  min-height: 54px;
+  align-self: center;
+  padding-inline: 12px;
+  color: var(--brand);
+  background: var(--surface);
+  white-space: nowrap;
+}
 .rounds { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 .round { min-height: 74px; padding: 10px 4px; background: var(--sky); border-color: transparent; }
 .round[aria-pressed=true] {
@@ -798,6 +807,8 @@ dialog::backdrop { background: #13271e88; }
   .child-first-name { font-size: 15px; }
   .total-number { font-size: 25px; }
   .round-value, .choice-money { font-size: 17px; }
+  .contribution-choice { grid-template-columns: 1fr; }
+  .contribution-choice .stop-collection { justify-self: end; min-height: 44px; }
   .collection-dock { padding-inline: 14px; }
   .collection-dock .switch button { font-size: 13px; }
   .collection-dock-amount { gap: 9px; }

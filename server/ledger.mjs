@@ -190,7 +190,7 @@ CREATE TABLE IF NOT EXISTS contribution_edit_guard (
 ) STRICT;
 CREATE TABLE IF NOT EXISTS transactions (
   id TEXT PRIMARY KEY,
-  type TEXT NOT NULL CHECK(type IN ('collection', 'payment', 'credit_apply', 'rounding_adjustment', 'refund', 'fund_advance', 'advance_repayment', 'reversal')),
+  type TEXT NOT NULL CHECK(type IN ('collection', 'payment', 'credit_apply', 'rounding_adjustment', 'refund', 'fund_advance', 'advance_repayment', 'advance_waiver', 'reversal')),
   occurred_at TEXT NOT NULL, created_at TEXT NOT NULL,
   child_id TEXT REFERENCES children(id), expense_id TEXT REFERENCES expenses(id),
   destination TEXT NOT NULL, comment TEXT NOT NULL,
@@ -198,7 +198,7 @@ CREATE TABLE IF NOT EXISTS transactions (
   reverses_id TEXT UNIQUE REFERENCES transactions(id), advance_id TEXT REFERENCES transactions(id),
   actor_id TEXT NOT NULL, actor_label TEXT NOT NULL,
   CHECK((type = 'reversal') = (reverses_id IS NOT NULL)),
-  CHECK((type = 'advance_repayment') = (advance_id IS NOT NULL))
+  CHECK((type IN ('advance_repayment', 'advance_waiver')) = (advance_id IS NOT NULL))
 ) STRICT;
 CREATE TABLE IF NOT EXISTS allocations (
   transaction_id TEXT NOT NULL REFERENCES transactions(id),
@@ -288,7 +288,7 @@ function migratePaymentSettings(db) {
 
 function migrateTransactions(db) {
   const table = db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'transactions'").get();
-  if (!table?.sql || table.sql.includes("'rounding_adjustment'")) return;
+  if (!table?.sql || (table.sql.includes("'rounding_adjustment'") && table.sql.includes("'advance_waiver'"))) return;
   const hasAdvanceId = table.sql.includes('advance_id');
   db.exec('PRAGMA foreign_keys = OFF; BEGIN IMMEDIATE');
   try {
@@ -296,7 +296,7 @@ function migrateTransactions(db) {
       DROP TRIGGER IF EXISTS transactions_no_delete;
       CREATE TABLE transactions_new (
         id TEXT PRIMARY KEY,
-        type TEXT NOT NULL CHECK(type IN ('collection', 'payment', 'credit_apply', 'rounding_adjustment', 'refund', 'fund_advance', 'advance_repayment', 'reversal')),
+        type TEXT NOT NULL CHECK(type IN ('collection', 'payment', 'credit_apply', 'rounding_adjustment', 'refund', 'fund_advance', 'advance_repayment', 'advance_waiver', 'reversal')),
         occurred_at TEXT NOT NULL, created_at TEXT NOT NULL,
         child_id TEXT REFERENCES children(id), expense_id TEXT REFERENCES expenses(id),
         destination TEXT NOT NULL, comment TEXT NOT NULL,
@@ -304,7 +304,7 @@ function migrateTransactions(db) {
         reverses_id TEXT UNIQUE REFERENCES transactions_new(id), advance_id TEXT REFERENCES transactions_new(id),
         actor_id TEXT NOT NULL, actor_label TEXT NOT NULL,
         CHECK((type = 'reversal') = (reverses_id IS NOT NULL)),
-        CHECK((type = 'advance_repayment') = (advance_id IS NOT NULL))
+        CHECK((type IN ('advance_repayment', 'advance_waiver')) = (advance_id IS NOT NULL))
       ) STRICT;
       INSERT INTO transactions_new (id, type, occurred_at, created_at, child_id, expense_id, destination,
         comment, amount, change, reverses_id, advance_id, actor_id, actor_label)
@@ -582,10 +582,13 @@ export class Ledger {
     const childCredit = new Map(childRows.map(row => [row.id, 0]));
     const contributionPaid = new Map();
     const contributionAdjusted = new Map();
+    const contributionCovered = new Map();
     const expenseCollected = new Map();
     const expenseAdjusted = new Map();
+    const expenseCovered = new Map();
     const expensePaid = new Map();
     const advanceRepaid = new Map();
+    const advanceWaived = new Map();
     let totalReceivedMinor = 0;
     let totalPaidMinor = 0;
     let totalAdvancedMinor = 0;
@@ -621,13 +624,18 @@ export class Ledger {
         totalAdvanceRepaidMinor = add(totalAdvanceRepaidMinor, tx.amountMinor);
         totalPaidMinor = add(totalPaidMinor, tx.amountMinor);
         bump(advanceRepaid, tx.advanceId, tx.amountMinor);
+      } else if (tx.type === 'advance_waiver') {
+        bump(advanceWaived, tx.advanceId, tx.amountMinor);
       }
-      if (tx.type === 'collection' || tx.type === 'credit_apply' || tx.type === 'rounding_adjustment') {
+      if (tx.type === 'collection' || tx.type === 'credit_apply' || tx.type === 'rounding_adjustment' || tx.type === 'advance_waiver') {
         for (const allocation of tx.allocations) {
           const key = `${tx.childId}:${allocation.expenseId}`;
           if (tx.type === 'rounding_adjustment') {
             bump(contributionAdjusted, key, allocation.amountMinor);
             bump(expenseAdjusted, allocation.expenseId, allocation.amountMinor);
+          } else if (tx.type === 'advance_waiver') {
+            bump(contributionCovered, key, allocation.amountMinor);
+            bump(expenseCovered, allocation.expenseId, allocation.amountMinor);
           } else {
             bump(contributionPaid, key, allocation.amountMinor);
             bump(expenseCollected, allocation.expenseId, allocation.amountMinor);
@@ -638,6 +646,7 @@ export class Ledger {
     const expenses = expenseRows.map(row => ({
       id: row.id, title: row.title, type: row.type, amountMinor: row.amount, totalMinor: row.total,
       collectedMinor: expenseCollected.get(row.id) ?? 0, adjustedMinor: expenseAdjusted.get(row.id) ?? 0,
+      coveredMinor: expenseCovered.get(row.id) ?? 0,
       paidOutMinor: expensePaid.get(row.id) ?? 0,
       occurredAt: row.occurred_at, dueDate: row.due_date, comment: row.comment,
       cancelled: Boolean(row.cancelled),
@@ -651,17 +660,20 @@ export class Ledger {
         const expense = expensesById.get(c.expense_id);
         const paidMinor = contributionPaid.get(`${row.id}:${c.expense_id}`) ?? 0;
         const adjustedMinor = contributionAdjusted.get(`${row.id}:${c.expense_id}`) ?? 0;
+        const coveredMinor = contributionCovered.get(`${row.id}:${c.expense_id}`) ?? 0;
         return { expenseId: c.expense_id, title: expense.title, dueDate: expense.dueDate,
-          amountMinor: c.amount, paidMinor, adjustedMinor, remainingMinor: c.amount - paidMinor - adjustedMinor };
+          amountMinor: c.amount, paidMinor, adjustedMinor, coveredMinor,
+          remainingMinor: c.amount - paidMinor - adjustedMinor - coveredMinor };
       }).sort((a, b) => (a.dueDate ?? '9999-12-31').localeCompare(b.dueDate ?? '9999-12-31') || names.compare(a.title, b.title) || a.expenseId.localeCompare(b.expenseId));
       return { id: row.id, firstName: row.first_name, lastName: row.last_name, active: Boolean(row.active),
         creditMinor: childCredit.get(row.id), dueMinor: sum(contributions.map(c => c.remainingMinor)), contributions };
     }).sort((a, b) => names.compare(a.lastName, b.lastName) || names.compare(a.firstName, b.firstName) || a.id.localeCompare(b.id));
     const advances = transactions.filter(tx => tx.type === 'fund_advance').map(tx => {
       const repaidMinor = advanceRepaid.get(tx.id) ?? 0;
+      const waivedMinor = advanceWaived.get(tx.id) ?? 0;
       return { id: tx.id, person: tx.destination, expenseId: tx.expenseId, occurredAt: tx.occurredAt,
-        createdAt: tx.createdAt, comment: tx.comment, amountMinor: tx.amountMinor, repaidMinor,
-        outstandingMinor: tx.reversed ? 0 : tx.amountMinor - repaidMinor, reversed: tx.reversed };
+        createdAt: tx.createdAt, comment: tx.comment, amountMinor: tx.amountMinor, repaidMinor, waivedMinor,
+        outstandingMinor: tx.reversed ? 0 : tx.amountMinor - repaidMinor - waivedMinor, reversed: tx.reversed };
     });
     const totalAdvanceOutstandingMinor = sum(advances.map(item => item.outstandingMinor));
     const balanceMinor = add(meta.opening_balance, totalReceivedMinor + totalAdvancedMinor - totalPaidMinor);
@@ -677,7 +689,8 @@ export class Ledger {
       summary: { balanceMinor, netBalanceMinor: balanceMinor - totalAdvanceOutstandingMinor,
         totalReceivedMinor, totalPaidMinor, totalCreditMinor: sum(children.map(child => child.creditMinor)),
         totalDueMinor: sum(children.map(child => child.dueMinor)),
-        totalAdjustedMinor: sum(expenses.map(expense => expense.adjustedMinor)), totalAdvancedMinor,
+        totalAdjustedMinor: sum(expenses.map(expense => expense.adjustedMinor)),
+        totalCoveredMinor: sum(expenses.map(expense => expense.coveredMinor)), totalAdvancedMinor,
         totalAdvanceRepaidMinor, totalAdvanceOutstandingMinor },
       reports: this.#reports(),
     };
@@ -886,15 +899,18 @@ export class Ledger {
         && (tx.expenseId === expense.id || tx.allocations.some(allocation => allocation.expenseId === expense.id)));
       const safeContributionCorrection = body.type === expense.type
         && expense.amountMinor === amount
-        && (body.type === 'split' ? expense.collectedMinor === 0 : ['fixed', 'quantity'].includes(body.type)
+        && (body.type === 'split' ? expense.collectedMinor === 0 && expense.adjustedMinor === 0 && expense.coveredMinor === 0
+          : ['fixed', 'quantity'].includes(body.type)
           && contributions.every(next => {
             const child = state.children.find(item => item.id === next.childId);
-            const paid = child?.contributions.find(item => item.expenseId === expense.id)?.paidMinor ?? 0;
-            return next.amount >= paid;
+            const previous = child?.contributions.find(item => item.expenseId === expense.id);
+            const settled = (previous?.paidMinor ?? 0) + (previous?.adjustedMinor ?? 0) + (previous?.coveredMinor ?? 0);
+            return next.amount >= settled;
           })
           && expense.contributions.filter(old => !contributions.some(next => next.childId === old.childId)).every(old => {
             const child = state.children.find(item => item.id === old.childId);
-            return (child?.contributions.find(item => item.expenseId === expense.id)?.paidMinor ?? 0) === 0;
+            const previous = child?.contributions.find(item => item.expenseId === expense.id);
+            return (previous?.paidMinor ?? 0) + (previous?.adjustedMinor ?? 0) + (previous?.coveredMinor ?? 0) === 0;
           }))
         && total >= expense.paidOutMinor;
       if (formulaChanged && hasActiveLinks && !safeContributionCorrection) {
@@ -987,14 +1003,35 @@ export class Ledger {
       return this.#transaction('advance_repayment', body, actor, { amountMinor, destination: advance.person,
         advanceId: advance.id, expenseId: advance.expenseId });
     }
+    if (operation === 'fund_advance.waive') {
+      const advanceId = text(body.advanceId, 'Suma avansată', 128);
+      const advance = state.advances.find(item => item.id === advanceId && !item.reversed);
+      if (!advance) fail('Suma avansată nu există sau a fost corectată.', 404);
+      const child = this.#child(state, body.childId);
+      const expense = this.#expense(state, body.expenseId);
+      if (advance.expenseId && advance.expenseId !== expense.id) {
+        fail('Suma avansată este asociată altei cheltuieli.', 409);
+      }
+      const contribution = child.contributions.find(item => item.expenseId === expense.id);
+      if (!contribution) fail('Copilul nu participă la această cheltuială.');
+      const amountMinor = integer(body.amountMinor, 'Suma acoperită', 1);
+      if (amountMinor > advance.outstandingMinor) fail('Suma depășește avansul rămas de restituit.');
+      if (amountMinor > contribution.remainingMinor) fail('Suma depășește contribuția rămasă de achitat.');
+      return this.#transaction('advance_waiver', body, actor, { childId: child.id, expenseId: expense.id,
+        amountMinor, destination: advance.person, advanceId: advance.id,
+        allocations: [{ expenseId: expense.id, amountMinor }] });
+    }
     if (operation === 'transaction.reverse') {
       const transactionId = text(body.transactionId, 'Operațiunea', 128);
       const original = state.transactions.find(tx => tx.id === transactionId);
       if (!original) fail('Operațiunea nu există.', 404);
       if (original.type === 'reversal') fail('O corecție nu poate fi anulată. Înregistrați o operațiune nouă.', 409);
       if (original.reversed) fail('Operațiunea a fost deja corectată.', 409);
-      if (original.type === 'fund_advance' && state.advances.find(item => item.id === original.id)?.repaidMinor) {
-        fail('Corectați mai întâi restituirile legate de această sumă avansată.', 409);
+      if (original.type === 'fund_advance') {
+        const advance = state.advances.find(item => item.id === original.id);
+        if (advance?.repaidMinor || advance?.waivedMinor) {
+          fail('Corectați mai întâi restituirile și acoperirile legate de această sumă avansată.', 409);
+        }
       }
       const comment = text(body.comment, 'Motivul corecției', 2000);
       return this.#transaction('reversal', { comment }, actor, { childId: original.childId, expenseId: original.expenseId,
