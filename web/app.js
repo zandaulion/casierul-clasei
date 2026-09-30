@@ -13,11 +13,12 @@ const localNow = () => localDateTime();
 const timestampField = (value = localNow()) => field('Data și ora', 'occurredAt', value, 'type="datetime-local" required');
 const dateText = value => value ? new Intl.DateTimeFormat('ro-RO', { dateStyle: 'medium', ...(value.includes('T') ? { timeStyle: 'short' } : {}) }).format(new Date(value.includes('T') ? value : `${value}T12:00:00`)) : 'Fără termen';
 const labels = { collection: 'Încasare', payment: 'Bani dați', credit_apply: 'Avans repartizat', rounding_adjustment: 'Ajustare de rotunjire', refund: 'Avans restituit',
-  fund_advance: 'Sumă avansată fondului', advance_repayment: 'Restituire sumă avansată', reversal: 'Corecție' };
+  fund_advance: 'Sumă avansată fondului', advance_repayment: 'Restituire sumă avansată',
+  advance_waiver: 'Acoperire din sumă avansată', reversal: 'Corecție' };
 const typeLabels = { fixed: 'Sumă fixă / copil', split: 'Total împărțit', quantity: 'Cantitate × preț' };
 const reportTypeLabels = { class: 'Situația clasei', matrix: 'Tabelul contribuțiilor', expense: 'Situația unei cheltuieli', child: 'Fișa copilului' };
 const writeActions = new Set(['add-child', 'edit-child', 'edit-contacts', 'edit-reminder-contact', 'whatsapp-reminders', 'create-child-report', 'bulk-children', 'add-expense', 'edit-expense', 'payment', 'fund-advance', 'repay-advance', 'attach-document',
-  'expense-payment', 'apply-credit', 'refund', 'report-class', 'report-matrix', 'report-expense', 'report-child',
+  'expense-payment', 'stop-collection', 'apply-credit', 'refund', 'report-class', 'report-matrix', 'report-expense', 'report-child',
   'replace-report', 'reverse', 'cancel-expense', 'remove-logo', 'add-classroom']);
 const pendingKey = 'casierul.pending.v1';
 const navigationKey = 'casierulNavigation';
@@ -258,7 +259,8 @@ function renderRosterList() {
   $('#roster-list').innerHTML = children.length ? children.map(c => {
     const contactCount = contactsFor(c.id).length;
     const contactStatus = canWrite() ? `<span class="child-contact-status ${contactCount ? '' : 'missing'}" data-contact-count="${contactCount}">${icon('phone')}${contactCount ? (contactCount === 1 ? '1 telefon' : `${contactCount} telefoane`) : 'Fără telefon'}</span>` : '';
-    return `<button class="child" data-child="${esc(c.id)}"><span><span class="child-name">${esc(c.lastName)}</span><span class="child-first-name">${esc(c.firstName)}</span>${c.active ? '' : '<span class="caption">Arhivat</span>'}${contactStatus}</span><span class="child-side">${c.dueMinor ? `<span class="amount due-status">${money(c.dueMinor)}</span><span class="caption">De achitat</span>` : `<span class="amount paid-status">${icon('check')}Achitat</span>`}${c.creditMinor ? `<span class="caption">Avans ${money(c.creditMinor)}</span>` : ''}</span></button>`;
+    const covered = c.contributions.some(item => item.coveredMinor > 0);
+    return `<button class="child" data-child="${esc(c.id)}"><span><span class="child-name">${esc(c.lastName)}</span><span class="child-first-name">${esc(c.firstName)}</span>${c.active ? '' : '<span class="caption">Arhivat</span>'}${contactStatus}</span><span class="child-side">${c.dueMinor ? `<span class="amount due-status">${money(c.dueMinor)}</span><span class="caption">De achitat</span>` : `<span class="amount paid-status">${icon('check')}${covered ? 'Închis' : 'Achitat'}</span>`}${c.creditMinor ? `<span class="caption">Avans ${money(c.creditMinor)}</span>` : ''}</span></button>`;
   }).join('') : '<div class="empty"><p>Nu am găsit acest nume. Încearcă numele de familie sau prenumele.</p></div>';
 }
 function resetDraft(c) {
@@ -284,14 +286,22 @@ function renderChild() {
   if (!canWrite()) {
     const parent = classroomAccess()?.role === 'parent';
     const nextContribution = unpaid(c).find(item => item.dueDate);
-    const contributionRows = c.contributions.map(item => `<div class="card"><div class="row"><h3>${esc(item.title)}</h3><span class="amount">${money(item.paidMinor)} din ${money(item.amountMinor)}</span></div>${item.adjustedMinor ? `<div class="caption">Ajustare de rotunjire: ${money(item.adjustedMinor)}</div>` : ''}<div class="caption">${item.remainingMinor ? `De achitat ${money(item.remainingMinor)}` : `<span class="paid-status">${icon('check')}Achitat</span>`}${item.dueDate ? ` · termen ${dateText(item.dueDate)}` : ''}</div></div>`).join('');
-    $('#main').innerHTML = `${parent ? welcomeBanner('Aproape de clasa ta', 'Contribuțiile și noutățile din registru, la îndemână.') : '<button class="back" data-action="back">‹ Copii</button>'}<div class="child-layout"><section class="child-overview" aria-labelledby="child-title"><h1 id="child-title">${esc(name(c))}</h1><p class="caption">Situația contribuțiilor</p><div class="summary parent-summary"><dl><div><dt>De achitat</dt><dd><strong>${money(c.dueMinor)}</strong></dd></div><div><dt>Avans disponibil</dt><dd>${money(c.creditMinor)}</dd></div></dl>${nextContribution ? `<p class="caption">Primul termen de achitat: ${dateText(nextContribution.dueDate)} · ${esc(nextContribution.title)}</p>` : c.dueMinor ? '' : '<p class="caption">Toate contribuțiile înregistrate sunt achitate.</p>'}</div></section><section class="child-contributions" aria-labelledby="contributions-title"><h2 id="contributions-title">Contribuții</h2><div class="stack">${contributionRows || '<p class="caption">Contribuțiile vor apărea aici după ce sunt adăugate de casier.</p>'}</div><details class="history"><summary>Istoricul copilului</summary><div class="stack">${transactionRows(state.transactions.filter(t => t.childId === c.id))}</div></details></section></div>`;
+    const contributionRows = c.contributions.map(item => `<div class="card"><div class="row"><h3>${esc(item.title)}</h3><span class="amount">${money(item.paidMinor)} din bani</span></div>${item.coveredMinor ? `<div class="caption">Acoperită din fond: ${money(item.coveredMinor)}</div>` : ''}${item.adjustedMinor ? `<div class="caption">Ajustare de rotunjire: ${money(item.adjustedMinor)}</div>` : ''}<div class="caption">${item.remainingMinor ? `De achitat ${money(item.remainingMinor)}` : item.coveredMinor ? `<span class="paid-status">${icon('check')}Nu se mai colectează</span>` : `<span class="paid-status">${icon('check')}Achitat</span>`}${item.dueDate ? ` · termen ${dateText(item.dueDate)}` : ''}</div></div>`).join('');
+    $('#main').innerHTML = `${parent ? welcomeBanner('Aproape de clasa ta', 'Contribuțiile și noutățile din registru, la îndemână.') : '<button class="back" data-action="back">‹ Copii</button>'}<div class="child-layout"><section class="child-overview" aria-labelledby="child-title"><h1 id="child-title">${esc(name(c))}</h1><p class="caption">Situația contribuțiilor</p><div class="summary parent-summary"><dl><div><dt>De achitat</dt><dd><strong>${money(c.dueMinor)}</strong></dd></div><div><dt>Avans disponibil</dt><dd>${money(c.creditMinor)}</dd></div></dl>${nextContribution ? `<p class="caption">Primul termen de achitat: ${dateText(nextContribution.dueDate)} · ${esc(nextContribution.title)}</p>` : c.dueMinor ? '' : '<p class="caption">Nu mai sunt contribuții de achitat.</p>'}</div></section><section class="child-contributions" aria-labelledby="contributions-title"><h2 id="contributions-title">Contribuții</h2><div class="stack">${contributionRows || '<p class="caption">Contribuțiile vor apărea aici după ce sunt adăugate de casier.</p>'}</div><details class="history"><summary>Istoricul copilului</summary><div class="stack">${transactionRows(state.transactions.filter(t => t.childId === c.id))}</div></details></section></div>`;
     return;
   }
   const contributions = unpaid(c);
+  const contributionChoices = contributions.map(e => {
+    const expense = state.expenses.find(item => item.id === e.expenseId);
+    const matchingAdvance = (state.advances || []).some(item => !item.reversed && item.outstandingMinor > 0
+      && (!item.expenseId || item.expenseId === e.expenseId));
+    const canRecalculate = expense?.type === 'split' && expense.contributions.length > 1
+      && expense.collectedMinor === 0 && (expense.adjustedMinor || 0) === 0 && (expense.coveredMinor || 0) === 0;
+    return `<div class="contribution-choice"><button type="button" class="choice" data-target="${esc(e.expenseId)}" aria-pressed="false"><span>${esc(e.title)}<span class="caption" style="display:block">${e.dueDate ? `Termen ${dateText(e.dueDate)}` : 'Fără termen'}${e.coveredMinor ? ` · acoperit din fond ${money(e.coveredMinor)}` : ''}</span></span><span class="choice-money">${money(e.remainingMinor)}</span></button>${matchingAdvance || canRecalculate ? `<button type="button" class="stop-collection" data-action="stop-collection" data-id="${esc(e.expenseId)}">Nu mai colectez</button>` : ''}</div>`;
+  }).join('');
   $('#main').innerHTML = `<button class="back" data-action="back">‹ Copii</button><div class="row"><h1>${esc(name(c))}</h1><button data-action="edit-child" aria-label="Editează copilul">Editează</button></div><div class="caption">Încasare rapidă${c.active ? '' : ' · Copil arhivat'}</div>${c.creditMinor ? `<div class="summary"><div class="row"><span>Avans disponibil</span><strong>${money(c.creditMinor)}</strong></div><div class="toolbar"><button data-action="apply-credit" ${c.dueMinor ? '' : 'disabled'}>Folosește avansul</button><button data-action="refund">Restituie</button></div></div>` : ''}
   <form id="collection-form"><div class="collection-options">
-  ${c.dueMinor ? `<button type="button" class="choice total-choice" data-target="all" aria-pressed="true"><span>Total de achitat</span><span class="total-number">${money(c.dueMinor)}</span></button><div class="section-label" id="round-label">Alege rapid suma primită</div><div class="rounds" id="rounds">${[5, 10, 50, 100].map(unit => `<button type="button" class="round" data-round="${unit}" aria-pressed="false"><span class="round-value"></span><span class="caption">multiplu de ${unit}</span></button>`).join('')}</div><div class="section-label">Sau alege o singură contribuție</div><div class="stack">${contributions.map(e => `<button type="button" class="choice" data-target="${esc(e.expenseId)}" aria-pressed="false"><span>${esc(e.title)}<span class="caption" style="display:block">${e.dueDate ? `Termen ${dateText(e.dueDate)}` : 'Fără termen'}</span></span><span class="choice-money">${money(e.remainingMinor)}</span></button>`).join('')}</div>` : '<div class="empty"><h2>Contribuțiile sunt achitate.</h2><p>Poți primi bani în avans. Introdu suma și alege „Păstrez în avans”.</p></div>'}
+  ${c.dueMinor ? `<button type="button" class="choice total-choice" data-target="all" aria-pressed="true"><span>Total de achitat</span><span class="total-number">${money(c.dueMinor)}</span></button><div class="section-label" id="round-label">Alege rapid suma primită</div><div class="rounds" id="rounds">${[5, 10, 50, 100].map(unit => `<button type="button" class="round" data-round="${unit}" aria-pressed="false"><span class="round-value"></span><span class="caption">multiplu de ${unit}</span></button>`).join('')}</div><div class="section-label">Sau alege o singură contribuție</div><div class="stack">${contributionChoices}</div>` : '<div class="empty"><h2>Nu mai sunt sume de colectat.</h2><p>Poți primi bani în avans. Introdu suma și alege „Păstrez în avans”.</p></div>'}
   <div class="summary" id="collection-summary" aria-live="polite" aria-atomic="true"></div>
   <details id="allocation-details" ${draft.manual ? 'open' : ''}><summary>Ajustează repartizarea</summary><label class="check"><input type="checkbox" id="manual" ${draft.manual ? 'checked' : ''} data-write-control>Aleg manual sumele pentru cheltuieli</label>${contributions.map(e => `<label class="allocation"><span>${esc(e.title)}<small style="display:block">De achitat ${money(e.remainingMinor)}</small></span><input inputmode="decimal" aria-label="${esc(e.title)}: repartizare în lei" data-allocation="${esc(e.expenseId)}" value="0" data-write-control></label>`).join('')}<p class="caption">Repartizarea automată acoperă mai întâi termenele cele mai apropiate. O cheltuială selectată primește doar suma datorată; diferența rămâne rest sau avans.</p></details>
   <details><summary>Data, ora și comentarii</summary><label>Data și ora<input id="collection-date" type="datetime-local" value="${esc(draft.occurredAt)}" required data-write-control></label><label>Comentarii<textarea id="collection-comment" maxlength="2000" data-write-control>${esc(draft.comment)}</textarea></label></details></div>
@@ -347,12 +357,14 @@ function updateCollection() {
 function renderExpenses() {
   const expenses = [...state.expenses].reverse();
   const expenseCards = expenses.map(e => {
-    const progress = e.totalMinor > 0 ? Math.min(100, Math.max(0, e.collectedMinor / e.totalMinor * 100)) : 0;
+    const coveredTotal = e.collectedMinor + (e.coveredMinor || 0);
+    const progress = e.totalMinor > 0 ? Math.min(100, Math.max(0, coveredTotal / e.totalMinor * 100)) : 0;
     return `<button class="card card-button expense-card ${e.cancelled ? 'transaction-muted' : ''}" data-expense="${esc(e.id)}">
       <div class="row"><h3>${esc(e.title)}</h3>${e.cancelled ? '<span class="badge">Anulată</span>' : ''}</div>
       <div class="caption">${e.dueDate ? `Termen ${dateText(e.dueDate)}` : 'Fără termen de plată'}</div>
-      <div class="expense-totals">Încasat <strong class="amount">${money(e.collectedMinor)}</strong> din <span class="amount">${money(e.totalMinor)}</span></div>
+      <div class="expense-totals">Acoperit <strong class="amount">${money(coveredTotal)}</strong> din <span class="amount">${money(e.totalMinor)}</span></div>
       ${e.cancelled ? '' : `<div class="expense-progress" aria-hidden="true"><span class="expense-progress-fill" style="width:${progress}%"></span></div>`}
+      ${e.coveredMinor ? `<div class="caption">Din fond: <span class="amount">${money(e.coveredMinor)}</span> · din contribuții: <span class="amount">${money(e.collectedMinor)}</span></div>` : ''}
       ${e.adjustedMinor ? `<div class="caption">Ajustări de rotunjire: <span class="amount">${money(e.adjustedMinor)}</span></div>` : ''}
       <div class="caption">Plătit mai departe: <span class="amount">${money(e.paidOutMinor)}</span></div>
       <div class="caption">${typeLabels[e.type]} · ${e.participantCount ?? e.contributions.length} participanți</div>
@@ -374,7 +386,7 @@ function renderLedger() {
     .sort((a, b) => b.occurredAt.localeCompare(a.occurredAt));
   const advances = openAdvances.length ? `<h2>Sume de restituit</h2><div class="stack">${openAdvances.map(item => {
     const expense = state.expenses.find(entry => entry.id === item.expenseId);
-    return `<article class="card"><div class="row"><strong>${esc(item.person)}</strong><span class="amount">${money(item.outstandingMinor)}</span></div><div class="caption">Avansat ${money(item.amountMinor)} · restituit ${money(item.repaidMinor)}${expense ? ` · ${esc(expense.title)}` : ''}</div>${canWrite() ? `<button type="button" class="primary wide" style="margin-top:14px" data-action="repay-advance" data-id="${esc(item.id)}">Restituie</button>` : ''}</article>`;
+    return `<article class="card"><div class="row"><strong>${esc(item.person)}</strong><span class="amount">${money(item.outstandingMinor)}</span></div><div class="caption">Avansat ${money(item.amountMinor)} · restituit ${money(item.repaidMinor)}${item.waivedMinor ? ` · acoperit din fond ${money(item.waivedMinor)}` : ''}${expense ? ` · ${esc(expense.title)}` : ''}</div>${canWrite() ? `<button type="button" class="primary wide" style="margin-top:14px" data-action="repay-advance" data-id="${esc(item.id)}">Restituie</button>` : ''}</article>`;
   }).join('')}</div>` : '';
   $('#main').innerHTML = `${pageHeading('Registrul clasei', 'O imagine clară a banilor din fond.', 'ledger')}
     <div class="ledger-layout"><section class="ledger-overview" aria-label="Situația fondului">
@@ -382,7 +394,7 @@ function renderLedger() {
         <div class="balance-grid"><div><span class="caption">De restituit pentru sume avansate</span><span class="amount">${money(s.totalAdvanceOutstandingMinor || 0)}</span></div><div><span class="caption">Sold după restituirea sumelor avansate</span><span class="amount">${money(s.netBalanceMinor ?? s.balanceMinor)}</span></div></div>
         <p class="caption">Soldul include ${money(s.totalCreditMinor)} primiți în avans de la copii.</p>
       </div>
-      <div class="summary"><dl><div><dt>De încasat de la copii</dt><dd>${money(s.totalDueMinor)}</dd></div><div><dt>Încasări de la copii</dt><dd>${money(s.totalReceivedMinor)}</dd></div><div><dt>Bani ieșiți</dt><dd>${money(s.totalPaidMinor)}</dd></div><div><dt>Sold inițial</dt><dd>${money(state.settings.openingBalanceMinor)}</dd></div></dl></div>
+      <div class="summary"><dl><div><dt>De încasat de la copii</dt><dd>${money(s.totalDueMinor)}</dd></div><div><dt>Încasări de la copii</dt><dd>${money(s.totalReceivedMinor)}</dd></div><div><dt>Acoperit din fond</dt><dd>${money(s.totalCoveredMinor || 0)}</dd></div><div><dt>Bani ieșiți</dt><dd>${money(s.totalPaidMinor)}</dd></div><div><dt>Sold inițial</dt><dd>${money(state.settings.openingBalanceMinor)}</dd></div></dl></div>
       ${canWrite() ? '<div class="toolbar"><button class="primary" data-action="payment">+ Bani dați mai departe</button><button data-action="fund-advance">+ Sumă avansată fondului</button></div>' : ''}
       ${advances}
       <div class="toolbar"><button data-action="refresh">Actualizează</button>${canWrite() ? `<a href="${esc(scopedUrl('/api/export'))}" download="casierul-clasei.json">Export JSON</a>` : ''}</div>
@@ -446,7 +458,7 @@ function updateChildReportOptions() {
   const alphabetical = (a, b) => a.id === b.id ? 0 : sortChildren([a, b])[0] === a ? -1 : 1;
   const children = [...state.children].filter(item => filter === 'all' || (filter === 'due' ? item.dueMinor > 0 : item.dueMinor === 0))
     .sort((a, b) => (filter === 'due' ? b.dueMinor - a.dueMinor : 0) || alphabetical(a, b));
-  select.innerHTML = children.map(item => `<option value="${esc(item.id)}">${esc(name(item))} · ${item.dueMinor ? `De achitat ${money(item.dueMinor)}` : `Achitat${item.creditMinor ? ` · Avans ${money(item.creditMinor)}` : ''}`}</option>`).join('');
+  select.innerHTML = children.map(item => `<option value="${esc(item.id)}">${esc(name(item))} · ${item.dueMinor ? `De achitat ${money(item.dueMinor)}` : `Fără sume de achitat${item.creditMinor ? ` · Avans ${money(item.creditMinor)}` : ''}`}</option>`).join('');
   if (children.some(item => item.id === previous)) select.value = previous;
   select.disabled = !children.length;
   $('#modal-submit').disabled = saving || !children.length;
@@ -710,14 +722,16 @@ function expenseModal(expense = null) {
   const participants = sortChildren(state.children.filter(c => c.active || existing.has(c.id)));
   const type = expense?.type || 'fixed';
   const formulaLockedAttribute = linked ? 'disabled data-locked' : '';
-  const splitParticipantsEditable = type === 'split' && expense?.collectedMinor === 0;
+  const splitParticipantsEditable = type === 'split' && expense?.collectedMinor === 0
+    && (expense?.adjustedMinor || 0) === 0 && (expense?.coveredMinor || 0) === 0;
   const allParticipantsLocked = linked && !splitParticipantsEditable;
   const typeOptions = [['fixed', 'Sumă fixă pentru fiecare copil'], ['split', 'Total împărțit între participanți'], ['quantity', 'Cantitate pentru fiecare copil × preț']]
     .map(([value, label]) => `<option value="${value}" ${type === value ? 'selected' : ''}>${label}</option>`).join('');
   const participantFields = participants.map(c => {
     const contribution = existing.get(c.id), checked = expense ? !!contribution : c.active;
-    const paidMinor = c.contributions.find(item => item.expenseId === expense?.id)?.paidMinor ?? 0;
-    const participantLocked = linked && (paidMinor > 0 || (type === 'split' && !splitParticipantsEditable));
+    const previous = c.contributions.find(item => item.expenseId === expense?.id);
+    const settledMinor = (previous?.paidMinor ?? 0) + (previous?.adjustedMinor ?? 0) + (previous?.coveredMinor ?? 0);
+    const participantLocked = linked && (settledMinor > 0 || (type === 'split' && !splitParticipantsEditable));
     const participantLockedAttribute = participantLocked ? 'disabled data-locked' : '';
     const quantityLocked = linked && type !== 'quantity' ? formulaLockedAttribute : '';
     return `<div class="participant"><label class="check"><input type="checkbox" data-participant="${esc(c.id)}" ${checked ? 'checked' : ''} ${participantLockedAttribute}>${esc(name(c))}${c.active ? '' : ' · Arhivat'}</label><input type="number" data-quantity="${esc(c.id)}" min="1" max="10000" step="1" value="${contribution?.quantity || 1}" aria-label="Cantitate pentru ${esc(name(c))}" ${quantityLocked} hidden></div>`;
@@ -772,7 +786,7 @@ function expenseDetails(id) {
   const financing = (state.advances || []).filter(item => !item.reversed && item.expenseId === e.id);
   const financedMinor = financing.reduce((total, item) => total + item.amountMinor, 0);
   const outstandingMinor = financing.reduce((total, item) => total + item.outstandingMinor, 0);
-  openModal('expense-detail', e.title, `<p class="caption">${typeLabels[e.type]} · ${e.cancelled ? 'Anulată' : `${e.participantCount ?? e.contributions.length} participanți`}</p><div class="summary"><dl><div><dt>Total contribuții</dt><dd>${money(e.totalMinor)}</dd></div><div><dt>Încasat</dt><dd>${money(e.collectedMinor)}</dd></div>${e.adjustedMinor ? `<div><dt>Ajustări de rotunjire</dt><dd>${money(e.adjustedMinor)}</dd></div>` : ''}<div><dt>Bani dați mai departe</dt><dd>${money(e.paidOutMinor)}</dd></div>${financing.length ? `<div><dt>Avansat temporar fondului</dt><dd>${money(financedMinor)}</dd></div><div><dt>De restituit</dt><dd>${money(outstandingMinor)}</dd></div>` : ''}</dl></div><p>${e.dueDate ? `Termen: ${dateText(e.dueDate)}` : 'Fără termen de plată'}</p><p class="caption">Data cheltuielii: ${dateText(e.occurredAt)}</p>${e.comment ? `<p>${esc(e.comment)}</p>` : ''}<div class="preview-list">${sortChildren(state.children.filter(c => e.contributions.some(p => p.childId === c.id))).map(c => { const p = e.contributions.find(p => p.childId === c.id); const contribution = c.contributions.find(p => p.expenseId === e.id); return `<div class="row"><span>${esc(name(c))}${e.type === 'quantity' ? ` × ${p.quantity}` : ''}<small style="display:block">De achitat ${money(contribution?.remainingMinor || 0)}${contribution?.adjustedMinor ? ` · Ajustare ${money(contribution.adjustedMinor)}` : ''}</small></span><span class="amount">${money(p.amountMinor)}</span></div>`; }).join('')}</div>${attachmentSection('expense', e.id)}${e.cancelled || !canWrite() ? '' : `<div class="toolbar"><button type="button" data-action="edit-expense" data-id="${esc(e.id)}">Editează</button><button type="button" data-action="expense-payment" data-id="${esc(e.id)}">Înregistrează bani dați</button></div>${!e.collectedMinor && !e.adjustedMinor && !e.paidOutMinor && !financing.length ? `<button type="button" class="danger" data-action="cancel-expense" data-id="${esc(e.id)}">Anulează cheltuiala</button><p class="caption">Anularea este posibilă doar dacă nu mai există încasări sau plăți legate de cheltuială.</p>` : ''}`}`, null);
+  openModal('expense-detail', e.title, `<p class="caption">${typeLabels[e.type]} · ${e.cancelled ? 'Anulată' : `${e.participantCount ?? e.contributions.length} participanți`}</p><div class="summary"><dl><div><dt>Total contribuții</dt><dd>${money(e.totalMinor)}</dd></div><div><dt>Încasat de la părinți</dt><dd>${money(e.collectedMinor)}</dd></div>${e.coveredMinor ? `<div><dt>Acoperit din fond</dt><dd>${money(e.coveredMinor)}</dd></div>` : ''}${e.adjustedMinor ? `<div><dt>Ajustări de rotunjire</dt><dd>${money(e.adjustedMinor)}</dd></div>` : ''}<div><dt>Bani dați mai departe</dt><dd>${money(e.paidOutMinor)}</dd></div>${financing.length ? `<div><dt>Avansat temporar fondului</dt><dd>${money(financedMinor)}</dd></div><div><dt>De restituit</dt><dd>${money(outstandingMinor)}</dd></div>` : ''}</dl></div><p>${e.dueDate ? `Termen: ${dateText(e.dueDate)}` : 'Fără termen de plată'}</p><p class="caption">Data cheltuielii: ${dateText(e.occurredAt)}</p>${e.comment ? `<p>${esc(e.comment)}</p>` : ''}<div class="preview-list">${sortChildren(state.children.filter(c => e.contributions.some(p => p.childId === c.id))).map(c => { const p = e.contributions.find(p => p.childId === c.id); const contribution = c.contributions.find(p => p.expenseId === e.id); return `<div class="row"><span>${esc(name(c))}${e.type === 'quantity' ? ` × ${p.quantity}` : ''}<small style="display:block">De achitat ${money(contribution?.remainingMinor || 0)}${contribution?.coveredMinor ? ` · Acoperit din fond ${money(contribution.coveredMinor)}` : ''}${contribution?.adjustedMinor ? ` · Ajustare ${money(contribution.adjustedMinor)}` : ''}</small></span><span class="amount">${money(p.amountMinor)}</span></div>`; }).join('')}</div>${attachmentSection('expense', e.id)}${e.cancelled || !canWrite() ? '' : `<div class="toolbar"><button type="button" data-action="edit-expense" data-id="${esc(e.id)}">Editează</button><button type="button" data-action="expense-payment" data-id="${esc(e.id)}">Înregistrează bani dați</button></div>${!e.collectedMinor && !e.coveredMinor && !e.adjustedMinor && !e.paidOutMinor && !financing.length ? `<button type="button" class="danger" data-action="cancel-expense" data-id="${esc(e.id)}">Anulează cheltuiala</button><p class="caption">Anularea este posibilă doar dacă nu mai există încasări sau plăți legate de cheltuială.</p>` : ''}`}`, null);
 }
 function paymentModal(expenseId = '') {
   openModal('payment', 'Bani dați mai departe', `${moneyField('Suma dată (lei)', 'amount')}${field('Cui ai dat banii', 'destination', '', 'required maxlength="200" placeholder="De exemplu: dirigintă, profesoară, fotograf"')}<label>Cheltuială asociată (opțional)<select name="expenseId"><option value="">Fără asociere</option>${state.expenses.filter(e => !e.cancelled).map(e => `<option value="${esc(e.id)}" ${e.id === expenseId ? 'selected' : ''}>${esc(e.title)}</option>`).join('')}</select></label>${timestampField()}${comments()}<p class="caption">Suma scade din soldul fondului. Contribuțiile copiilor rămân neschimbate.</p>`, 'Înregistrează');
@@ -784,6 +798,47 @@ function repayAdvanceModal(id) {
   const advance = (state.advances || []).find(item => item.id === id && !item.reversed);
   if (!advance || advance.outstandingMinor <= 0) return;
   openModal('repay-advance', 'Restituie suma avansată', `<p><strong>${esc(advance.person)}</strong></p><div class="summary"><dl><div><dt>Sumă avansată</dt><dd>${money(advance.amountMinor)}</dd></div><div><dt>De restituit acum</dt><dd>${money(advance.outstandingMinor)}</dd></div></dl></div>${moneyField('Suma restituită (lei)', 'amount', decimal(advance.outstandingMinor))}${timestampField()}${comments()}<p class="caption">Poți face și o restituire parțială. Numerarul și datoria clasei scad cu aceeași sumă.</p>`, 'Înregistrează restituirea', { advanceId: advance.id, outstandingMinor: advance.outstandingMinor });
+}
+function stopCollectionModal(expenseId) {
+  const c = child();
+  const contribution = c.contributions.find(item => item.expenseId === expenseId && item.remainingMinor > 0);
+  const expense = state.expenses.find(item => item.id === expenseId && !item.cancelled);
+  if (!contribution || !expense) return;
+  const advances = (state.advances || []).filter(item => !item.reversed && item.outstandingMinor > 0
+    && (!item.expenseId || item.expenseId === expense.id))
+    .sort((a, b) => Number(b.expenseId === expense.id) - Number(a.expenseId === expense.id) || b.occurredAt.localeCompare(a.occurredAt));
+  const canRecalculate = expense.type === 'split' && expense.contributions.length > 1
+    && expense.collectedMinor === 0 && (expense.adjustedMinor || 0) === 0 && (expense.coveredMinor || 0) === 0;
+  if (!advances.length && !canRecalculate) {
+    toast('Contribuția poate fi închisă numai dintr-un avans personal disponibil.'); return;
+  }
+  const methodOptions = `${advances.length ? '<option value="waive">Acoperă dintr-o sumă avansată</option>' : ''}${canRecalculate ? '<option value="recalculate">Recalculează pentru ceilalți</option>' : ''}`;
+  const firstAdvance = advances[0];
+  const advanceOptions = advances.map(item => {
+    const linkedExpense = item.expenseId ? state.expenses.find(exp => exp.id === item.expenseId)?.title : 'fără cheltuială asociată';
+    return `<option value="${esc(item.id)}">${esc(item.person)} · ${money(item.outstandingMinor)} · ${esc(linkedExpense || '')}</option>`;
+  }).join('');
+  const remainingParticipants = expense.contributions.filter(item => item.childId !== c.id);
+  const recalculated = canRecalculate ? expensePreview('split', expense.amountMinor, remainingParticipants) : [];
+  const recalculatedValues = [...new Set(recalculated.map(item => item.amountMinor))].map(money).join(' / ');
+  openModal('stop-collection', `Nu mai colectez · ${contribution.title}`,
+    `<p><strong>${esc(name(c))}</strong> · de achitat ${money(contribution.remainingMinor)}</p><label>Cum închizi contribuția?<select name="method">${methodOptions}</select></label>
+    <section id="stop-waiver-fields"><label>Suma avansată<select name="advanceId">${advanceOptions}</select></label>${field('Suma acoperită (lei)', 'amount', firstAdvance ? decimal(Math.min(contribution.remainingMinor, firstAdvance.outstandingMinor)) : '', 'inputmode="decimal" autocomplete="off"')}${timestampField()}${comments()}<div class="summary"><p>Suma se scade din ceea ce fondul trebuie să restituie persoanei care a avansat banii. Numerarul nu se modifică.</p><p class="caption">Poți acoperi integral contribuția sau doar o parte. În rapoarte apare separat ca „Acoperită din fond”.</p></div></section>
+    <section id="stop-recalculate-info"><div class="summary"><strong>${remainingParticipants.length} copii vor rămâne participanți</strong><p>Noua contribuție: ${esc(recalculatedValues || '—')}</p></div><p class="caption">Totalul cheltuielii rămâne ${money(expense.totalMinor)}. Copilul este exclus, iar suma se împarte din nou între ceilalți participanți.</p></section>`,
+    'Confirmă', { childId: c.id, expenseId: expense.id, contributionRemainingMinor: contribution.remainingMinor,
+      advances, canRecalculate });
+  updateStopCollectionModal();
+}
+function updateStopCollectionModal() {
+  if (modal?.type !== 'stop-collection') return;
+  const form = $('#modal-form'), waive = form.elements.method.value === 'waive';
+  $('#stop-waiver-fields').hidden = !waive;
+  $('#stop-recalculate-info').hidden = waive;
+  if (waive) {
+    const advance = modal.advances.find(item => item.id === form.elements.advanceId.value);
+    const maximum = Math.min(modal.contributionRemainingMinor, advance?.outstandingMinor || 0);
+    if (parseMoney(form.elements.amount.value) > maximum) form.elements.amount.value = decimal(maximum);
+  }
 }
 function creditModal() {
   const c = child(), defaults = automaticAllocations(unpaid(c), c.creditMinor);
@@ -804,7 +859,7 @@ function refundModal() {
 }
 function transactionDetails(id) {
   const t = state.transactions.find(t => t.id === id), c = state.children.find(c => c.id === t.childId);
-  const partyLabel = ['fund_advance', 'advance_repayment'].includes(t.type) ? 'Persoană' : 'Destinație';
+  const partyLabel = ['fund_advance', 'advance_repayment', 'advance_waiver'].includes(t.type) ? 'Persoană' : 'Destinație';
   const documents = t.type === 'payment' ? attachmentSection('payment', t.id) : '';
   openModal('transaction-detail', labels[t.type], `<div class="summary"><strong class="total-number">${money(t.amountMinor)}</strong>${t.changeMinor ? `<p>Rest restituit: ${money(t.changeMinor)}</p>` : ''}</div>${c ? `<p>${esc(name(c))}</p>` : ''}${t.destination ? `<p>${partyLabel}: ${esc(t.destination)}</p>` : ''}${t.expenseId ? `<p>Cheltuială: ${esc(state.expenses.find(e => e.id === t.expenseId)?.title || '')}</p>` : ''}<p>Data și ora: ${dateText(t.occurredAt)}</p><p class="caption">Înregistrat: ${dateText(t.createdAt)}${t.actorLabel ? ` · ${esc(t.actorLabel)}` : ''}</p>${t.comment ? `<p>${esc(t.comment)}</p>` : ''}${t.allocations?.length ? `<h3>Repartizare</h3><div class="preview-list">${t.allocations.map(a => `<div class="row"><span>${esc(state.expenses.find(e => e.id === a.expenseId)?.title || 'Cheltuială')}</span><span>${money(a.amountMinor)}</span></div>`).join('')}</div>` : ''}${documents}${t.reversed ? '<p class="caption">Operațiune corectată. Înregistrarea originală rămâne în istoric.</p>' : t.type === 'reversal' ? '<p class="caption">Această înregistrare inversează efectele operațiunii corectate.</p>' : canWrite() ? `<button type="button" class="danger wide" style="margin-top:18px" data-action="reverse" data-id="${esc(t.id)}">Corectează prin anularea operațiunii</button>` : ''}`, null);
 }
@@ -916,6 +971,25 @@ async function submitModal() {
       const amountMinor = positiveMoney(form.elements.amount.value);
       if (amountMinor > modal.outstandingMinor) throw new Error('Suma depășește valoarea rămasă de restituit.');
       body = { amountMinor, ...metadata(form) };
+    }
+    else if (modal.type === 'stop-collection') {
+      if (form.elements.method.value === 'waive') {
+        const advance = modal.advances.find(item => item.id === form.elements.advanceId.value);
+        if (!advance) throw new Error('Alege suma avansată din care acoperi contribuția.');
+        const amountMinor = positiveMoney(form.elements.amount.value);
+        if (amountMinor > modal.contributionRemainingMinor) throw new Error('Suma depășește contribuția rămasă de achitat.');
+        if (amountMinor > advance.outstandingMinor) throw new Error('Suma depășește avansul rămas de restituit.');
+        path = `/api/fund-advances/${encodeURIComponent(advance.id)}/waivers`;
+        body = { childId: modal.childId, expenseId: modal.expenseId, amountMinor, ...metadata(form) };
+      } else {
+        const expense = state.expenses.find(item => item.id === modal.expenseId);
+        if (!expense || !modal.canRecalculate) throw new Error('Cheltuiala nu mai poate fi recalculată.');
+        path = `/api/expenses/${encodeURIComponent(expense.id)}`;
+        body = { title: expense.title, type: expense.type, amountMinor: expense.amountMinor,
+          participants: expense.contributions.filter(item => item.childId !== modal.childId)
+            .map(item => ({ childId: item.childId, ...(expense.type === 'quantity' ? { quantity: item.quantity } : {}) })),
+          occurredAt: expense.occurredAt, dueDate: expense.dueDate, comment: expense.comment };
+      }
     }
     else if (modal.type === 'credit') { path = '/api/credit/apply'; const data = readCredit(); body = { childId: data.childId, allocations: data.allocations, ...metadata(form) }; }
     else if (modal.type === 'refund') {
@@ -1071,6 +1145,7 @@ document.addEventListener('click', async event => {
     case 'attach-document': attachmentModal(button.dataset.entityType, button.dataset.id); break;
     case 'fund-advance': fundAdvanceModal(); break;
     case 'repay-advance': repayAdvanceModal(button.dataset.id); break;
+    case 'stop-collection': stopCollectionModal(button.dataset.id); break;
     case 'apply-credit': creditModal(); break;
     case 'refund': refundModal(); break;
     case 'report-class': reportModal('class'); break;
@@ -1151,6 +1226,7 @@ document.addEventListener('change', async event => {
     input.value = ''; return;
   }
   if (input.name === 'debtFilter') { modalDirty = true; updateChildReportOptions(); return; }
+  if (modal?.type === 'stop-collection' && ['method', 'advanceId'].includes(input.name)) { updateStopCollectionModal(); return; }
   if (input.id === 'show-archived') { showArchived = input.checked; renderRosterList(); }
   if (input.id === 'manual') {
     const result = collectionResult(child(), draft);

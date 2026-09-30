@@ -126,7 +126,7 @@ function assertLayout(result, type) {
   assert.ok(result.pages.length > 0);
   for (const page of result.pages) {
     assert.equal(page.width > page.height, type === 'matrix', `${type}: orientation`);
-    if (type === 'matrix') assert.ok(page.text.includes('Acoperire din contribuții'), 'matrix pages keep a table header instead of an isolated closing note');
+    if (type === 'matrix') assert.ok(page.text.includes('Acoperire totală'), 'matrix pages keep a table header instead of an isolated closing note');
     assert.ok(page.text.includes(`${result.report.code} · pagina ${page.number}/${result.pages.length}`), `${type}: numbered footer on page ${page.number}`);
     const offPage = page.items.filter(item => item.transform[4] < -1 || item.transform[4] + item.width > page.width + 1
       || item.transform[5] < 1 || item.transform[5] + item.height > page.height + 1);
@@ -196,13 +196,13 @@ test('all four PDF reports preserve financial values, privacy, branding and read
       assertMetric(result, 'De restituit pentru sume avansate', money(3000));
       assertMetric(result, 'Sold după restituirea sumelor avansate', money(27845));
       assertMetric(result, 'Total de încasat', money(35750));
-      assertMetric(result, 'Acoperire din contribuții', '45,8%');
+      assertMetric(result, 'Acoperire totală', '45,8%');
     } else if (type === 'expense') {
       assertMetric(result, 'Necesar total', money(12000));
-      assertMetric(result, 'Încasat', money(5500));
+      assertMetric(result, 'Încasat de la părinți', money(5500));
       assertMetric(result, 'Bani dați mai departe', money(2000));
       assertMetric(result, 'De achitat', `3 copii · ${money(6500)}`);
-      assertMetric(result, 'Acoperire din contribuții', '45,8%');
+      assertMetric(result, 'Acoperire totală', '45,8%');
     } else if (type === 'child') {
       assertMetric(result, 'Total de achitat', money(10250));
       assertMetric(result, 'Avans disponibil', money(0));
@@ -241,7 +241,7 @@ test('multipage PDFs keep long titles, comments and histories without clipping o
     }
     if (type === 'class' || type === 'matrix') assert.ok((result.text.match(/(?:<)?\d+(?:,\d+)?%/gu) || []).length >= data.ledger.getState().expenses.length,
       `${type}: coverage remains present across expense rows or repeated matrix headers`);
-    if (type === 'expense') assertText(result, 'Acoperire din contribuții', 'coverage remains present with long titles and comments');
+    if (type === 'expense') assertText(result, 'Acoperire totală', 'coverage remains present with long titles and comments');
   }
 });
 
@@ -286,7 +286,7 @@ test('expense coverage counts allocated contributions, with honest zero, tiny, n
   for (const [index, { id, expected }] of cases.entries()) {
     const result = await inspectPdf({ ...data, primary: id }, 'expense', `coverage-edge-${index}`);
     assertLayout(result, 'expense');
-    assertMetric(result, 'Acoperire din contribuții', expected);
+    assertMetric(result, 'Acoperire totală', expected);
     if (expected !== '100%') assert.equal(result.text.includes('100%'), false, `${expected}: incomplete coverage never says 100%`);
   }
   for (const type of ['class', 'matrix']) {
@@ -295,7 +295,7 @@ test('expense coverage counts allocated contributions, with honest zero, tiny, n
     const percentages = result.text.match(/(?:<)?\d+(?:,\d+)?%/gu) || [];
     assert.deepEqual(percentages.toSorted(), ['45,8%', '25%', '25%', ...cases.map(item => item.expected)].toSorted(),
       `${type}: every expense uses its own allocated contribution total`);
-    if (type === 'matrix') assert.match(result.text, /acoperire.*contribuții/iu, 'matrix legend explains what the percentages measure');
+    if (type === 'matrix') assert.match(result.text, /acoperire totală/iu, 'matrix legend explains what the percentages measure');
   }
 });
 
@@ -310,18 +310,44 @@ test('reports separate rounding adjustments from cash while showing the contribu
 
   const classReport = await inspectPdf(data, 'class', 'rounding-adjustment-class');
   assertMetric(classReport, 'Ajustări de rotunjire', money(14));
-  assertText(classReport, `Încasat ${money(1400)} · Ajustări ${money(14)}`, 'class expense row separates cash and adjustment');
+  assertText(classReport, `Încasat ${money(1400)} · Acoperit din fond ${money(0)} · Ajustări ${money(14)}`, 'class expense row separates cash and adjustment');
   const expenseReport = await inspectPdf({ ...data, primary: expense.id }, 'expense', 'rounding-adjustment-expense');
-  assertMetric(expenseReport, 'Încasat', money(1400));
+  assertMetric(expenseReport, 'Încasat de la părinți', money(1400));
   assertMetric(expenseReport, 'Ajustări de rotunjire', money(14));
   assertMetric(expenseReport, 'De achitat', `0 copii · ${money(0)}`);
-  assertMetric(expenseReport, 'Acoperire din contribuții', '99%');
+  assertMetric(expenseReport, 'Acoperire totală', '99%');
   const childReport = await inspectPdf(data, 'child', 'rounding-adjustment-child');
   assertText(childReport, `Acoperit din bani ${money(1400)} · Ajustare de rotunjire ${money(14)} · De achitat ${money(0)}`,
     'individual report explains the non-cash settlement');
   const matrixReport = await inspectPdf(data, 'matrix', 'rounding-adjustment-matrix');
   assertText(matrixReport, '14,14 / 14,14', 'matrix treats the adjusted contribution as settled');
-  assert.match(matrixReport.text, /ajustările de rotunjire.*numai contribuțiile acoperite din bani/iu);
+  assert.match(matrixReport.text, /ajustările de rotunjire.*banii încasați și acoperirile din fond/iu);
+});
+
+test('reports distinguish a contribution covered from a personal advance from money paid by the parent', async t => {
+  const data = await fixture(t);
+  const advance = data.ledger.getState().advances.find(item => item.expenseId === data.primary && item.outstandingMinor > 0);
+  data.post('fund_advance.waive', { advanceId: advance.id, childId: data.own.id, expenseId: data.primary,
+    amountMinor: 500, comment: 'Contribuția nu se mai colectează' });
+
+  const childReport = await inspectPdf(data, 'child', 'covered-from-fund-child');
+  assertMetric(childReport, 'Total de achitat', money(9750));
+  assertText(childReport, `Acoperit din bani ${money(2500)} · Acoperit din fond ${money(500)} · De achitat ${money(0)}`,
+    'individual report keeps the source of settlement explicit');
+  assertText(childReport, 'Acoperire din fond', 'individual history names the waiver');
+
+  const expenseReport = await inspectPdf(data, 'expense', 'covered-from-fund-expense');
+  assertMetric(expenseReport, 'Încasat de la părinți', money(5500));
+  assertMetric(expenseReport, 'Acoperit din fond', money(500));
+  assertMetric(expenseReport, 'Acoperire totală', '50%');
+  assertMetric(expenseReport, 'De achitat', `2 copii · ${money(6000)}`);
+
+  const classReport = await inspectPdf(data, 'class', 'covered-from-fund-class');
+  assertMetric(classReport, 'Contribuții acoperite din fond', money(500));
+  assertMetric(classReport, 'De restituit pentru sume avansate', money(2500));
+
+  const matrixReport = await inspectPdf(data, 'matrix', 'covered-from-fund-matrix');
+  assertText(matrixReport, '30 / 30', 'matrix treats money plus fund coverage as settled');
 });
 
 test('a zero-total expense has no misleading percentage or non-finite financial text', async t => {

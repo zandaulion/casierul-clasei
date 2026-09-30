@@ -433,7 +433,7 @@ test('temporary fund advances reconcile cash, liability, vendor payment and part
     occurredAt: '2026-09-27T18:00:00+03:00', comment: 'Achitat personal la Decathlon' }).transactionId;
   let state = ledger.getState();
   assert.deepEqual(state.summary, { balanceMinor: 10000, netBalanceMinor: 0, totalReceivedMinor: 0,
-    totalPaidMinor: 0, totalCreditMinor: 0, totalDueMinor: 10000, totalAdjustedMinor: 0, totalAdvancedMinor: 10000,
+    totalPaidMinor: 0, totalCreditMinor: 0, totalDueMinor: 10000, totalAdjustedMinor: 0, totalCoveredMinor: 0, totalAdvancedMinor: 10000,
     totalAdvanceRepaidMinor: 0, totalAdvanceOutstandingMinor: 10000 });
   post('payment.create', { amountMinor: 10000, destination: 'Decathlon', expenseId: equipment,
     occurredAt: '2026-09-27T18:00:00+03:00' });
@@ -453,7 +453,7 @@ test('temporary fund advances reconcile cash, liability, vendor payment and part
   assert.deepEqual(state.advances.find(item => item.id === advance), {
     id: advance, person: 'Casier', expenseId: equipment, occurredAt: '2026-09-27T15:00:00.000Z',
     createdAt: state.advances.find(item => item.id === advance).createdAt, comment: 'Achitat personal la Decathlon',
-    amountMinor: 10000, repaidMinor: 4000, outstandingMinor: 6000, reversed: false,
+    amountMinor: 10000, repaidMinor: 4000, waivedMinor: 0, outstandingMinor: 6000, reversed: false,
   });
   assert.throws(() => post('fund_advance.repay', { advanceId: advance, amountMinor: 6001 }), status(400));
   assert.throws(() => post('transaction.reverse', { transactionId: advance, comment: 'Greșit' }), status(409));
@@ -464,6 +464,40 @@ test('temporary fund advances reconcile cash, liability, vendor payment and part
   assert.equal(state.summary.balanceMinor, 0);
   assert.equal(state.summary.totalAdvanceOutstandingMinor, 0);
   assert.equal(state.summary.netBalanceMinor, 0);
+});
+
+test('an outstanding personal advance can cover an unpaid contribution without moving cash', t => {
+  const { ledger, post, child, expense } = fixture(t);
+  const ana = child('Ana', 'Avram');
+  const david = child('David', 'Bălan');
+  const equipment = expense([ana, david], 1414, 'fixed', { title: 'Echipament sportiv' });
+  const advance = post('fund_advance.create', { amountMinor: 2828, person: 'Casier', expenseId: equipment }).transactionId;
+  post('payment.create', { amountMinor: 2828, destination: 'Decathlon', expenseId: equipment });
+
+  const waiver = post('fund_advance.waive', { advanceId: advance, childId: ana, expenseId: equipment,
+    amountMinor: 1414, comment: 'Nu se mai colectează această contribuție' }).transactionId;
+  let state = ledger.getState();
+  const anaContribution = state.children.find(item => item.id === ana).contributions.find(item => item.expenseId === equipment);
+  assert.deepEqual({ paidMinor: anaContribution.paidMinor, coveredMinor: anaContribution.coveredMinor,
+    remainingMinor: anaContribution.remainingMinor }, { paidMinor: 0, coveredMinor: 1414, remainingMinor: 0 });
+  assert.equal(state.children.find(item => item.id === david).dueMinor, 1414);
+  assert.equal(state.expenses.find(item => item.id === equipment).collectedMinor, 0);
+  assert.equal(state.expenses.find(item => item.id === equipment).coveredMinor, 1414);
+  assert.equal(state.summary.balanceMinor, 0);
+  assert.equal(state.summary.totalCoveredMinor, 1414);
+  assert.equal(state.summary.totalAdvanceOutstandingMinor, 1414);
+  assert.equal(state.summary.netBalanceMinor, -1414);
+  assert.equal(state.advances[0].waivedMinor, 1414);
+  assert.throws(() => post('fund_advance.repay', { advanceId: advance, amountMinor: 1415 }), status(400));
+  assert.throws(() => post('fund_advance.waive', { advanceId: advance, childId: david, expenseId: equipment, amountMinor: 1415 }), status(400));
+  assert.throws(() => post('transaction.reverse', { transactionId: advance, comment: 'Avans greșit' }), status(409));
+
+  post('transaction.reverse', { transactionId: waiver, comment: 'Acoperire introdusă greșit' });
+  state = ledger.getState();
+  assert.equal(state.children.find(item => item.id === ana).dueMinor, 1414);
+  assert.equal(state.expenses.find(item => item.id === equipment).coveredMinor, 0);
+  assert.equal(state.summary.totalCoveredMinor, 0);
+  assert.equal(state.summary.totalAdvanceOutstandingMinor, 2828);
 });
 
 test('documents attach immutably to expenses and payments with scoped metadata and idempotency', t => {
@@ -566,7 +600,7 @@ test('existing transaction tables migrate without changing financial history', t
   assert.match(check.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'transactions'").get().sql, /advance_id/u);
 });
 
-test('deployed transaction schema gains rounding adjustments without losing advances', t => {
+test('deployed transaction schema gains newer settlement types without losing advances', t => {
   const directory = mkdtempSync(join(tmpdir(), 'casierul-current-migration-'));
   const path = join(directory, 'ledger.sqlite');
   t.after(() => rmSync(directory, { recursive: true, force: true }));
@@ -595,6 +629,7 @@ test('deployed transaction schema gains rounding adjustments without losing adva
   const check = new DatabaseSync(path);
   t.after(() => check.close());
   assert.match(check.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'transactions'").get().sql, /rounding_adjustment/u);
+  assert.match(check.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'transactions'").get().sql, /advance_waiver/u);
   assert.deepEqual(check.prepare('PRAGMA foreign_key_check').all(), []);
 });
 

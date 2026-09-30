@@ -25,10 +25,10 @@ const sharedAttachments = (state, entityType, entityId) => (state.attachments ||
 
 function expenseCoverage(expense) {
   if (expense.totalMinor <= 0) return { ratio: 0, label: 'Fără sumă de acoperit', shortLabel: '—' };
-  const collected = Math.max(0, Math.min(expense.totalMinor, expense.collectedMinor));
-  const ratio = collected / expense.totalMinor;
+  const covered = Math.max(0, Math.min(expense.totalMinor, expense.collectedMinor + (expense.coveredMinor ?? 0)));
+  const ratio = covered / expense.totalMinor;
   // Keep 100% reserved for a fully covered expense, even with just one ban due.
-  const percent = Number(BigInt(collected) * 1000n / BigInt(expense.totalMinor)) / 10;
+  const percent = Number(BigInt(covered) * 1000n / BigInt(expense.totalMinor)) / 10;
   const label = ratio > 0 && percent === 0 ? '<0,1%' : `${coverageFormat.format(percent)}%`;
   return { ratio, label, shortLabel: label };
 }
@@ -121,7 +121,7 @@ export async function renderReportPdf(report, state, branding = {}) {
   const coverage = (expense, left = doc.page.margins.left, availableWidth = width) => {
     ensure(coverageHeight); const y = doc.y;
     const { ratio, label } = expenseCoverage(expense);
-    doc.font('Regular').fontSize(8).fillColor(muted).text('Acoperire din contribuții', left, y, { width: availableWidth * .55 });
+    doc.font('Regular').fontSize(8).fillColor(muted).text('Acoperire totală', left, y, { width: availableWidth * .55 });
     doc.font('Bold').fontSize(8.5).fillColor(ratio === 1 ? green : dark).text(label, left + availableWidth * .55, y,
       { width: availableWidth * .45, align: 'right' });
     drawCoverageBar(left, y + 15, availableWidth, 6, ratio);
@@ -187,12 +187,12 @@ export async function renderReportPdf(report, state, branding = {}) {
     const groups = Array.from({ length: Math.ceil(expenses.length / columnsPerGroup) }, (_, index) => expenses.slice(index * columnsPerGroup, (index + 1) * columnsPerGroup));
     const colors = { paid: '#d9f0e1', partial: '#fff0bf', unpaid: '#f7d6d2', none: '#eeeeea' };
     const rowHeight = 23, headerHeight = 68;
-    const closingNote = `Raport nominal pentru verificare internă, generat din registrul „Casierul clasei”. Sumele sunt în lei. Total de plată arată suma rămasă de achitat de fiecare copil pentru toate contribuțiile active. Celulele arată contribuțiile închise, inclusiv ajustările de rotunjire; barele și procentele arată numai contribuțiile acoperite din bani încasați.${expenses.some(expense => expense.totalMinor === 0) ? ' „—” în antet: fără sumă de acoperit.' : ''}`;
+    const closingNote = `Raport nominal pentru verificare internă, generat din registrul „Casierul clasei”. Sumele sunt în lei. Total de plată arată suma rămasă de achitat de fiecare copil pentru toate contribuțiile active. Celulele includ banii încasați, sumele acoperite din fond și ajustările de rotunjire; barele și procentele includ banii încasați și acoperirile din fond.${expenses.some(expense => expense.totalMinor === 0) ? ' „—” în antet: fără sumă de acoperit.' : ''}`;
     doc.font('Regular').fontSize(8.5);
     const closingHeight = doc.heightOfString(closingNote, { width, lineGap: 2 }) + 16;
     const compactMoney = minor => compactMoneyFormat.format(minor / 100);
     const legend = () => {
-      const entries = [['Achitat', colors.paid], ['Parțial', colors.partial], ['Neachitat', colors.unpaid], ['Nu participă', colors.none]];
+      const entries = [['Închis', colors.paid], ['Parțial', colors.partial], ['Neachitat', colors.unpaid], ['Nu participă', colors.none]];
       let x = left;
       doc.font('Regular').fontSize(7.5).fillColor(muted).text('Celulă: închis / datorat, în lei', x, doc.y, { lineBreak: false });
       x += 185;
@@ -213,7 +213,7 @@ export async function renderReportPdf(report, state, branding = {}) {
       doc.rect(x, y, nameWidth, headerHeight).fillAndStroke(paper.fill, line);
       doc.font('Bold').fontSize(8).fillColor(dark).text('Copil', x + 5, y + 18, { width: childNameWidth, ellipsis: true, lineBreak: false });
       doc.font('Bold').fontSize(7.2).fillColor(dark).text('Total de\nplată', x + nameWidth - totalWidth - 4, y + 14, { width: totalWidth, align: 'right', lineGap: 1 });
-      doc.font('Regular').fontSize(7).fillColor(muted).text('Acoperire din contribuții', x + 5, y + 48, { width: nameWidth - 10 });
+      doc.font('Regular').fontSize(7).fillColor(muted).text('Acoperire totală', x + 5, y + 48, { width: nameWidth - 10 });
       x += nameWidth;
       for (const expense of group) {
         doc.rect(x, y, cellWidth, headerHeight).fillAndStroke(paper.fill, line);
@@ -245,7 +245,7 @@ export async function renderReportPdf(report, state, branding = {}) {
         doc.font('Bold').fontSize(7.2).fillColor(child.dueMinor ? dark : green).text(`${compactMoney(child.dueMinor)} lei`, left + nameWidth - totalWidth - 4, y + 7, { width: totalWidth, align: 'right', lineBreak: false });
         group.forEach((expense, index) => {
           const contribution = child.contributions.find(entry => entry.expenseId === expense.id);
-          const settledMinor = contribution ? contribution.paidMinor + (contribution.adjustedMinor ?? 0) : 0;
+          const settledMinor = contribution ? contribution.paidMinor + (contribution.coveredMinor ?? 0) + (contribution.adjustedMinor ?? 0) : 0;
           const status = !contribution ? 'none' : contribution.remainingMinor === 0 ? 'paid' : settledMinor > 0 ? 'partial' : 'unpaid';
           const x = left + nameWidth + geometry.cellWidth * index;
           doc.rect(x, y, geometry.cellWidth, rowHeight).fillAndStroke(colors[status], line);
@@ -302,6 +302,7 @@ export async function renderReportPdf(report, state, branding = {}) {
     metric('Sold după restituirea sumelor avansate', money(state.summary.netBalanceMinor ?? state.summary.balanceMinor),
       (state.summary.netBalanceMinor ?? state.summary.balanceMinor) < 0 ? 'negative' : 'info');
     metric('Din sold: avansuri nealocate', money(state.summary.totalCreditMinor));
+    metric('Contribuții acoperite din fond', money(state.summary.totalCoveredMinor ?? 0));
     metric('Ajustări de rotunjire', money(state.summary.totalAdjustedMinor ?? 0));
     metric('Total de încasat', money(state.summary.totalDueMinor), state.summary.totalDueMinor ? 'negative' : 'positive');
     metric('Copii cu sume de achitat', String(state.children.filter(child => child.dueMinor > 0).length), state.summary.totalDueMinor ? 'negative' : 'positive');
@@ -313,7 +314,7 @@ export async function renderReportPdf(report, state, branding = {}) {
     for (const advance of advances) {
       const expense = state.expenses.find(entry => entry.id === advance.expenseId);
       item(advance.person, money(advance.amountMinor),
-        `${dateTimeFormat.format(new Date(advance.occurredAt))} · Restituit ${money(advance.repaidMinor)} · De restituit ${money(advance.outstandingMinor)}${expense ? ` · ${expense.title}` : ''}`,
+        `${dateTimeFormat.format(new Date(advance.occurredAt))} · Restituit ${money(advance.repaidMinor)} · Acoperit din fond ${money(advance.waivedMinor ?? 0)} · De restituit ${money(advance.outstandingMinor)}${expense ? ` · ${expense.title}` : ''}`,
         advance.comment, advance.outstandingMinor ? 'warning' : 'positive');
     }
 
@@ -322,7 +323,7 @@ export async function renderReportPdf(report, state, branding = {}) {
       const due = expenseStatus(state, expense);
       const tone = due.amountMinor === 0 ? 'positive' : expense.collectedMinor > 0 ? 'warning' : 'negative';
       item(expense.title, money(expense.totalMinor),
-        `Încasat ${money(expense.collectedMinor)} · Ajustări ${money(expense.adjustedMinor ?? 0)} · Dat mai departe ${money(expense.paidOutMinor)} · De achitat: ${due.count} copii · ${money(due.amountMinor)} · Documente partajate: ${sharedAttachments(state, 'expense', expense.id).length}`,
+        `Încasat ${money(expense.collectedMinor)} · Acoperit din fond ${money(expense.coveredMinor ?? 0)} · Ajustări ${money(expense.adjustedMinor ?? 0)} · Dat mai departe ${money(expense.paidOutMinor)} · De achitat: ${due.count} copii · ${money(due.amountMinor)} · Documente partajate: ${sharedAttachments(state, 'expense', expense.id).length}`,
         expense.comment, tone, expense);
     }
     const payments = transactions.filter(tx => tx.type === 'payment');
@@ -345,18 +346,19 @@ export async function renderReportPdf(report, state, branding = {}) {
     const due = expenseStatus(state, expense);
     const childContributions = state.children.map(child => child.contributions.find(entry => entry.expenseId === expense.id)).filter(Boolean);
     const fullyPaid = childContributions.filter(entry => entry.remainingMinor === 0).length;
-    const partiallyPaid = childContributions.filter(entry => entry.paidMinor > 0 && entry.remainingMinor > 0).length;
+    const partiallyPaid = childContributions.filter(entry => entry.paidMinor + (entry.coveredMinor ?? 0) > 0 && entry.remainingMinor > 0).length;
     section('Rezumat');
     metric('Necesar total', money(expense.totalMinor));
-    metric('Încasat', money(expense.collectedMinor), expense.collectedMinor >= expense.totalMinor ? 'positive' : expense.collectedMinor ? 'warning' : 'negative');
+    metric('Încasat de la părinți', money(expense.collectedMinor), expense.collectedMinor ? 'positive' : null);
+    metric('Acoperit din fond', money(expense.coveredMinor ?? 0), expense.coveredMinor ? 'info' : null);
     metric('Ajustări de rotunjire', money(expense.adjustedMinor ?? 0), expense.adjustedMinor ? 'info' : null);
     coverage(expense);
     metric('Bani dați mai departe', money(expense.paidOutMinor), expense.paidOutMinor ? 'info' : null);
     const relatedAdvances = (state.advances || []).filter(entry => !entry.reversed && entry.expenseId === expense.id);
     metric('Sume avansate temporar pentru cheltuială', money(sum(relatedAdvances.map(entry => entry.amountMinor))), relatedAdvances.length ? 'warning' : null);
     metric('Participanți', String(expense.contributions.length));
-    metric('Contribuții achitate integral', String(fullyPaid), 'positive');
-    metric('Contribuții achitate parțial', String(partiallyPaid), partiallyPaid ? 'warning' : null);
+    metric('Contribuții închise integral', String(fullyPaid), 'positive');
+    metric('Contribuții acoperite parțial', String(partiallyPaid), partiallyPaid ? 'warning' : null);
     metric('De achitat', `${due.count} copii · ${money(due.amountMinor)}`, due.amountMinor ? 'negative' : 'positive');
     if (expense.dueDate) metric('Termen', dateFormat.format(new Date(`${expense.dueDate}T12:00:00Z`)));
     if (expense.comment) note(`Comentariu: ${expense.comment}`);
@@ -374,7 +376,7 @@ export async function renderReportPdf(report, state, branding = {}) {
     if (relatedAdvances.length) {
       section('Finanțare temporară');
       for (const advance of relatedAdvances) item(advance.person, money(advance.amountMinor),
-        `${dateTimeFormat.format(new Date(advance.occurredAt))} · Restituit ${money(advance.repaidMinor)} · De restituit ${money(advance.outstandingMinor)}`,
+        `${dateTimeFormat.format(new Date(advance.occurredAt))} · Restituit ${money(advance.repaidMinor)} · Acoperit din fond ${money(advance.waivedMinor ?? 0)} · De restituit ${money(advance.outstandingMinor)}`,
         advance.comment, advance.outstandingMinor ? 'warning' : 'positive');
     }
   }
@@ -387,13 +389,14 @@ export async function renderReportPdf(report, state, branding = {}) {
     section('Contribuții');
     if (!child.contributions.length) note('Copilul nu are contribuții înregistrate.');
     for (const contribution of child.contributions) item(contribution.title, money(contribution.amountMinor),
-      `Acoperit din bani ${money(contribution.paidMinor)}${contribution.adjustedMinor ? ` · Ajustare de rotunjire ${money(contribution.adjustedMinor)}` : ''} · De achitat ${money(contribution.remainingMinor)}${contribution.dueDate ? ` · Termen ${dateFormat.format(new Date(`${contribution.dueDate}T12:00:00Z`))}` : ''}`, '',
-      contribution.remainingMinor === 0 ? 'positive' : contribution.paidMinor ? 'warning' : 'negative');
+      `Acoperit din bani ${money(contribution.paidMinor)}${contribution.coveredMinor ? ` · Acoperit din fond ${money(contribution.coveredMinor)}` : ''}${contribution.adjustedMinor ? ` · Ajustare de rotunjire ${money(contribution.adjustedMinor)}` : ''} · De achitat ${money(contribution.remainingMinor)}${contribution.dueDate ? ` · Termen ${dateFormat.format(new Date(`${contribution.dueDate}T12:00:00Z`))}` : ''}`, '',
+      contribution.remainingMinor === 0 ? 'positive' : contribution.paidMinor + (contribution.coveredMinor ?? 0) ? 'warning' : 'negative');
     const history = state.transactions.filter(tx => tx.childId === child.id);
     section('Istoric individual');
     if (!history.length) note('Nu există operațiuni pentru acest copil.');
     for (const tx of history) {
-      const label = { collection: 'Încasare', credit_apply: 'Avans repartizat', rounding_adjustment: 'Ajustare de rotunjire', refund: 'Avans restituit', reversal: 'Corecție' }[tx.type] || tx.type;
+      const label = { collection: 'Încasare', credit_apply: 'Avans repartizat', rounding_adjustment: 'Ajustare de rotunjire',
+        advance_waiver: 'Acoperire din fond', refund: 'Avans restituit', reversal: 'Corecție' }[tx.type] || tx.type;
       const retained = tx.type === 'collection' ? tx.amountMinor - tx.changeMinor : tx.amountMinor;
       const allocationText = tx.allocations.map(allocation => {
         const expense = state.expenses.find(entry => entry.id === allocation.expenseId);
@@ -401,7 +404,7 @@ export async function renderReportPdf(report, state, branding = {}) {
       }).join(' · ');
       item(`${label}${tx.reversed ? ' · corectată' : ''}`, money(retained),
         `${dateTimeFormat.format(new Date(tx.occurredAt))}${tx.changeMinor ? ` · Rest returnat ${money(tx.changeMinor)}` : ''}${allocationText ? ` · ${allocationText}` : ''}`, tx.comment,
-        tx.reversed || tx.type === 'reversal' ? 'correction' : tx.type === 'collection' ? 'positive' : ['credit_apply', 'rounding_adjustment'].includes(tx.type) ? 'info' : 'warning');
+        tx.reversed || tx.type === 'reversal' ? 'correction' : tx.type === 'collection' ? 'positive' : ['credit_apply', 'rounding_adjustment', 'advance_waiver'].includes(tx.type) ? 'info' : 'warning');
     }
   }
 

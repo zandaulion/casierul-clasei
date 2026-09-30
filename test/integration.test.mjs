@@ -127,6 +127,14 @@ test('invited device manages a persisted class ledger without exposing admin or 
   assert.equal(state.summary.balanceMinor, 1000);
   assert.equal(state.children.find(child => child.id === anaId).creditMinor, 0);
   assert.equal(state.children.find(child => child.id === anaId).contributions.find(c => c.expenseId === booksId).remainingMinor, 6000);
+  const personalAdvance = await mutate('/api/fund-advances', { amountMinor: 1000, person: 'Casier test', expenseId: booksId });
+  const davidId = state.children.find(child => child.firstName === 'David').id;
+  await mutate(`/api/fund-advances/${personalAdvance.transactionId}/waivers`, {
+    childId: davidId, expenseId: booksId, amountMinor: 500, comment: 'Nu se mai colectează integral contribuția',
+  });
+  assert.equal(state.summary.balanceMinor, 2000, 'covering from an existing advance does not move cash again');
+  assert.equal(state.summary.totalAdvanceOutstandingMinor, 500);
+  assert.equal(state.children.find(child => child.id === davidId).contributions.find(c => c.expenseId === booksId).coveredMinor, 500);
   const snapshot = await json(origin() + '/api/export', { headers });
   assert.equal(snapshot.status, 200);
   assert.match(snapshot.headers.get('content-disposition'), /attachment/);

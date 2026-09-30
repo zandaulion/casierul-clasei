@@ -187,6 +187,7 @@ const BUSINESS_ROUTES = [
   [/^\/api\/payments$/u, 'payment.create', ['amountMinor', 'destination', 'expenseId', 'occurredAt', 'comment']],
   [/^\/api\/fund-advances$/u, 'fund_advance.create', ['amountMinor', 'person', 'expenseId', 'occurredAt', 'comment']],
   [/^\/api\/fund-advances\/([A-Za-z0-9_-]{1,100})\/repayments$/u, 'fund_advance.repay', ['amountMinor', 'occurredAt', 'comment'], 'advanceId'],
+  [/^\/api\/fund-advances\/([A-Za-z0-9_-]{1,100})\/waivers$/u, 'fund_advance.waive', ['childId', 'expenseId', 'amountMinor', 'occurredAt', 'comment'], 'advanceId'],
   [/^\/api\/transactions\/([A-Za-z0-9_-]{1,100})\/reverse$/u, 'transaction.reverse', ['comment'], 'transactionId'],
 ];
 
