@@ -111,7 +111,7 @@ const simpleHelpFlows = {
     ['Configurezi contactele și plata', 'Numerele copilului, Revolut.me, beneficiar și IBAN.'],
     ['Deschizi reminderul', 'Mesajul include situația copilului și detaliile de plată.'],
     ['Verifici mesajul', 'Aplicația nu îl trimite și nu pretinde că a fost livrat.'],
-    ['Alegi ce partajezi', 'Doar mesajul sau mesajul împreună cu raportul individual.'],
+    ['Alegi ce partajezi', 'Doar mesajul sau mesajul copiat împreună cu raportul individual.'],
     ['Alegi conversația', 'Contact direct pentru copil sau selectorul telefonului.'],
     ['Apeși Trimite în WhatsApp', 'Expedierea rămâne sub controlul tău.'],
   ] },
@@ -468,7 +468,7 @@ function contactPanel(c) {
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
   const report = latestReport?.stateRevision === state.revision ? latestReport : null;
   const reportAction = report
-    ? `<div class="child-report-option"><div><strong>Mesaj și raport individual</strong><span class="caption">${esc(report.code)} · emis ${dateText(report.createdAt)}. Alege dacă partajezi doar mesajul sau mesajul împreună cu PDF-ul.</span></div><div class="report-actions"><button type="button" data-action="share-child-text" data-id="${esc(c.id)}">Doar mesajul</button><button type="button" class="primary" data-action="share-child-report" data-id="${esc(report.id)}">Mesajul + PDF</button><button type="button" data-action="create-child-report">Generează unul actualizat</button></div></div>`
+    ? `<div class="child-report-option"><div><strong>Mesaj și raport individual</strong><span class="caption">${esc(report.code)} · emis ${dateText(report.createdAt)}. Pentru PDF, mesajul se copiază automat; dacă WhatsApp nu îl atașează, îl poți lipi în câmpul mesajului.</span></div><div class="report-actions"><button type="button" data-action="share-child-text" data-id="${esc(c.id)}">Doar mesajul</button><button type="button" class="primary" data-action="share-child-report" data-id="${esc(report.id)}">Copiază mesajul + PDF</button><button type="button" data-action="create-child-report">Generează unul actualizat</button></div></div>`
     : `<div class="child-report-option"><div><strong>Mesaj + raport individual</strong><span class="caption">${latestReport ? `${esc(latestReport.code)} este dintr-o versiune anterioară a registrului. Generează fișa actuală înainte de partajare.` : 'Generează întâi fișa actuală; apoi o poți partaja împreună cu același mesaj.'}</span></div><button type="button" data-action="create-child-report">Generează raportul PDF</button></div>`;
   return `<section class="contact-panel" aria-labelledby="contact-panel-title"><div class="row"><div><h2 id="contact-panel-title">Contacte WhatsApp</h2><p class="caption">Conversația se deschide cu mesajul completat. Verifici și apeși Trimite în WhatsApp.</p><button type="button" class="context-help-link" data-action="help" data-help-topic="whatsapp">${icon('help')}Cum trimit?</button></div><button type="button" data-action="edit-contacts">${contacts.length ? 'Editează' : 'Adaugă'}</button></div>${contacts.length ? `<div class="whatsapp-actions">${whatsappLinks(c)}</div>` : '<p class="caption">Poți salva până la două contacte pentru acest copil.</p>'}${reportAction}</section>`;
 }
@@ -694,7 +694,10 @@ async function shareChildReport(reportId) {
   const report = (state.reports || []).find(item => item.id === reportId && item.type === 'child');
   const c = report ? state.children.find(item => item.id === report.subjectId) : null;
   if (!c) return;
-  await shareReport(report.id, whatsappReminder(c, state.settings.className, state.settings));
+  const message = whatsappReminder(c, state.settings.className, state.settings);
+  const copied = await copyText(message);
+  toast(copied ? 'Mesaj copiat. Dacă WhatsApp îl omite, lipește-l lângă PDF.' : 'PDF-ul va fi partajat, dar mesajul nu a putut fi copiat.');
+  await shareReport(report.id, message);
 }
 async function shareChildText(id) {
   const c = state.children.find(item => item.id === id);
@@ -707,18 +710,25 @@ async function shareChildText(id) {
   } catch (error) { if (error.name !== 'AbortError') toast(error.message || 'Mesajul nu a putut fi partajat.'); }
   finally { saving = false; updateNotices(); }
 }
+async function copyText(value) {
+  try {
+    if (!navigator.clipboard?.writeText) throw new Error('Clipboard indisponibil');
+    await navigator.clipboard.writeText(value);
+    return true;
+  } catch {
+    const input = document.createElement('textarea');
+    input.value = value; input.style.position = 'fixed'; input.style.opacity = '0';
+    document.body.append(input); input.select();
+    let copied = false;
+    try { copied = document.execCommand('copy'); } catch { /* The caller can explain that copying failed. */ }
+    input.remove();
+    return copied;
+  }
+}
 async function copyPaymentDetail(key) {
   const item = paymentShareItems(state.settings).find(entry => entry.key === key);
   if (!item) return;
-  try {
-    await navigator.clipboard.writeText(item.value);
-  } catch {
-    const input = document.createElement('textarea');
-    input.value = item.value; input.style.position = 'fixed'; input.style.opacity = '0';
-    document.body.append(input); input.select();
-    if (!document.execCommand('copy')) { input.remove(); toast('Textul nu a putut fi copiat.'); return; }
-    input.remove();
-  }
+  if (!await copyText(item.value)) { toast('Textul nu a putut fi copiat.'); return; }
   toast(`${item.label} a fost copiat.`);
 }
 async function loadReportPreview(currentModal, report) {

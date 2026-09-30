@@ -138,7 +138,7 @@ flowchart TB
     direction LR
     K1[Configurezi contacte și plata] --> K2{Ce trimiți?}
     K2 -- Copil --> K3[Mesaj privat precompletat]
-    K3 --> K8{Doar text sau și PDF?}
+    K3 --> K8{Doar text sau copie + PDF?}
     K2 -- Grup --> K4[Raport agregat și mesaj]
     K2 -- Date de plată --> K5[Revolut · beneficiar · IBAN separat]
     K8 --> K6[Alegi conversația]
