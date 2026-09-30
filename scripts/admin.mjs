@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Command-line access to the admin API: invitations for every role, devices, revocations.
-// Reads ~/.config/casierul-clasei/app.env (or $CASIERUL_ENV); ADMIN_TOKEN, ADMIN_HOST and
-// ADMIN_PORT in the environment take precedence, so it also works inside the Docker image.
+// Reads ~/.config/casierul-clasei/app.env (or $CASIERUL_ENV); ADMIN_TOKEN and ADMIN_PORT
+// in the environment take precedence, so it also works inside the Docker image.
 import { existsSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import path from 'node:path';
@@ -28,7 +28,7 @@ const config = existsSync(file)
 const setting = name => process.env[name] || config[name];
 const token = setting('ADMIN_TOKEN');
 if (!token) fail(`ADMIN_TOKEN is not set and ${file} does not provide it.`);
-const base = `http://${setting('ADMIN_HOST') || '127.0.0.1'}:${setting('ADMIN_PORT') || '8118'}/api/admin`;
+const base = `http://127.0.0.1:${setting('ADMIN_PORT') || '8118'}/api/admin`;
 
 const [action, ...rest] = process.argv.slice(2);
 const flags = {}, positional = [];

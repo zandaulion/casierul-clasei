@@ -26,7 +26,7 @@ export function loadConfig(env = process.env) {
   const publicPort = port(env.PORT, 8018);
   if (env.COOKIE_SECURE != null && !['true', 'false'].includes(env.COOKIE_SECURE)) throw new Error('COOKIE_SECURE trebuie să fie true sau false.');
   return {
-    host, port: publicPort, adminHost: env.ADMIN_HOST || '127.0.0.1', adminPort: port(env.ADMIN_PORT, 8118),
+    host, port: publicPort, adminHost: '127.0.0.1', adminPort: port(env.ADMIN_PORT, 8118),
     dataDir: env.DATA_DIR || path.join(ROOT, 'data'),
     publicBaseUrl: env.PUBLIC_BASE_URL || `http://${host}:${publicPort}`,
     adminToken: env.ADMIN_TOKEN || '', cookieSecure: env.COOKIE_SECURE !== 'false', webDir: path.join(ROOT, 'web'),

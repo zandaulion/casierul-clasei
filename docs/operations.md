@@ -12,9 +12,15 @@
 
 Aplicația nu depinde de consola privată sau de Caddy. Variantele generice:
 
-- **Docker**: `PUBLIC_BASE_URL=https://… ADMIN_TOKEN=… docker compose up -d` pornește serverul pe `127.0.0.1:8018` cu datele în volumul `data`; invitațiile se emit cu `docker compose exec app node scripts/admin.mjs …`. Publicarea prin HTTPS rămâne în sarcina unui reverse proxy.
-- **systemd**: unitățile din `deploy/` folosesc `%h/projects/casierul-clasei`; `./deploy.sh https://origine-publica` le instalează și pornește aplicația chiar și fără consola privată.
-- Variabile: `PUBLIC_BASE_URL` (obligatorie), `ADMIN_TOKEN` (fără el API-ul de administrare răspunde 404), `DATA_DIR`, `HOST`/`PORT` (implicit `127.0.0.1:8018`), `ADMIN_HOST`/`ADMIN_PORT` (implicit `127.0.0.1:8118`, rămâne pe loopback chiar dacă `HOST` este `0.0.0.0`), `COOKIE_SECURE` (`false` doar pentru teste locale fără HTTPS).
+- **Docker**: creează fișierul privat `.env` ca în README, apoi `docker compose up -d`. Serverul este publicat numai pe `127.0.0.1:8018`, datele rămân în volumul `data`, iar invitațiile se emit cu `docker compose exec app node scripts/admin.mjs …`. Publicarea prin HTTPS rămâne în sarcina unui reverse proxy.
+- **systemd**: după `npm ci`, `./deploy.sh https://origine-publica` detectează directorul clonei și executabilele Node/Python, generează unitățile în `~/.config/systemd/user` și pornește aplicația chiar și fără consola privată. Clona poate fi amplasată în orice director accesibil utilizatorului serviciului.
+- Variabile: `PUBLIC_BASE_URL` (obligatorie), `ADMIN_TOKEN` (fără el API-ul de administrare răspunde 404), `DATA_DIR`, `HOST`/`PORT` (implicit `127.0.0.1:8018`), `ADMIN_PORT` (implicit `8118`) și `COOKIE_SECURE` (`false` doar pentru teste locale fără HTTPS). API-ul de administrare ascultă întotdeauna pe `127.0.0.1`.
+
+Serviciul systemd de utilizator trebuie să poată porni după restart fără autentificare interactivă. `deploy.sh` avertizează dacă această opțiune nu este activă; administratorul serverului o poate activa o singură dată:
+
+```
+sudo loginctl enable-linger numele-utilizatorului
+```
 
 ## Publicare
 
@@ -22,7 +28,9 @@ Aplicația nu depinde de consola privată sau de Caddy. Variantele generice:
 ./deploy.sh https://casierul-clasei.zandaulion.com
 ```
 
-Scriptul rulează testele, pregătește configurația, instalează ruta privată în consolă, pornește aplicația pe același port 8018 și verifică `/api/health`. Instalările următoare pot folosi `./deploy.sh` fără URL. Actualizarea consolei adaugă doar intrarea acestei aplicații și păstrează celelalte intrări existente. Configurația Caddy este salvată înainte de modificare și validată înainte de reîncărcare.
+Scriptul rulează testele, pregătește configurația, generează serviciile pentru directorul curent, instalează și serviciul de previzualizare folosit la revenire, pornește aplicația pe portul 8018 și verifică `/api/health`. Dacă serverul are consola privată și Caddy, instalează și ruta acestei aplicații; altfel omite pasul. Instalările următoare pot folosi `./deploy.sh` fără URL. Configurația Caddy este salvată înainte de modificare și validată înainte de reîncărcare.
+
+Scriptul nu instalează Node.js, npm, Python, systemd, un reverse proxy sau certificatul HTTPS. Verifică prezența comenzilor necesare și se oprește înainte de schimbarea serviciilor dacă lipsește una dintre ele.
 
 Fișierele din `web/` sunt încărcate de server la pornire. După orice modificare, repornește serviciul prin deploy. Versiunea workerului este derivată din conținutul fișierelor, prin mecanismul pwa-kit.
 
@@ -45,13 +53,17 @@ Pentru accesuri pe clase și pentru rolurile părinte/auditor, folosește consol
 ```
 node scripts/admin.mjs options                                   # clasele și copiii care pot primi invitații
 node scripts/admin.mjs invite "Telefonul meu"                    # casier pentru clasa implicită
-node scripts/admin.mjs invite --role auditor --for classroom:<id>
-node scripts/admin.mjs invite --role parent --for child:<clasă>:<copil> --expires 2027-06-30
-node scripts/admin.mjs invites | devices
-node scripts/admin.mjs revoke-invite <id> | revoke-device <id> | restore-device <id> | delete-device <id>
+node scripts/admin.mjs invite --role auditor --for classroom:ID_CLASĂ
+node scripts/admin.mjs invite --role parent --for child:ID_CLASĂ:ID_COPIL --expires 2027-06-30
+node scripts/admin.mjs invites
+node scripts/admin.mjs devices
+node scripts/admin.mjs revoke-invite ID_INVITAȚIE
+node scripts/admin.mjs revoke-device ID_DISPOZITIV
+node scripts/admin.mjs restore-device ID_DISPOZITIV
+node scripts/admin.mjs delete-device ID_DISPOZITIV
 ```
 
-Scriptul citește `~/.config/casierul-clasei/app.env` sau variabilele `ADMIN_TOKEN`, `ADMIN_HOST`, `ADMIN_PORT` din mediu. Consola privată este instalată de `deploy.sh` numai dacă există pe server; pe alte instalări pasul este sărit.
+Scriptul citește `~/.config/casierul-clasei/app.env` sau variabilele `ADMIN_TOKEN` și `ADMIN_PORT` din mediu. Se conectează numai la API-ul local de pe `127.0.0.1`. Consola privată este instalată de `deploy.sh` numai dacă există pe server; pe alte instalări pasul este sărit.
 
 Codurile de invitație permit două activări și expiră la șapte zile de la emitere; prima folosire nu prelungește termenul. Deschiderea unui link nu consumă o activare. O activare reușită prin **Deschide registrul clasei** sau **Adaugă acces din invitație** folosește una dintre cele două activări. Cererile eșuate, inclusiv adăugarea unei clase deja accesibile, nu consumă activări.
 
@@ -75,7 +87,18 @@ Backup manual:
 systemctl --user start casierul-clasei-backup.service
 ```
 
-Pentru restaurare, oprește aplicația, păstrează o copie a întregului director curent de date, apoi înlocuiește `auth.sqlite` și toate bazele claselor cu fișierele din aceeași copie datată. Catalogul și registrele trebuie să provină din același subdirector de backup. Fișierele WAL și SHM vechi nu trebuie păstrate lângă bazele restaurate. Păstrează proprietarul `opc` și permisiunile private, pornește aplicația și verifică soldurile fiecărei clase. Nu restaura peste o bază deschisă de un proces activ.
+În Docker, creează copia consistentă în volum și export-o într-un director privat de pe gazdă, mai ales înainte de upgrade:
+
+```
+docker compose exec app node scripts/backup.mjs
+mkdir -p docker-backups
+chmod 700 docker-backups
+docker compose cp app:/data/backups/. ./docker-backups/
+```
+
+Automatizează aceste comenzi cu planificatorul gazdei și copiază periodic `docker-backups/` pe alt disc sau server. Volumul Docker și copiile din același volum se pot pierde împreună.
+
+Pentru restaurare, oprește aplicația, păstrează o copie a întregului director curent de date, apoi înlocuiește `auth.sqlite` și toate bazele claselor cu fișierele din aceeași copie datată. Catalogul și registrele trebuie să provină din același subdirector de backup. Fișierele WAL și SHM vechi nu trebuie păstrate lângă bazele restaurate. Păstrează utilizatorul serviciului ca proprietar și permisiunile private, pornește aplicația și verifică soldurile fiecărei clase. Nu restaura peste o bază deschisă de un proces activ. Pentru Docker, oprește mai întâi serviciul `app` și copiază setul în `/data`; nu modifica volumul cât timp serverul rulează.
 
 Exportul JSON din aplicație conține datele registrului și istoricul, fără credentiale sau contactele copiilor. Pentru documente include metadatele și amprentele SHA-256, nu conținutul fișierelor. Este util pentru verificare și păstrarea unei copii lizibile; restaurarea automată din JSON nu este implementată. Pentru restaurarea contactelor este necesară copia SQLite privată.
 

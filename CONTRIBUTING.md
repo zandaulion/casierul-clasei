@@ -12,7 +12,7 @@ npm test
 npm start          # http://127.0.0.1:8018, admin API on 127.0.0.1:8118
 ```
 
-Node.js 24 or newer is required (`node:sqlite` is used without native dependencies). For a local trial without HTTPS, start with `COOKIE_SECURE=false ADMIN_TOKEN=dev-secret npm start`, then issue an invitation with `ADMIN_TOKEN=dev-secret node scripts/admin.mjs invite "Laptop"` and open the printed link.
+Node.js 24 or newer is required (`node:sqlite` is used without native dependencies). For a local trial without HTTPS, start with `COOKIE_SECURE=false ADMIN_TOKEN=dev-secret npm start`, then issue an invitation with `ADMIN_TOKEN=dev-secret node scripts/admin.mjs invite "Laptop"` and open the printed link. Production installations need HTTPS; `deploy.sh` installs user services but does not configure the reverse proxy or certificate.
 
 ## Before opening a pull request
 
