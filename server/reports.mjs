@@ -25,7 +25,7 @@ const sharedAttachments = (state, entityType, entityId) => (state.attachments ||
 
 function expenseCoverage(expense) {
   if (expense.totalMinor <= 0) return { ratio: 0, label: 'Fără sumă de acoperit', shortLabel: '—' };
-  const covered = Math.max(0, Math.min(expense.totalMinor, expense.collectedMinor + (expense.coveredMinor ?? 0)));
+  const covered = Math.max(0, Math.min(expense.totalMinor, expense.collectedMinor + (expense.directMinor ?? 0) + (expense.coveredMinor ?? 0)));
   const ratio = covered / expense.totalMinor;
   // Keep 100% reserved for a fully covered expense, even with just one ban due.
   const percent = Number(BigInt(covered) * 1000n / BigInt(expense.totalMinor)) / 10;
@@ -196,7 +196,7 @@ export async function renderReportPdf(report, state, branding = {}) {
     const groups = Array.from({ length: Math.ceil(expenses.length / columnsPerGroup) }, (_, index) => expenses.slice(index * columnsPerGroup, (index + 1) * columnsPerGroup));
     const colors = { paid: '#d9f0e1', partial: '#fff0bf', unpaid: '#f7d6d2', none: '#eeeeea' };
     const rowHeight = 23, headerHeight = 68;
-    const closingNote = `Raport nominal pentru verificare internă, generat din registrul „Casierul clasei”. Sumele sunt în lei. Total de plată arată suma rămasă de achitat de fiecare copil pentru toate contribuțiile active. Celulele includ banii încasați, sumele acoperite din fond și ajustările de rotunjire; barele și procentele includ banii încasați și acoperirile din fond.${expenses.some(expense => expense.totalMinor === 0) ? ' „—” în antet: fără sumă de acoperit.' : ''}`;
+    const closingNote = `Raport nominal pentru verificare internă, generat din registrul „Casierul clasei”. Sumele sunt în lei. Total de plată arată suma rămasă de achitat de fiecare copil pentru toate contribuțiile active. Celulele includ banii încasați în fond, plățile directe către beneficiari, sumele acoperite din fond și ajustările de rotunjire; barele și procentele includ încasările, plățile directe și acoperirile din fond.${expenses.some(expense => expense.totalMinor === 0) ? ' „—” în antet: fără sumă de acoperit.' : ''}`;
     doc.font('Regular').fontSize(8.5);
     const closingHeight = doc.heightOfString(closingNote, { width, lineGap: 2 }) + 16;
     const compactMoney = minor => compactMoneyFormat.format(minor / 100);
@@ -254,7 +254,7 @@ export async function renderReportPdf(report, state, branding = {}) {
         doc.font('Bold').fontSize(7.2).fillColor(child.dueMinor ? dark : green).text(`${compactMoney(child.dueMinor)} lei`, left + nameWidth - totalWidth - 4, y + 7, { width: totalWidth, align: 'right', lineBreak: false });
         group.forEach((expense, index) => {
           const contribution = child.contributions.find(entry => entry.expenseId === expense.id);
-          const settledMinor = contribution ? contribution.paidMinor + (contribution.coveredMinor ?? 0) + (contribution.adjustedMinor ?? 0) : 0;
+          const settledMinor = contribution ? contribution.paidMinor + (contribution.directMinor ?? 0) + (contribution.coveredMinor ?? 0) + (contribution.adjustedMinor ?? 0) : 0;
           const status = !contribution ? 'none' : contribution.remainingMinor === 0 ? 'paid' : settledMinor > 0 ? 'partial' : 'unpaid';
           const x = left + nameWidth + geometry.cellWidth * index;
           doc.rect(x, y, geometry.cellWidth, rowHeight).fillAndStroke(colors[status], line);
@@ -303,6 +303,7 @@ export async function renderReportPdf(report, state, branding = {}) {
     section('Situația fondului');
     metric('Sold inițial', money(state.settings.openingBalanceMinor));
     metric('Bani primiți și păstrați în fond', money(state.summary.totalReceivedMinor));
+    metric('Plăți directe către beneficiari', money(state.summary.totalDirectMinor ?? 0));
     metric('Sume avansate temporar fondului', money(state.summary.totalAdvancedMinor ?? 0));
     metric('Bani dați mai departe și restituiți', money(state.summary.totalPaidMinor));
     metric('Numerar disponibil în fond', money(state.summary.balanceMinor), 'info');
@@ -331,9 +332,9 @@ export async function renderReportPdf(report, state, branding = {}) {
     for (const expense of state.expenses.filter(entry => !entry.cancelled).reverse()) {
       const due = expenseStatus(state, expense);
       const contributionMinor = reportedContributionMinor(expense);
-      const tone = due.amountMinor === 0 ? 'positive' : expense.collectedMinor > 0 ? 'warning' : 'negative';
+      const tone = due.amountMinor === 0 ? 'positive' : expense.collectedMinor + (expense.directMinor ?? 0) > 0 ? 'warning' : 'negative';
       item(expense.title, money(expense.totalMinor),
-        `${contributionMinor === null ? '' : `Contribuție per copil ${money(contributionMinor)} · `}Încasat ${money(expense.collectedMinor)} · Acoperit din fond ${money(expense.coveredMinor ?? 0)} · Ajustări ${money(expense.adjustedMinor ?? 0)} · Dat mai departe ${money(expense.paidOutMinor)} · De achitat: ${due.count} copii · ${money(due.amountMinor)} · Documente partajate: ${sharedAttachments(state, 'expense', expense.id).length}`,
+        `${contributionMinor === null ? '' : `Contribuție per copil ${money(contributionMinor)} · `}Încasat în fond ${money(expense.collectedMinor)} · Plătit direct ${money(expense.directMinor ?? 0)} · Acoperit din fond ${money(expense.coveredMinor ?? 0)} · Ajustări ${money(expense.adjustedMinor ?? 0)} · Dat mai departe ${money(expense.paidOutMinor)} · De achitat: ${due.count} copii · ${money(due.amountMinor)} · Documente partajate: ${sharedAttachments(state, 'expense', expense.id).length}`,
         expense.comment, tone, expense);
     }
     const payments = transactions.filter(tx => tx.type === 'payment');
@@ -356,12 +357,13 @@ export async function renderReportPdf(report, state, branding = {}) {
     const due = expenseStatus(state, expense);
     const childContributions = state.children.map(child => child.contributions.find(entry => entry.expenseId === expense.id)).filter(Boolean);
     const fullyPaid = childContributions.filter(entry => entry.remainingMinor === 0).length;
-    const partiallyPaid = childContributions.filter(entry => entry.paidMinor + (entry.coveredMinor ?? 0) > 0 && entry.remainingMinor > 0).length;
+    const partiallyPaid = childContributions.filter(entry => entry.paidMinor + (entry.directMinor ?? 0) + (entry.coveredMinor ?? 0) > 0 && entry.remainingMinor > 0).length;
     section('Rezumat');
     metric('Necesar total', money(expense.totalMinor));
     const contributionMinor = reportedContributionMinor(expense);
     if (contributionMinor !== null) metric('Contribuție per copil', money(contributionMinor), 'info');
-    metric('Încasat de la părinți', money(expense.collectedMinor), expense.collectedMinor ? 'positive' : null);
+    metric('Încasat în fond de la părinți', money(expense.collectedMinor), expense.collectedMinor ? 'positive' : null);
+    metric('Plătit direct beneficiarilor', money(expense.directMinor ?? 0), expense.directMinor ? 'info' : null);
     metric('Acoperit din fond', money(expense.coveredMinor ?? 0), expense.coveredMinor ? 'info' : null);
     metric('Ajustări de rotunjire', money(expense.adjustedMinor ?? 0), expense.adjustedMinor ? 'info' : null);
     coverage(expense);
@@ -401,13 +403,13 @@ export async function renderReportPdf(report, state, branding = {}) {
     section('Contribuții');
     if (!child.contributions.length) note('Copilul nu are contribuții înregistrate.');
     for (const contribution of child.contributions) item(contribution.title, money(contribution.amountMinor),
-      `Acoperit din bani ${money(contribution.paidMinor)}${contribution.coveredMinor ? ` · Acoperit din fond ${money(contribution.coveredMinor)}` : ''}${contribution.adjustedMinor ? ` · Ajustare de rotunjire ${money(contribution.adjustedMinor)}` : ''} · De achitat ${money(contribution.remainingMinor)}${contribution.dueDate ? ` · Termen ${dateFormat.format(new Date(`${contribution.dueDate}T12:00:00Z`))}` : ''}`, '',
-      contribution.remainingMinor === 0 ? 'positive' : contribution.paidMinor + (contribution.coveredMinor ?? 0) ? 'warning' : 'negative');
+      `Încasat în fond ${money(contribution.paidMinor)}${contribution.directMinor ? ` · Plătit direct beneficiarului ${money(contribution.directMinor)}` : ''}${contribution.coveredMinor ? ` · Acoperit din fond ${money(contribution.coveredMinor)}` : ''}${contribution.adjustedMinor ? ` · Ajustare de rotunjire ${money(contribution.adjustedMinor)}` : ''} · De achitat ${money(contribution.remainingMinor)}${contribution.dueDate ? ` · Termen ${dateFormat.format(new Date(`${contribution.dueDate}T12:00:00Z`))}` : ''}`, '',
+      contribution.remainingMinor === 0 ? 'positive' : contribution.paidMinor + (contribution.directMinor ?? 0) + (contribution.coveredMinor ?? 0) ? 'warning' : 'negative');
     const history = state.transactions.filter(tx => tx.childId === child.id);
     section('Istoric individual');
     if (!history.length) note('Nu există operațiuni pentru acest copil.');
     for (const tx of history) {
-      const label = { collection: 'Încasare', credit_apply: 'Avans repartizat', rounding_adjustment: 'Ajustare de rotunjire',
+      const label = { collection: 'Încasare', direct_payment: 'Plată directă beneficiarului', credit_apply: 'Avans repartizat', rounding_adjustment: 'Ajustare de rotunjire',
         advance_waiver: 'Acoperire din fond', refund: 'Avans restituit', reversal: 'Corecție' }[tx.type] || tx.type;
       const retained = tx.type === 'collection' ? tx.amountMinor - tx.changeMinor : tx.amountMinor;
       const allocationText = tx.allocations.map(allocation => {
@@ -415,8 +417,8 @@ export async function renderReportPdf(report, state, branding = {}) {
         return `${expense?.title || 'Cheltuială'}: ${money(allocation.amountMinor)}`;
       }).join(' · ');
       item(`${label}${tx.reversed ? ' · corectată' : ''}`, money(retained),
-        `${dateTimeFormat.format(new Date(tx.occurredAt))}${tx.changeMinor ? ` · Rest returnat ${money(tx.changeMinor)}` : ''}${allocationText ? ` · ${allocationText}` : ''}`, tx.comment,
-        tx.reversed || tx.type === 'reversal' ? 'correction' : tx.type === 'collection' ? 'positive' : ['credit_apply', 'rounding_adjustment', 'advance_waiver'].includes(tx.type) ? 'info' : 'warning');
+        `${dateTimeFormat.format(new Date(tx.occurredAt))}${tx.type === 'direct_payment' ? ` · Beneficiar: ${tx.destination}` : ''}${tx.changeMinor ? ` · Rest returnat ${money(tx.changeMinor)}` : ''}${allocationText ? ` · ${allocationText}` : ''}`, tx.comment,
+        tx.reversed || tx.type === 'reversal' ? 'correction' : tx.type === 'collection' ? 'positive' : ['direct_payment', 'credit_apply', 'rounding_adjustment', 'advance_waiver'].includes(tx.type) ? 'info' : 'warning');
     }
   }
 

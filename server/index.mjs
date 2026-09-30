@@ -182,6 +182,7 @@ const BUSINESS_ROUTES = [
   [/^\/api\/expenses\/([A-Za-z0-9_-]{1,100})$/u, 'expense.update', ['title', 'type', 'amountMinor', 'participants', 'occurredAt', 'dueDate', 'comment'], 'expenseId'],
   [/^\/api\/expenses\/([A-Za-z0-9_-]{1,100})\/cancel$/u, 'expense.cancel', ['comment'], 'expenseId'],
   [/^\/api\/collections$/u, 'collection.create', ['childId', 'receivedMinor', 'changeMinor', 'allocations', 'settlement', 'occurredAt', 'comment']],
+  [/^\/api\/direct-payments$/u, 'direct_payment.create', ['childId', 'expenseId', 'amountMinor', 'destination', 'occurredAt', 'comment']],
   [/^\/api\/rounding-adjustments$/u, 'rounding_adjustment.create', ['childId', 'expenseId', 'occurredAt', 'comment']],
   [/^\/api\/credit\/apply$/u, 'credit.apply', ['childId', 'allocations', 'occurredAt', 'comment']],
   [/^\/api\/refunds$/u, 'refund.create', ['childId', 'amountMinor', 'occurredAt', 'comment']],

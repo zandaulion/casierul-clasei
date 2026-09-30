@@ -148,6 +148,16 @@ test('invited device manages a persisted class ledger without exposing admin or 
   assert.equal(roundedContribution.paidMinor, 1400);
   assert.equal(roundedContribution.adjustedMinor, 14);
   assert.equal(state.summary.balanceMinor, 3400, 'standalone rounding does not move cash');
+  await mutate('/api/expenses', { title: 'Fotografii', type: 'fixed', amountMinor: 5000,
+    participants: [{ childId: davidId }] });
+  const photosId = state.expenses.find(expense => expense.title === 'Fotografii').id;
+  await mutate('/api/direct-payments', { childId: davidId, expenseId: photosId, amountMinor: 5000,
+    destination: 'Doamna dirigintă', comment: 'Bani predați direct' });
+  const directContribution = state.children.find(child => child.id === davidId).contributions.find(c => c.expenseId === photosId);
+  assert.equal(directContribution.remainingMinor, 0);
+  assert.equal(directContribution.directMinor, 5000);
+  assert.equal(state.summary.totalDirectMinor, 5000);
+  assert.equal(state.summary.balanceMinor, 3400, 'direct beneficiary payments do not enter class cash');
   const snapshot = await json(origin() + '/api/export', { headers });
   assert.equal(snapshot.status, 200);
   assert.match(snapshot.headers.get('content-disposition'), /attachment/);
