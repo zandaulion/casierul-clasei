@@ -8,7 +8,7 @@ Aplicația: https://casierul-clasei.zandaulion.com
 
 ## Capturi de ecran
 
-Datele afișate în capturi sunt integral sintetice. Setul surprinde și contactele WhatsApp, detaliile de plată, totalul de achitat din Tabelul contribuțiilor și istoricul Registrului cu operațiunile recente primele.
+Datele afișate în capturi sunt integral sintetice. Setul surprinde și contactele WhatsApp, detaliile de plată, totalul de achitat din Tabelul contribuțiilor, istoricul Registrului cu operațiunile recente primele și Ajutorul vizual integrat.
 
 <table>
   <tr>
@@ -40,6 +40,11 @@ Datele afișate în capturi sunt integral sintetice. Setul surprinde și contact
     <td align="center"><img src="docs/screenshots/07-raport-pdf-tableta-1024x768.png" alt="Previzualizarea PDF a Tabelului contribuțiilor cu totalul de plată pentru fiecare copil" width="440"><br><strong>Tabelul contribuțiilor în PDF · 1024×768</strong></td>
   </tr>
 </table>
+
+<p align="center">
+  <img src="docs/screenshots/09-ajutor-tableta-768x1024.png" alt="Ajutorul vizual cu fluxurile aplicației" width="560"><br>
+  <strong>Ajutor general și contextual · 768×1024</strong>
+</p>
 
 ## Începe
 
