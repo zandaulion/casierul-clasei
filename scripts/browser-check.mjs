@@ -346,6 +346,9 @@ try {
   await fill('#modal-form [name=comment]', 'Verificare corecție'); await saveModal();
   assert.equal(snapshot().summary.balanceMinor, 9000);
   assert.equal(snapshot().transactions.find(t => t.id === paymentId).reversed, true);
+  assert.deepEqual(await evaluate('[...document.querySelectorAll(".ledger-history [data-transaction]")].map(item => item.dataset.transaction)'),
+    [...snapshot().transactions].sort((a, b) => b.occurredAt.localeCompare(a.occurredAt) || b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id)).map(item => item.id),
+    'ledger history is newest first');
   await screenshot('ledger');
   await click('[data-tab=reports]');
   await until('document.querySelector("[data-action=report-class]")', 'reports screen');

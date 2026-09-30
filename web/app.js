@@ -1,5 +1,5 @@
 import { installUpdates } from '/pwa-update.js';
-import { name, money, decimal, parseMoney, sortChildren, unpaid, roundUp, automaticAllocations, collectionResult, creditSettlement, smallSettlement, expensePreview, whatsappReminder, whatsappUrl, whatsappShareUrl, paymentShareItems, reportShareMessage } from './helpers.mjs';
+import { name, money, decimal, parseMoney, sortChildren, sortTransactionsNewestFirst, unpaid, roundUp, automaticAllocations, collectionResult, creditSettlement, smallSettlement, expensePreview, whatsappReminder, whatsappUrl, whatsappShareUrl, paymentShareItems, reportShareMessage } from './helpers.mjs';
 import { icon } from './icons.mjs';
 
 const $ = selector => document.querySelector(selector);
@@ -363,7 +363,7 @@ function renderExpenses() {
     <div class="expense-grid">${expenseCards || `<div class="empty"><h2>Ce pregătim pentru clasă?</h2><p>${canWrite() ? 'Adaugă prima cheltuială și alege copiii care participă.' : 'Cheltuielile vor apărea aici după ce sunt adăugate de casier.'}</p></div>`}</div>`;
 }
 function transactionRows(transactions) {
-  return [...transactions].sort((a, b) => b.occurredAt.localeCompare(a.occurredAt) || b.createdAt.localeCompare(a.createdAt)).map(t => {
+  return sortTransactionsNewestFirst(transactions).map(t => {
     const c = state.children.find(c => c.id === t.childId);
     return `<button class="card ${t.reversed ? 'transaction-muted' : ''}" data-transaction="${esc(t.id)}"><div class="row"><strong>${labels[t.type] || esc(t.type)}</strong><span class="amount">${money(t.amountMinor)}</span></div><div>${esc(c ? name(c) : t.destination || '')}</div><div class="caption">${dateText(t.occurredAt)}${t.reversed ? ' · Corectată' : ''}${t.changeMinor ? ` · Rest ${money(t.changeMinor)}` : ''}</div>${t.comment ? `<div class="caption">${esc(t.comment)}</div>` : ''}</button>`;
   }).join('') || '<p class="caption">Nu există operațiuni înregistrate.</p>';
@@ -386,7 +386,7 @@ function renderLedger() {
       ${canWrite() ? '<div class="toolbar"><button class="primary" data-action="payment">+ Bani dați mai departe</button><button data-action="fund-advance">+ Sumă avansată fondului</button></div>' : ''}
       ${advances}
       <div class="toolbar"><button data-action="refresh">Actualizează</button>${canWrite() ? `<a href="${esc(scopedUrl('/api/export'))}" download="casierul-clasei.json">Export JSON</a>` : ''}</div>
-    </section><section class="ledger-history" aria-labelledby="ledger-history-title"><h2 id="ledger-history-title">Istoricul operațiunilor</h2><div class="stack">${transactionRows(state.transactions)}</div></section></div>`;
+    </section><section class="ledger-history" aria-labelledby="ledger-history-title"><h2 id="ledger-history-title">Istoricul operațiunilor</h2><p class="caption">Cele mai recente apar primele.</p><div class="stack">${transactionRows(state.transactions)}</div></section></div>`;
 }
 function renderReports() {
   const reports = state.reports || [];

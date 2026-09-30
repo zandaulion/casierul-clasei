@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { money, parseMoney, roundUp, collectionResult, creditSettlement, smallSettlement, expensePreview, sortChildren, unpaid, whatsappReminder, whatsappUrl, whatsappShareUrl, paymentShareItems, reportShareMessage } from '../web/helpers.mjs';
+import { money, parseMoney, roundUp, collectionResult, creditSettlement, smallSettlement, expensePreview, sortChildren, sortTransactionsNewestFirst, unpaid, whatsappReminder, whatsappUrl, whatsappShareUrl, paymentShareItems, reportShareMessage } from '../web/helpers.mjs';
 const child = { dueMinor: 8500, contributions: [
   { expenseId: 'books', title: 'Culegeri', dueDate: '2026-10-02', remainingMinor: 6000 },
   { expenseId: 'trip', title: 'Excursie', dueDate: '2026-10-01', remainingMinor: 2500 },
@@ -86,6 +86,16 @@ test('exact split distributes every ban by lexical child ID independent of input
 test('surname order uses Romanian collation and paid contributions are excluded', () => {
   assert.deepEqual(sortChildren([{ id:'1',lastName:'Șerban',firstName:'Ana' },{ id:'2',lastName:'Avram',firstName:'Dan' },{ id:'3',lastName:'Bălan',firstName:'Ioana' }]).map(c => c.id), ['2','3','1']);
   assert.equal(unpaid({ contributions: [{expenseId:'paid',remainingMinor:0}, ...child.contributions] }).length, 2);
+});
+test('transaction history is ordered newest first with deterministic ties', () => {
+  const transactions = [
+    { id: 'old', occurredAt: '2026-09-28T08:00:00.000Z', createdAt: '2026-09-30T08:00:00.000Z' },
+    { id: 'tie-a', occurredAt: '2026-09-30T08:00:00.000Z', createdAt: '2026-09-30T09:00:00.000Z' },
+    { id: 'tie-b', occurredAt: '2026-09-30T08:00:00.000Z', createdAt: '2026-09-30T09:00:00.000Z' },
+    { id: 'middle', occurredAt: '2026-09-29T08:00:00.000Z', createdAt: '2026-09-30T10:00:00.000Z' },
+  ];
+  assert.deepEqual(sortTransactionsNewestFirst(transactions).map(item => item.id), ['tie-b', 'tie-a', 'middle', 'old']);
+  assert.deepEqual(transactions.map(item => item.id), ['old', 'tie-a', 'tie-b', 'middle'], 'sorting does not mutate application state');
 });
 test('WhatsApp reminders contain only the selected child situation and use a direct conversation URL', () => {
   const pupil = { ...child, firstName: 'Ana', lastName: 'Popescu', creditMinor: 500 };
