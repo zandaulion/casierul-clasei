@@ -50,6 +50,7 @@ flowchart TB
     D5 --> D6
     D6 --> D7[Verifici previzualizarea]
     D7 --> D8[Salvezi]
+    D8 --> D9[După plată urmărești încasările noi]
   end
 ```
 

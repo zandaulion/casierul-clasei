@@ -544,6 +544,11 @@ dd { margin: 0 0 0 auto; text-align: right; }
 .expense-card { display: block; padding: 18px; }
 .expense-card .row { align-items: flex-start; }
 .expense-card .caption { margin-top: 5px; }
+.expense-after-payment-brief { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; margin: 12px 0 7px; padding: 9px 10px; border-radius: 10px; background: var(--sky); color: var(--text); font-size: 13px; }
+.expense-after-payment-brief strong { white-space: nowrap; }
+.expense-after-payment { background: var(--sky); }
+.expense-after-payment h3 { margin: 0 0 3px; }
+.expense-after-payment .caption:last-child { margin: 9px 0 0; }
 .expense-progress { height: 7px; margin: 14px 0 10px; border-radius: 10px; background: var(--soft); overflow: hidden; }
 .expense-progress-fill { display: block; height: 100%; border-radius: inherit; background: var(--brand); }
 .expense-totals { margin-top: 12px; font-size: 14px; }

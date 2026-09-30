@@ -29,6 +29,7 @@ Inventarul descrie comportamentul disponibil în aplicație la 30 septembrie 202
 - Casierul selectează participanții, data, termenul și comentariul. Împărțirea lucrează în bani întregi și distribuie determinist ultimii bani.
 - La o cheltuială împărțită, participanții pot fi schimbați și sumele recalculate până la prima contribuție alocată, chiar dacă există deja o plată către furnizor sau un avans personal asociat.
 - După încasări, câmpurile descriptive rămân editabile. La calculul pe cantități sunt permise doar corecțiile care nu coboară contribuția sub suma deja stinsă și nu fac totalul incompatibil cu plățile legate.
+- După o plată asociată cheltuielii, lista arată suma strânsă în fond după cea mai recentă plată. Detaliul separă încasările noi în fond, plățile directe ulterioare și totalul rămas de colectat. O plată corectată nu mai delimitează intervalul.
 - O cheltuială poate fi anulată după ce nu mai are încasări, acoperiri sau plăți active asociate.
 
 ## 5. Încasarea de la un copil

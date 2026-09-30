@@ -93,6 +93,12 @@ function add(a, b) {
 
 function sum(values) { return values.reduce(add, 0); }
 
+function compareTransactionTime(a, b) {
+  return a.occurredAt.localeCompare(b.occurredAt)
+    || a.createdAt.localeCompare(b.createdAt)
+    || a.id.localeCompare(b.id);
+}
+
 function dateOnly(value, label = 'Data') {
   if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/u.test(value)) fail(`${label} nu este validă.`);
   const date = new Date(`${value}T00:00:00.000Z`);
@@ -651,11 +657,34 @@ export class Ledger {
         }
       }
     }
+    const activeTransactions = transactions.filter(tx => tx.type !== 'reversal' && !tx.reversed);
+    const latestExpensePayment = new Map();
+    for (const tx of activeTransactions) {
+      if (tx.type !== 'payment' || !tx.expenseId) continue;
+      const previous = latestExpensePayment.get(tx.expenseId);
+      if (!previous || compareTransactionTime(tx, previous) > 0) latestExpensePayment.set(tx.expenseId, tx);
+    }
+    const collectedAfterPayment = new Map();
+    const directAfterPayment = new Map();
+    for (const tx of activeTransactions) {
+      if (!['collection', 'direct_payment'].includes(tx.type)) continue;
+      for (const allocation of tx.allocations) {
+        const latestPayment = latestExpensePayment.get(allocation.expenseId);
+        if (!latestPayment || compareTransactionTime(tx, latestPayment) <= 0) continue;
+        bump(tx.type === 'collection' ? collectedAfterPayment : directAfterPayment, allocation.expenseId, allocation.amountMinor);
+      }
+    }
     const expenses = expenseRows.map(row => ({
       id: row.id, title: row.title, type: row.type, amountMinor: row.amount, totalMinor: row.total,
       collectedMinor: expenseCollected.get(row.id) ?? 0, adjustedMinor: expenseAdjusted.get(row.id) ?? 0,
       directMinor: expenseDirect.get(row.id) ?? 0, coveredMinor: expenseCovered.get(row.id) ?? 0,
       paidOutMinor: expensePaid.get(row.id) ?? 0,
+      latestPayment: latestExpensePayment.has(row.id) ? {
+        id: latestExpensePayment.get(row.id).id, amountMinor: latestExpensePayment.get(row.id).amountMinor,
+        destination: latestExpensePayment.get(row.id).destination, occurredAt: latestExpensePayment.get(row.id).occurredAt,
+      } : null,
+      collectedAfterLatestPaymentMinor: collectedAfterPayment.get(row.id) ?? 0,
+      directAfterLatestPaymentMinor: directAfterPayment.get(row.id) ?? 0,
       occurredAt: row.occurred_at, dueDate: row.due_date, comment: row.comment,
       cancelled: Boolean(row.cancelled),
       contributions: contributionRows.filter(c => c.expense_id === row.id).map(c => ({
@@ -677,6 +706,9 @@ export class Ledger {
       return { id: row.id, firstName: row.first_name, lastName: row.last_name, active: Boolean(row.active),
         creditMinor: childCredit.get(row.id), dueMinor: sum(contributions.map(c => c.remainingMinor)), contributions };
     }).sort((a, b) => names.compare(a.lastName, b.lastName) || names.compare(a.firstName, b.firstName) || a.id.localeCompare(b.id));
+    for (const expense of expenses) {
+      expense.dueMinor = sum(children.map(child => child.contributions.find(contribution => contribution.expenseId === expense.id)?.remainingMinor ?? 0));
+    }
     const advances = transactions.filter(tx => tx.type === 'fund_advance').map(tx => {
       const repaidMinor = advanceRepaid.get(tx.id) ?? 0;
       const waivedMinor = advanceWaived.get(tx.id) ?? 0;

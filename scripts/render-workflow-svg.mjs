@@ -33,7 +33,7 @@ const diagrams = [
       ] },
       { title: '4. Cheltuielile', stages: [
         ['Cheltuială nouă'], ['Fix', 'Total împărțit', 'Cantitate × preț'],
-        ['Selectezi participanții'], ['Verifici calculul'], ['Salvezi'],
+        ['Selectezi participanții'], ['Verifici calculul'], ['Salvezi', 'După plată urmărești încasările noi'],
       ] },
     ],
   },
