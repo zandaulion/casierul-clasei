@@ -34,7 +34,7 @@ export function paymentShareItems(settings) {
   const classSuffix = settings.className ? ` – ${settings.className}` : '';
   return [
     settings.paymentRevolutUrl ? { key: 'revolut', label: 'Link Revolut.me', value: settings.paymentRevolutUrl,
-      message: `Detalii de plată${classSuffix}\nRevolut: ${settings.paymentRevolutUrl}\nDetalii plată: numele elevului` } : null,
+      message: `Detalii de plată${classSuffix}\nRevolut: ${settings.paymentRevolutUrl}\nNu ai nevoie de cont Revolut: poți plăti și cu cardul direct din link.\nDetalii plată: numele elevului` } : null,
     settings.paymentBeneficiary ? { key: 'beneficiary', label: 'Numele beneficiarului', value: settings.paymentBeneficiary, message: settings.paymentBeneficiary } : null,
     settings.paymentIban ? { key: 'iban', label: 'IBAN', value: settings.paymentIban, message: settings.paymentIban } : null,
   ].filter(Boolean);

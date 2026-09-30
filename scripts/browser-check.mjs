@@ -350,7 +350,7 @@ try {
   await until('document.querySelector("[data-action=report-class]")', 'reports screen');
   assert.deepEqual(await evaluate('[...document.querySelectorAll("[data-copy-payment]")].map(button => button.dataset.copyPayment)'), ['revolut', 'beneficiary', 'iban']);
   assert.deepEqual(await evaluate('[...document.querySelectorAll(".payment-detail-actions .whatsapp-link")].map(link => new URL(link.href).searchParams.get("text"))'), [
-    'Detalii de plată – III A\nRevolut: https://revolut.me/exampleclass\nDetalii plată: numele elevului',
+    'Detalii de plată – III A\nRevolut: https://revolut.me/exampleclass\nNu ai nevoie de cont Revolut: poți plăti și cu cardul direct din link.\nDetalii plată: numele elevului',
     'Ana Popescu', 'RO49AAAA1B31007593840000',
   ]);
   await click('[data-action=report-matrix]');
