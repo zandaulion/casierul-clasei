@@ -158,6 +158,25 @@ export async function renderReportPdf(report, state, branding = {}) {
     if (comment) doc.font('Regular').fontSize(8.5).fillColor(dark).text(comment, doc.page.margins.left + inset, doc.y, { width: textWidth, lineGap: 2 });
     doc.moveDown(.4); doc.strokeColor(line).lineWidth(.4).moveTo(doc.page.margins.left, doc.y).lineTo(doc.page.width - doc.page.margins.right, doc.y).stroke().moveDown(.45);
   };
+  const paymentDetails = () => {
+    const settings = state.settings;
+    if (!settings.paymentRevolutUrl && !settings.paymentBeneficiary && !settings.paymentIban) return;
+    section('Cum poți plăti');
+    if (settings.paymentRevolutUrl) {
+      ensure(66);
+      doc.font('Bold').fontSize(10).fillColor(dark).text('Revolut.me', doc.page.margins.left, doc.y, { width });
+      doc.moveDown(.15).font('Regular').fontSize(9).fillColor(tones.info.ink)
+        .text(settings.paymentRevolutUrl, doc.page.margins.left, doc.y, { width, link: settings.paymentRevolutUrl, underline: true });
+      doc.moveDown(.15).font('Regular').fontSize(8.5).fillColor(muted)
+        .text('Poți plăti și cu cardul direct din link, fără cont Revolut. Detalii plată: numele elevului.', doc.page.margins.left, doc.y, { width, lineGap: 2 });
+      doc.x = doc.page.margins.left; rule();
+    }
+    if (settings.paymentBeneficiary || settings.paymentIban) {
+      const details = [settings.paymentBeneficiary ? `Beneficiar: ${settings.paymentBeneficiary}` : '',
+        settings.paymentIban ? `IBAN: ${settings.paymentIban}` : '', 'Detalii plată: numele elevului'].filter(Boolean).join('\n');
+      item('Transfer bancar', '', details, '', 'info');
+    }
+  };
   const matrixReport = () => {
     const expenses = state.expenses.filter(entry => !entry.cancelled).sort((a, b) => a.occurredAt.localeCompare(b.occurredAt) || a.title.localeCompare(b.title, locale));
     if (!expenses.length) { note('Nu există cheltuieli active pentru tabel.'); return; }
@@ -386,7 +405,10 @@ export async function renderReportPdf(report, state, branding = {}) {
     }
   }
 
-  if (report.type !== 'matrix') note('Document generat din registrul „Casierul clasei”. Sumele sunt exprimate în lei și reflectă datele existente la momentul emiterii.');
+  if (report.type !== 'matrix') {
+    paymentDetails();
+    note('Document generat din registrul „Casierul clasei”. Sumele sunt exprimate în lei și reflectă datele existente la momentul emiterii.');
+  }
   const pages = doc.bufferedPageRange();
   for (let index = 0; index < pages.count; index += 1) {
     doc.switchToPage(index);

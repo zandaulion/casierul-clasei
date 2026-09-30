@@ -28,7 +28,8 @@ async function fixture(t, stress = false) {
   const png = await readFile(new URL('../web/icons/icon-192.png', import.meta.url));
   const logo = `data:image/png;base64,${png.toString('base64')}`;
   post('settings.update', { schoolName: 'Școala demonstrativă pentru explorare și învățare împreună',
-    className: 'III A', schoolYear: '2026–2027', openingBalanceMinor: 12345, schoolLogo: logo, classLogo: logo });
+    className: 'III A', schoolYear: '2026–2027', openingBalanceMinor: 12345, schoolLogo: logo, classLogo: logo,
+    paymentRevolutUrl: 'https://revolut.me/exampleclass', paymentBeneficiary: 'Ana Popescu', paymentIban: 'RO49AAAA1B31007593840000' });
   const children = [
     { lastName: stress ? 'Constantinescu-Popescu-Ionescu-Petrescu-Șerbănescu' : 'Avram',
       firstName: stress ? 'Ana-Maria-Alexandra-Gabriela-Ștefania' : 'Ana' },
@@ -182,6 +183,14 @@ test('all four PDF reports preserve financial values, privacy, branding and read
     assertLayout(result, type);
     assertPrivacy(result, data, type);
     assertText(result, 'Școala demonstrativă pentru explorare și învățare împreună', `${type}: school identity`);
+    if (type === 'matrix') assert.equal(result.text.includes('RO49AAAA1B31007593840000'), false, 'internal matrix omits payment instructions');
+    else {
+      assertText(result, 'Cum poți plăti', `${type}: payment section`);
+      assertText(result, 'https://revolut.me/exampleclass', `${type}: Revolut link`);
+      assertText(result, 'Beneficiar: Ana Popescu', `${type}: bank beneficiary`);
+      assertText(result, 'IBAN: RO49AAAA1B31007593840000', `${type}: bank account`);
+      assertText(result, 'Detalii plată: numele elevului', `${type}: transfer reference guidance`);
+    }
     if (type === 'class') {
       assertMetric(result, 'Numerar disponibil în fond', money(30845));
       assertMetric(result, 'De restituit pentru sume avansate', money(3000));

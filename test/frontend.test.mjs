@@ -89,11 +89,16 @@ test('surname order uses Romanian collation and paid contributions are excluded'
 });
 test('WhatsApp reminders contain only the selected child situation and use a direct conversation URL', () => {
   const pupil = { ...child, firstName: 'Ana', lastName: 'Popescu', creditMinor: 500 };
-  const message = whatsappReminder(pupil, 'III B');
+  const message = whatsappReminder(pupil, 'III B', { paymentRevolutUrl: 'https://revolut.me/exampleclass',
+    paymentBeneficiary: 'Ana Popescu', paymentIban: 'RO49AAAA1B31007593840000' });
   assert.match(message, /Popescu Ana din III B/u);
   assert.match(message, /Excursie: 25 lei \(termen 1 oct\. 2026\)/u);
   assert.match(message, /Total de achitat: 85 lei/u);
   assert.match(message, /Avans disponibil: 5 lei/u);
+  assert.match(message, /Poți plăti și cu cardul direct din link, fără cont Revolut/u);
+  assert.match(message, /Beneficiar: Ana Popescu/u);
+  assert.match(message, /IBAN: RO49AAAA1B31007593840000/u);
+  assert.match(message, /Detalii plată: numele elevului/u);
   assert.equal(whatsappUrl('+40722111222', message), `https://wa.me/40722111222?text=${encodeURIComponent(message)}`);
   assert.equal(whatsappUrl('număr invalid', message), '');
 });
