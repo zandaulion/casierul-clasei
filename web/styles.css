@@ -484,6 +484,14 @@ main { min-width: 0; padding: 24px 20px; outline: none; }
 .collection-dock-summary dl > div { gap: 8px; padding: 2px 0; }
 .collection-dock-summary dd { white-space: nowrap; font-weight: 600; }
 .collection-dock-summary dt { color: var(--muted); }
+.small-settlement {
+  margin-top: 4px;
+  padding-top: 9px;
+  border-top: 1px solid var(--line);
+}
+.small-settlement label { margin: 0; font-size: 13px; }
+.small-settlement label > span { display: block; margin-bottom: 4px; }
+.small-settlement select { min-height: 42px; margin: 0; padding-block: 7px; font-size: 14px; }
 
 /* Summaries, expenses, and a clear distinction between received and paid out. */
 .summary {

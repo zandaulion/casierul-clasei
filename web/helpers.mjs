@@ -58,6 +58,17 @@ export function collectionResult(child, draft) {
   const changeMinor = draft.excess === 'change' ? excessMinor : 0;
   return { receivedMinor, allocations: allocations.filter(a => a.amountMinor > 0), coveredMinor, excessMinor, changeMinor, creditMinor: excessMinor - changeMinor, netMinor: receivedMinor - changeMinor, dueMinor: child.dueMinor - coveredMinor };
 }
+export function smallSettlement(child, draft, result = collectionResult(child, draft)) {
+  if (result.error || result.netMinor <= 0) return null;
+  const paidByExpense = new Map(result.allocations.map(item => [item.expenseId, item.amountMinor]));
+  const candidates = unpaid(child).filter(item => draft.target === 'all' || item.expenseId === draft.target);
+  const allocations = candidates.map(item => ({
+    expenseId: item.expenseId,
+    amountMinor: item.remainingMinor - (paidByExpense.get(item.expenseId) || 0),
+  })).filter(item => item.amountMinor > 0);
+  const amountMinor = allocations.reduce((sum, item) => sum + item.amountMinor, 0);
+  return amountMinor > 0 && amountMinor <= 100 ? { amountMinor, allocations } : null;
+}
 export function expensePreview(type, amountMinor, participants) {
   const ordered = [...participants].sort((a, b) => a.childId < b.childId ? -1 : a.childId > b.childId ? 1 : 0);
   return ordered.map((p, i) => ({ ...p, amountMinor: type === 'split' ? Math.floor(amountMinor / ordered.length) + (i < amountMinor % ordered.length ? 1 : 0) : amountMinor * (type === 'quantity' ? p.quantity : 1) }));

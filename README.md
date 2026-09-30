@@ -66,6 +66,8 @@ Atinge copilul din lista alfabetică, apoi alege totalul de achitat sau o singur
 
 Pentru diferență, alege **Dau rest** sau **Păstrez în avans**. Dacă ai selectat o singură cheltuială, diferența nu se repartizează automat către alte datorii. Poți introduce suma primită și repartizarea manual. Rezumatul de lângă salvare arată suma primită, restul și suma înregistrată. Verifică-l și salvează; aplicația revine la lista copiilor și confirmă încasarea pentru copilul ales.
 
+Dacă după o încasare rămâne cel mult 1 leu pentru totalul sau contribuția selectată, poți lăsa diferența de achitat, o poți acoperi din avansul existent al copilului sau o poți închide ca **ajustare de rotunjire**. Numerarul se înregistrează întotdeauna exact. Folosirea avansului și ajustarea sunt operațiuni distincte, reversibile și vizibile în istoric și rapoarte; ajustarea nu mărește soldul de numerar și apare separat de suma încasată.
+
 Pe tabletă în mod peisaj și pe laptop, contribuțiile și confirmarea încasării apar alături. Panoul de confirmare rămâne la îndemână în timpul derulării; pe telefon, el stă la baza ecranului. Rotirea sau redimensionarea ferestrei păstrează suma introdusă, contribuția selectată și repartizarea manuală.
 
 Avansul poate acoperi ulterior alte contribuții sau poate fi restituit. Folosirea avansului nu înregistrează încă o intrare de bani.

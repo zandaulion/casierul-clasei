@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { money, parseMoney, roundUp, collectionResult, expensePreview, sortChildren, unpaid, whatsappReminder, whatsappUrl, reportShareMessage } from '../web/helpers.mjs';
+import { money, parseMoney, roundUp, collectionResult, smallSettlement, expensePreview, sortChildren, unpaid, whatsappReminder, whatsappUrl, reportShareMessage } from '../web/helpers.mjs';
 const child = { dueMinor: 8500, contributions: [
   { expenseId: 'books', title: 'Culegeri', dueDate: '2026-10-02', remainingMinor: 6000 },
   { expenseId: 'trip', title: 'Excursie', dueDate: '2026-10-01', remainingMinor: 2500 },
@@ -30,6 +30,18 @@ test('automatic collections use earliest deadline and handle partial payment', (
   assert.deepEqual(result.allocations, [{ expenseId: 'trip', amountMinor: 2500 }, { expenseId: 'books', amountMinor: 1500 }]);
   assert.equal(result.dueMinor, 4500);
   assert.equal(result.netMinor, 4000);
+});
+test('small settlement closes at most one leu on the selected scope', () => {
+  const tiny = { dueMinor: 1414, contributions: [{ expenseId: 'sport', title: 'Echipament', dueDate: null, remainingMinor: 1414 }] };
+  const result = collectionResult(tiny, draft({ amount: '14' }));
+  assert.deepEqual(smallSettlement(tiny, draft({ amount: '14' }), result), {
+    amountMinor: 14, allocations: [{ expenseId: 'sport', amountMinor: 14 }],
+  });
+  assert.equal(smallSettlement(tiny, draft({ amount: '13' })), null);
+  const scoped = collectionResult(child, draft({ amount: '59,50', target: 'books' }));
+  assert.deepEqual(smallSettlement(child, draft({ amount: '59,50', target: 'books' }), scoped), {
+    amountMinor: 50, allocations: [{ expenseId: 'books', amountMinor: 50 }],
+  });
 });
 test('earmarked rounded amount never covers another expense and supports change or credit', () => {
   const change = collectionResult(child, draft({ target: 'books' }));

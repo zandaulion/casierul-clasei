@@ -197,7 +197,7 @@ test('all four PDF reports preserve financial values, privacy, branding and read
     } else if (type === 'child') {
       assertMetric(result, 'Total de achitat', money(10250));
       assertMetric(result, 'Avans disponibil', money(0));
-      assertText(result, `Achitat ${money(2500)} · De achitat ${money(500)}`, 'partial individual contribution');
+      assertText(result, `Acoperit din bani ${money(2500)} · De achitat ${money(500)}`, 'partial individual contribution');
     } else {
       assertText(result, '25 / 30', 'partial matrix contribution');
       assertText(result, '30 / 30', 'paid matrix contribution');
@@ -284,6 +284,31 @@ test('expense coverage counts allocated contributions, with honest zero, tiny, n
       `${type}: every expense uses its own allocated contribution total`);
     if (type === 'matrix') assert.match(result.text, /acoperire.*contribuții/iu, 'matrix legend explains what the percentages measure');
   }
+});
+
+test('reports separate rounding adjustments from cash while showing the contribution as settled', async t => {
+  const data = await fixture(t);
+  data.post('expense.create', { title: 'Diferență de numerar', type: 'fixed', amountMinor: 1414,
+    participants: [{ childId: data.own.id }] });
+  const expense = data.ledger.getState().expenses.find(item => item.title === 'Diferență de numerar');
+  data.post('collection.create', { childId: data.own.id, receivedMinor: 1400, changeMinor: 0,
+    allocations: [{ expenseId: expense.id, amountMinor: 1400 }],
+    settlement: { type: 'rounding', allocations: [{ expenseId: expense.id, amountMinor: 14 }] } });
+
+  const classReport = await inspectPdf(data, 'class', 'rounding-adjustment-class');
+  assertMetric(classReport, 'Ajustări de rotunjire', money(14));
+  assertText(classReport, `Încasat ${money(1400)} · Ajustări ${money(14)}`, 'class expense row separates cash and adjustment');
+  const expenseReport = await inspectPdf({ ...data, primary: expense.id }, 'expense', 'rounding-adjustment-expense');
+  assertMetric(expenseReport, 'Încasat', money(1400));
+  assertMetric(expenseReport, 'Ajustări de rotunjire', money(14));
+  assertMetric(expenseReport, 'De achitat', `0 copii · ${money(0)}`);
+  assertMetric(expenseReport, 'Acoperire din contribuții', '99%');
+  const childReport = await inspectPdf(data, 'child', 'rounding-adjustment-child');
+  assertText(childReport, `Acoperit din bani ${money(1400)} · Ajustare de rotunjire ${money(14)} · De achitat ${money(0)}`,
+    'individual report explains the non-cash settlement');
+  const matrixReport = await inspectPdf(data, 'matrix', 'rounding-adjustment-matrix');
+  assertText(matrixReport, '14,14 / 14,14', 'matrix treats the adjusted contribution as settled');
+  assert.match(matrixReport.text, /ajustările de rotunjire.*numai contribuțiile acoperite din bani/iu);
 });
 
 test('a zero-total expense has no misleading percentage or non-finite financial text', async t => {

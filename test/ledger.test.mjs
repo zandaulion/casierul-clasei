@@ -279,6 +279,43 @@ test('installments and explicit change record exact allocations and no phantom c
   assert.equal(ledger.getState().children[0].creditMinor, 0);
 });
 
+test('small cash differences close atomically from credit or as an auditable rounding adjustment', t => {
+  const { ledger, post, child, expense } = fixture(t);
+  const withCredit = child('Ana', 'Avram');
+  const rounded = child('David', 'Bălan');
+  const creditExpense = expense([withCredit], 1414, 'fixed', { title: 'Echipament Ana' });
+  const roundedExpense = expense([rounded], 1414, 'fixed', { title: 'Echipament David' });
+  post('collection.create', { childId: withCredit, receivedMinor: 100, changeMinor: 0, allocations: [] });
+  post('collection.create', { childId: withCredit, receivedMinor: 1400, changeMinor: 0,
+    allocations: [{ expenseId: creditExpense, amountMinor: 1400 }],
+    settlement: { type: 'credit', allocations: [{ expenseId: creditExpense, amountMinor: 14 }] } });
+  post('collection.create', { childId: rounded, receivedMinor: 1400, changeMinor: 0,
+    allocations: [{ expenseId: roundedExpense, amountMinor: 1400 }],
+    settlement: { type: 'rounding', allocations: [{ expenseId: roundedExpense, amountMinor: 14 }] } });
+  let state = ledger.getState();
+  assert.equal(state.children.find(item => item.id === withCredit).creditMinor, 86);
+  assert.equal(state.children.find(item => item.id === withCredit).dueMinor, 0);
+  assert.equal(state.children.find(item => item.id === rounded).dueMinor, 0);
+  assert.equal(state.summary.balanceMinor, 2900);
+  assert.equal(state.summary.totalAdjustedMinor, 14);
+  assert.equal(state.expenses.find(item => item.id === roundedExpense).collectedMinor, 1400);
+  assert.equal(state.expenses.find(item => item.id === roundedExpense).adjustedMinor, 14);
+  const roundedContribution = state.children.find(item => item.id === rounded).contributions[0];
+  assert.equal(roundedContribution.paidMinor, 1400);
+  assert.equal(roundedContribution.adjustedMinor, 14);
+  const adjustment = state.transactions.find(item => item.type === 'rounding_adjustment');
+  post('transaction.reverse', { transactionId: adjustment.id, comment: 'Diferența va fi încasată' });
+  state = ledger.getState();
+  assert.equal(state.children.find(item => item.id === rounded).dueMinor, 14);
+  assert.equal(state.summary.balanceMinor, 2900);
+  assert.equal(state.summary.totalAdjustedMinor, 0);
+
+  const before = ledger.getState();
+  assert.throws(() => post('collection.create', { childId: rounded, receivedMinor: 1, changeMinor: 0, allocations: [],
+    settlement: { type: 'rounding', allocations: [{ expenseId: roundedExpense, amountMinor: 13 }] } }), status(400));
+  assert.deepEqual(ledger.getState(), before, 'invalid combined settlement rolls back the cash entry too');
+});
+
 test('invalid money, allocations, dates and partial bulk import roll back atomically', t => {
   const { ledger, post, child, expense } = fixture(t);
   const id = child();
@@ -374,7 +411,7 @@ test('temporary fund advances reconcile cash, liability, vendor payment and part
     occurredAt: '2026-09-27T18:00:00+03:00', comment: 'Achitat personal la Decathlon' }).transactionId;
   let state = ledger.getState();
   assert.deepEqual(state.summary, { balanceMinor: 10000, netBalanceMinor: 0, totalReceivedMinor: 0,
-    totalPaidMinor: 0, totalCreditMinor: 0, totalDueMinor: 10000, totalAdvancedMinor: 10000,
+    totalPaidMinor: 0, totalCreditMinor: 0, totalDueMinor: 10000, totalAdjustedMinor: 0, totalAdvancedMinor: 10000,
     totalAdvanceRepaidMinor: 0, totalAdvanceOutstandingMinor: 10000 });
   post('payment.create', { amountMinor: 10000, destination: 'Decathlon', expenseId: equipment,
     occurredAt: '2026-09-27T18:00:00+03:00' });
@@ -505,6 +542,38 @@ test('existing transaction tables migrate without changing financial history', t
   t.after(() => check.close());
   assert.deepEqual(check.prepare('PRAGMA foreign_key_check').all(), []);
   assert.match(check.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'transactions'").get().sql, /advance_id/u);
+});
+
+test('deployed transaction schema gains rounding adjustments without losing advances', t => {
+  const directory = mkdtempSync(join(tmpdir(), 'casierul-current-migration-'));
+  const path = join(directory, 'ledger.sqlite');
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  const current = new DatabaseSync(path);
+  current.exec(`CREATE TABLE transactions (
+    id TEXT PRIMARY KEY,
+    type TEXT NOT NULL CHECK(type IN ('collection', 'payment', 'credit_apply', 'refund', 'fund_advance', 'advance_repayment', 'reversal')),
+    occurred_at TEXT NOT NULL, created_at TEXT NOT NULL,
+    child_id TEXT, expense_id TEXT, destination TEXT NOT NULL, comment TEXT NOT NULL,
+    amount INTEGER NOT NULL CHECK(amount > 0), change INTEGER NOT NULL CHECK(change >= 0 AND change <= amount),
+    reverses_id TEXT UNIQUE REFERENCES transactions(id), advance_id TEXT REFERENCES transactions(id),
+    actor_id TEXT NOT NULL, actor_label TEXT NOT NULL,
+    CHECK((type = 'reversal') = (reverses_id IS NOT NULL)),
+    CHECK((type = 'advance_repayment') = (advance_id IS NOT NULL))
+  ) STRICT;
+  INSERT INTO transactions VALUES ('advance', 'fund_advance', '2026-09-01T10:00:00.000Z',
+    '2026-09-01T10:00:00.000Z', NULL, NULL, 'Casier', '', 1000, 0, NULL, NULL, 'device', 'Telefon');
+  INSERT INTO transactions VALUES ('repayment', 'advance_repayment', '2026-09-02T10:00:00.000Z',
+    '2026-09-02T10:00:00.000Z', NULL, NULL, 'Casier', '', 400, 0, NULL, 'advance', 'device', 'Telefon');`);
+  current.close();
+  const ledger = new Ledger(path);
+  t.after(() => ledger.close());
+  const state = ledger.getState();
+  assert.equal(state.advances[0].outstandingMinor, 600);
+  assert.equal(state.summary.balanceMinor, 600);
+  const check = new DatabaseSync(path);
+  t.after(() => check.close());
+  assert.match(check.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'transactions'").get().sql, /rounding_adjustment/u);
+  assert.deepEqual(check.prepare('PRAGMA foreign_key_check').all(), []);
 });
 
 test('expense cancellation requires reversing allocations and linked payouts, then leaves history', t => {

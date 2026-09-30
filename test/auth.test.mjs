@@ -578,6 +578,11 @@ test('business routes enforce body types, size, ids, and method before dispatch'
   assert.equal((await publicRequest('/api/children/kid-123/contacts', {
     method: 'POST', body: { ...base, contacts: [{ label: 'Mama', phone: 722111222 }] }, headers: { Cookie: cookie },
   })).status, 400);
+  assert.equal((await publicRequest('/api/collections', {
+    method: 'POST', body: { ...base, childId: 'kid-123', receivedMinor: 1400, changeMinor: 0,
+      allocations: [], settlement: { type: 'rounding', allocations: [{ expenseId: 'sport', amountMinor: '14' }] } },
+    headers: { Cookie: cookie },
+  })).status, 400);
   assert.equal(ledger.calls.length, 0);
   assert.equal((await publicRequest('/api/children/kid-123', {
     method: 'POST', body: { ...base, firstName: 'Ana', lastName: 'Pop' }, headers: { Cookie: cookie },
@@ -588,6 +593,13 @@ test('business routes enforce body types, size, ids, and method before dispatch'
   })).status, 200);
   assert.equal(ledger.calls[1].operation, 'child.contacts.update');
   assert.equal(ledger.calls[1].body.childId, 'kid-123');
+  assert.equal((await publicRequest('/api/collections', {
+    method: 'POST', body: { ...base, childId: 'kid-123', receivedMinor: 1400, changeMinor: 0,
+      allocations: [{ expenseId: 'sport', amountMinor: 1400 }],
+      settlement: { type: 'credit', allocations: [{ expenseId: 'sport', amountMinor: 14 }] } },
+    headers: { Cookie: cookie },
+  })).status, 200);
+  assert.deepEqual(ledger.calls[2].body.settlement, { type: 'credit', allocations: [{ expenseId: 'sport', amountMinor: 14 }] });
 });
 
 test('ledger 409 errors pass through and internal exceptions do not reveal internals', async (t) => {
