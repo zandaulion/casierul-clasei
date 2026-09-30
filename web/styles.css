@@ -556,6 +556,21 @@ dd { margin: 0 0 0 auto; text-align: right; }
 .reports-intro h1 { margin-bottom: 10px; }
 .reports-intro p { max-width: 45em; margin: 0; color: var(--muted); font-size: 14px; }
 .reports-illustration { width: 112px; height: 100px; flex: 0 0 112px; margin-left: auto; color: var(--brand); }
+.payment-details { margin-bottom: 20px; padding: 18px; border-left: 4px solid var(--brand); background: var(--sky); }
+.payment-details h2 { margin: 0 0 3px; font-size: 20px; }
+.payment-details p { margin: 0; }
+.payment-details > .row { align-items: flex-start; }
+.payment-detail-list { display: grid; gap: 10px; margin-top: 15px; }
+.payment-detail {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 18px;
+  min-width: 0; padding: 12px; border: 1px solid var(--line); border-radius: 13px; background: var(--surface);
+}
+.payment-detail > div:first-child { min-width: 0; flex: 1 1 16em; }
+.payment-detail strong, .payment-detail-value, .payment-detail > div:first-child a { display: block; }
+.payment-detail-value, .payment-detail > div:first-child a { margin-top: 3px; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.payment-detail-actions { display: flex; flex: 1 1 15em; justify-content: flex-end; gap: 8px; }
+.payment-detail-actions .whatsapp-link { flex: 1 1 9em; justify-content: center; }
+.payment-detail-actions button { flex: 0 1 8em; }
 .report-types { display: grid; gap: 12px; }
 .report-type {
   --report-accent: var(--lavender);

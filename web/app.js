@@ -1,5 +1,5 @@
 import { installUpdates } from '/pwa-update.js';
-import { name, money, decimal, parseMoney, sortChildren, unpaid, roundUp, automaticAllocations, collectionResult, creditSettlement, smallSettlement, expensePreview, whatsappReminder, whatsappUrl, reportShareMessage } from './helpers.mjs';
+import { name, money, decimal, parseMoney, sortChildren, unpaid, roundUp, automaticAllocations, collectionResult, creditSettlement, smallSettlement, expensePreview, whatsappReminder, whatsappUrl, whatsappShareUrl, paymentShareItems, reportShareMessage } from './helpers.mjs';
 import { icon } from './icons.mjs';
 
 const $ = selector => document.querySelector(selector);
@@ -390,6 +390,7 @@ function renderLedger() {
 }
 function renderReports() {
   const reports = state.reports || [];
+  const paymentItems = paymentShareItems(state.settings);
   const debtors = state.children.filter(item => item.dueMinor > 0);
   const hasExpenses = state.expenses.some(expense => !expense.cancelled);
   const reportTypes = [
@@ -410,6 +411,7 @@ function renderReports() {
     <circle cx="140" cy="87" r="4" fill="var(--peach)"/>
   </svg>`;
   $('#main').innerHTML = `<section class="reports-intro" aria-labelledby="reports-title"><div class="reports-intro-copy"><h1 id="reports-title">Rapoarte de împărtășit</h1><p>Fiecare contribuție, la locul ei. Situații clare, pregătite pentru consultare și partajare.</p></div>${stationery}</section>
+    ${canWrite() ? `<section class="payment-details card" aria-labelledby="payment-details-title"><div class="row"><div><h2 id="payment-details-title">Detalii de plată</h2><p class="caption">Trimite fiecare informație separat, ca părinții să poată deschide linkul sau copia ușor datele bancare.</p></div><button data-action="settings">${paymentItems.length ? 'Editează' : 'Configurează'}</button></div>${paymentItems.length ? `<div class="payment-detail-list">${paymentItems.map(item => `<article class="payment-detail"><div><strong>${esc(item.label)}</strong>${item.key === 'revolut' ? `<a href="${esc(item.value)}" target="_blank" rel="noopener noreferrer">${esc(item.value)}</a>` : `<span class="payment-detail-value">${esc(item.value)}</span>`}</div><div class="payment-detail-actions"><a class="whatsapp-link compact" href="${esc(whatsappShareUrl(item.message))}" target="_blank" rel="noopener noreferrer" aria-label="Trimite ${esc(item.label)} prin WhatsApp">${icon('message')}WhatsApp</a><button type="button" data-copy-payment="${esc(item.key)}">Copiază</button></div></article>`).join('')}</div>` : '<div class="empty"><p>Adaugă linkul Revolut.me, numele beneficiarului și IBAN-ul în setările clasei.</p></div>'}</section>` : ''}
     ${canWrite() ? `<div class="report-types">${reportTypes.map(item => `<button class="card card-button report-type report-type-${item.type}" data-action="report-${item.type}" ${item.available ? '' : 'disabled'}><span class="report-icon">${icon(item.icon)}</span><span class="report-type-copy"><h3>${item.title}</h3><span class="caption">${item.description}</span></span></button>`).join('')}</div>` : '<p>Consultă, descarcă sau partajează rapoartele emise de casier la care ai acces.</p>'}
     <section class="report-archive" aria-labelledby="report-archive-title"><div class="report-archive-heading"><h2 id="report-archive-title">${icon('reports')}Rapoarte emise</h2></div><p class="caption">„Partajează PDF” deschide selectorul telefonului; de acolo poți alege WhatsApp și grupul părinților.</p>
       <div class="stack report-archive-list">${reports.length ? reports.map(report => `<article class="card report-card ${report.replacedById ? 'replaced' : ''}">
@@ -487,6 +489,20 @@ async function shareChildReport(reportId) {
   const c = report ? state.children.find(item => item.id === report.subjectId) : null;
   if (!c) return;
   await shareReport(report.id, whatsappReminder(c, state.settings.className));
+}
+async function copyPaymentDetail(key) {
+  const item = paymentShareItems(state.settings).find(entry => entry.key === key);
+  if (!item) return;
+  try {
+    await navigator.clipboard.writeText(item.value);
+  } catch {
+    const input = document.createElement('textarea');
+    input.value = item.value; input.style.position = 'fixed'; input.style.opacity = '0';
+    document.body.append(input); input.select();
+    if (!document.execCommand('copy')) { input.remove(); toast('Textul nu a putut fi copiat.'); return; }
+    input.remove();
+  }
+  toast(`${item.label} a fost copiat.`);
 }
 async function loadReportPreview(currentModal, report) {
   const status = $('#pdf-preview-status'), pages = $('#pdf-preview-pages'), dialog = $('#dialog');
@@ -609,7 +625,7 @@ function settingsModal() {
   }
   const year = new Date().getFullYear() - (new Date().getMonth() < 8 ? 1 : 0);
   const logoPicker = (kind, label, exists) => `<div class="logo-picker"><div class="logo-preview"><img id="${kind}-logo-preview" ${exists ? `src="${esc(scopedUrl(`/api/branding/${kind}?v=${encodeURIComponent(s[`${kind}LogoVersion`] || '')}`))}"` : 'hidden'} alt="${esc(label)}"><span id="${kind}-logo-empty" ${exists ? 'hidden' : ''}>Fără siglă</span></div><strong>${esc(label)}</strong><label class="file-button">Alege imaginea<input type="file" accept="image/png,image/jpeg,image/webp" data-logo-input="${kind}" class="visually-hidden"></label><button type="button" data-action="remove-logo" data-logo-kind="${kind}" ${exists ? '' : 'hidden'}>Elimină</button></div>`;
-  openModal('settings', s.className ? 'Setările clasei' : 'Configurează clasa', `${field('Școala', 'schoolName', s.schoolName, 'required maxlength="160"')}${field('Clasa', 'className', s.className, 'required maxlength="80"')}${field('An școlar', 'schoolYear', s.schoolYear || `${year}–${year + 1}`, 'required maxlength="40"')}<div class="section-label">Sigle pentru rapoarte</div><div class="logo-grid">${logoPicker('school', 'Sigla școlii', s.hasSchoolLogo)}${logoPicker('class', 'Sigla clasei', s.hasClassLogo)}</div><p class="caption">Poți alege PNG, JPG sau WebP. Imaginea este redimensionată pe dispozitiv și apare în antetul PDF-urilor emise de acum înainte.</p>${field('Sold inițial (lei)', 'openingBalance', decimal(s.openingBalanceMinor), `inputmode="decimal" required ${state.transactions.length ? 'readonly' : ''}`)}<p class="caption">Banii deja existenți în fond înainte să începi evidența. ${state.transactions.length ? 'Soldul inițial nu mai poate fi schimbat după înregistrarea operațiunilor.' : 'Avansurile individuale se înregistrează separat, prin încasări.'}</p>${state.settings.className ? `<div class="toolbar"><a href="${esc(scopedUrl('/api/export'))}" download="casierul-clasei.json">Exportă datele JSON</a><button type="button" data-action="logout">Deconectează dispozitivul</button></div>` : ''}<div class="section-label">Drepturi pe alte clase</div><button type="button" class="wide" data-action="add-access">+ Adaugă acces din invitație</button>${device?.is_owner ? '<div class="section-label">Mai multe clase</div><button type="button" class="wide" data-action="add-classroom">+ Adaugă altă clasă</button><p class="caption">Fiecare clasă are registru, rapoarte și drepturi de acces separate.</p>' : ''}`, 'Salvează', { logoChanges: {} });
+  openModal('settings', s.className ? 'Setările clasei' : 'Configurează clasa', `${field('Școala', 'schoolName', s.schoolName, 'required maxlength="160"')}${field('Clasa', 'className', s.className, 'required maxlength="80"')}${field('An școlar', 'schoolYear', s.schoolYear || `${year}–${year + 1}`, 'required maxlength="40"')}<div class="section-label">Detalii de plată</div>${field('Link Revolut.me', 'paymentRevolutUrl', s.paymentRevolutUrl || '', 'inputmode="url" maxlength="240" autocomplete="url" placeholder="https://revolut.me/nume"')}${field('Numele beneficiarului', 'paymentBeneficiary', s.paymentBeneficiary || '', 'maxlength="160" autocomplete="name"')}${field('IBAN', 'paymentIban', s.paymentIban || '', 'maxlength="64" autocapitalize="characters" spellcheck="false" placeholder="RO00 BANK 0000 0000 0000 0000"')}<p class="caption">În Rapoarte, fiecare valoare va avea propriul buton WhatsApp și propriul buton de copiere. Pentru detaliile transferului, părintele va folosi numele elevului.</p><div class="section-label">Sigle pentru rapoarte</div><div class="logo-grid">${logoPicker('school', 'Sigla școlii', s.hasSchoolLogo)}${logoPicker('class', 'Sigla clasei', s.hasClassLogo)}</div><p class="caption">Poți alege PNG, JPG sau WebP. Imaginea este redimensionată pe dispozitiv și apare în antetul PDF-urilor emise de acum înainte.</p>${field('Sold inițial (lei)', 'openingBalance', decimal(s.openingBalanceMinor), `inputmode="decimal" required ${state.transactions.length ? 'readonly' : ''}`)}<p class="caption">Banii deja existenți în fond înainte să începi evidența. ${state.transactions.length ? 'Soldul inițial nu mai poate fi schimbat după înregistrarea operațiunilor.' : 'Avansurile individuale se înregistrează separat, prin încasări.'}</p>${state.settings.className ? `<div class="toolbar"><a href="${esc(scopedUrl('/api/export'))}" download="casierul-clasei.json">Exportă datele JSON</a><button type="button" data-action="logout">Deconectează dispozitivul</button></div>` : ''}<div class="section-label">Drepturi pe alte clase</div><button type="button" class="wide" data-action="add-access">+ Adaugă acces din invitație</button>${device?.is_owner ? '<div class="section-label">Mai multe clase</div><button type="button" class="wide" data-action="add-classroom">+ Adaugă altă clasă</button><p class="caption">Fiecare clasă are registru, rapoarte și drepturi de acces separate.</p>' : ''}`, 'Salvează', { logoChanges: {} });
 }
 function accessModal() {
   openModal('add-access', 'Adaugă acces la o clasă', `${field('Cod de invitație', 'code', '', 'required autocomplete="off" autocapitalize="none" spellcheck="false"')}<p class="caption">Folosește invitația emisă pentru clasa și rolul dorite. Accesul existent pe acest dispozitiv rămâne activ.</p>`, 'Adaugă accesul');
@@ -874,7 +890,8 @@ async function submitModal() {
     if (modal.type === 'settings') {
       const openingBalanceMinor = parseMoney(form.elements.openingBalance.value);
       if (openingBalanceMinor === null) throw new Error('Soldul inițial trebuie să fie o sumă validă, zero sau mai mare.');
-      path = '/api/settings'; body = { schoolName: form.elements.schoolName.value.trim(), className: form.elements.className.value.trim(), schoolYear: form.elements.schoolYear.value.trim(), openingBalanceMinor };
+      path = '/api/settings'; body = { schoolName: form.elements.schoolName.value.trim(), className: form.elements.className.value.trim(), schoolYear: form.elements.schoolYear.value.trim(), openingBalanceMinor,
+        paymentRevolutUrl: form.elements.paymentRevolutUrl.value.trim(), paymentBeneficiary: form.elements.paymentBeneficiary.value.trim(), paymentIban: form.elements.paymentIban.value.trim() };
       for (const [kind, fieldName] of [['school', 'schoolLogo'], ['class', 'classLogo']]) {
         if (Object.hasOwn(modal.logoChanges, kind)) body[fieldName] = modal.logoChanges[kind];
       }
@@ -985,6 +1002,7 @@ async function refresh(review = false) {
 document.addEventListener('click', async event => {
   const button = event.target.closest('button'); if (!button || button.disabled) return;
   const action = button.dataset.action;
+  if (button.dataset.copyPayment) { await copyPaymentDetail(button.dataset.copyPayment); return; }
   if (action && writeActions.has(action) && !canWrite()) { toast('Acest dispozitiv are acces doar pentru citire.'); return; }
   if (action === 'reconnect') { try { await api('/api/health'); if ($('#dialog').open && !pending && !conflict) $('#modal-error').hidden = true; updateNotices(); toast('Conexiunea este disponibilă.'); if (state && !busy()) await refresh(); } catch { updateNotices(); } return; }
   if (action === 'retry') { await sendPending(); return; }
