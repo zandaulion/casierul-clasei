@@ -8,7 +8,7 @@ Aplicația: https://casierul-clasei.zandaulion.com
 
 ## Capturi de ecran
 
-Datele afișate în capturi sunt integral sintetice.
+Datele afișate în capturi sunt integral sintetice. Setul surprinde și contactele WhatsApp, detaliile de plată, totalul de achitat din Tabelul contribuțiilor și istoricul Registrului cu operațiunile recente primele.
 
 <table>
   <tr>
@@ -20,13 +20,13 @@ Datele afișate în capturi sunt integral sintetice.
 <table>
   <tr>
     <td align="center"><img src="docs/screenshots/03-cheltuieli-tableta-768x1024.png" alt="Cheltuieli pe tabletă" width="440"><br><strong>Cheltuieli · 768×1024</strong></td>
-    <td align="center"><img src="docs/screenshots/04-rapoarte-tableta-1024x768.png" alt="Rapoarte pe tabletă" width="440"><br><strong>Rapoarte · 1024×768</strong></td>
+    <td align="center"><img src="docs/screenshots/04-rapoarte-tableta-1024x768.png" alt="Detalii de plată și rapoarte pe tabletă" width="440"><br><strong>Detalii de plată și rapoarte · 1024×768</strong></td>
   </tr>
 </table>
 
 <p align="center">
-  <img src="docs/screenshots/05-registru-desktop-1440x900.png" alt="Registrul clasei pe desktop" width="900"><br>
-  <strong>Registru · 1440×900</strong>
+  <img src="docs/screenshots/05-registru-desktop-1440x900.png" alt="Registrul clasei cu operațiunile recente afișate primele" width="900"><br>
+  <strong>Registru în ordine descrescătoare · 1440×900</strong>
 </p>
 
 <p align="center">
@@ -37,7 +37,7 @@ Datele afișate în capturi sunt integral sintetice.
 <table>
   <tr>
     <td align="center"><img src="docs/screenshots/06-documente-tableta-768x1024.png" alt="Document justificativ atașat unei plăți" width="440"><br><strong>Documente justificative · 768×1024</strong></td>
-    <td align="center"><img src="docs/screenshots/07-raport-pdf-tableta-1024x768.png" alt="Previzualizarea PDF a Tabelului contribuțiilor" width="440"><br><strong>Raport PDF în aplicație · 1024×768</strong></td>
+    <td align="center"><img src="docs/screenshots/07-raport-pdf-tableta-1024x768.png" alt="Previzualizarea PDF a Tabelului contribuțiilor cu totalul de plată pentru fiecare copil" width="440"><br><strong>Tabelul contribuțiilor în PDF · 1024×768</strong></td>
   </tr>
 </table>
 
