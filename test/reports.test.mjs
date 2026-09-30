@@ -199,6 +199,9 @@ test('all four PDF reports preserve financial values, privacy, branding and read
       assertMetric(result, 'Avans disponibil', money(0));
       assertText(result, `Acoperit din bani ${money(2500)} · De achitat ${money(500)}`, 'partial individual contribution');
     } else {
+      assertText(result, 'Total de plată', 'matrix labels the amount remaining beside each child');
+      assertText(result, '102,5 lei', 'matrix shows the selected child total remaining');
+      assertText(result, '0 lei', 'matrix shows a fully paid child total');
       assertText(result, '25 / 30', 'partial matrix contribution');
       assertText(result, '30 / 30', 'paid matrix contribution');
       assertText(result, '0 / 30', 'unpaid matrix contribution');
@@ -224,6 +227,7 @@ test('multipage PDFs keep long titles, comments and histories without clipping o
     if (type === 'child') assertText(result, 'Avans individual 22.', 'final child transaction survives pagination');
     if (type === 'matrix') {
       assertText(result, 'Familie36 Copil36', 'last child appears in multipage matrix');
+      assertText(result, 'Total de plată', 'total remaining column repeats on matrix pages');
       assertText(result, 'Atelier 10:', 'last expense group appears in multipage matrix');
     }
     if (type === 'class' || type === 'matrix') assert.ok((result.text.match(/(?:<)?\d+(?:,\d+)?%/gu) || []).length >= data.ledger.getState().expenses.length,
