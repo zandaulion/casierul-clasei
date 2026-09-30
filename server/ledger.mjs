@@ -893,10 +893,11 @@ export class Ledger {
         for (const allocation of settlementAllocations) {
           const contribution = child.contributions.find(item => item.expenseId === allocation.expenseId);
           const remainingAfterCash = contribution.remainingMinor - (collectedByExpense.get(allocation.expenseId) ?? 0);
-          if (allocation.amountMinor !== remainingAfterCash) fail('Diferența mică trebuie să închidă exact contribuția rămasă.');
+          if (allocation.amountMinor > remainingAfterCash) fail('Suma acoperită depășește contribuția rămasă după încasare.');
+          if (raw.type === 'rounding' && allocation.amountMinor !== remainingAfterCash) fail('Ajustarea de rotunjire trebuie să închidă exact contribuția rămasă.');
         }
         const amountMinor = sum(settlementAllocations.map(item => item.amountMinor));
-        if (amountMinor > 100) fail('Doar diferențele de cel mult 1 leu pot fi închise la încasare.');
+        if (raw.type === 'rounding' && amountMinor > 100) fail('Doar diferențele de cel mult 1 leu pot fi închise prin rotunjire la încasare.');
         if (raw.type === 'credit' && amountMinor > child.creditMinor) fail('Avansul disponibil nu acoperă diferența.');
         settlement = { type: raw.type, amountMinor, allocations: settlementAllocations };
       }

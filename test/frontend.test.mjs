@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { money, parseMoney, roundUp, collectionResult, smallSettlement, expensePreview, sortChildren, unpaid, whatsappReminder, whatsappUrl, reportShareMessage } from '../web/helpers.mjs';
+import { money, parseMoney, roundUp, collectionResult, creditSettlement, smallSettlement, expensePreview, sortChildren, unpaid, whatsappReminder, whatsappUrl, reportShareMessage } from '../web/helpers.mjs';
 const child = { dueMinor: 8500, contributions: [
   { expenseId: 'books', title: 'Culegeri', dueDate: '2026-10-02', remainingMinor: 6000 },
   { expenseId: 'trip', title: 'Excursie', dueDate: '2026-10-01', remainingMinor: 2500 },
@@ -41,6 +41,20 @@ test('small settlement closes at most one leu on the selected scope', () => {
   const scoped = collectionResult(child, draft({ amount: '59,50', target: 'books' }));
   assert.deepEqual(smallSettlement(child, draft({ amount: '59,50', target: 'books' }), scoped), {
     amountMinor: 50, allocations: [{ expenseId: 'books', amountMinor: 50 }],
+  });
+});
+test('existing child credit can cover all or part of the selected amount alongside cash', () => {
+  const withCredit = { ...child, creditMinor: 2000 };
+  const mixedDraft = draft({ amount: '65', useCredit: true });
+  const mixed = collectionResult(withCredit, mixedDraft);
+  assert.deepEqual(creditSettlement(withCredit, mixedDraft, mixed), {
+    amountMinor: 2000, allocations: [{ expenseId: 'books', amountMinor: 2000 }],
+  });
+  const creditOnlyDraft = draft({ amount: '0', target: 'trip', useCredit: true });
+  const creditOnly = collectionResult({ ...withCredit, creditMinor: 3000 }, creditOnlyDraft);
+  assert.equal(creditOnly.netMinor, 0);
+  assert.deepEqual(creditSettlement({ ...withCredit, creditMinor: 3000 }, creditOnlyDraft, creditOnly), {
+    amountMinor: 2500, allocations: [{ expenseId: 'trip', amountMinor: 2500 }],
   });
 });
 test('earmarked rounded amount never covers another expense and supports change or credit', () => {
