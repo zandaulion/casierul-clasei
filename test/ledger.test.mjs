@@ -322,6 +322,40 @@ test('small cash differences close atomically from credit or as an auditable rou
   assert.deepEqual(ledger.getState(), before, 'invalid combined settlement rolls back the cash entry too');
 });
 
+test('a saved partial cash collection can be followed by a standalone rounding adjustment', t => {
+  const { ledger, post, child, expense } = fixture(t);
+  const ianis = child('Ianis', 'Mirea');
+  const equipment = expense([ianis], 1414, 'fixed', { title: 'Echipament sportiv' });
+  post('collection.create', { childId: ianis, receivedMinor: 1400, changeMinor: 0,
+    allocations: [{ expenseId: equipment, amountMinor: 1400 }] });
+
+  const adjustmentId = post('rounding_adjustment.create', {
+    childId: ianis, expenseId: equipment, comment: 'Diferență de numerar',
+  }).transactionId;
+  let state = ledger.getState();
+  const contribution = state.children[0].contributions[0];
+  assert.equal(contribution.paidMinor, 1400);
+  assert.equal(contribution.adjustedMinor, 14);
+  assert.equal(contribution.remainingMinor, 0);
+  assert.equal(state.summary.balanceMinor, 1400, 'the adjustment does not move cash');
+  assert.equal(state.summary.totalAdjustedMinor, 14);
+
+  post('transaction.reverse', { transactionId: adjustmentId, comment: 'Diferența va fi încasată' });
+  state = ledger.getState();
+  assert.equal(state.children[0].dueMinor, 14);
+  assert.equal(state.summary.balanceMinor, 1400);
+  assert.equal(state.summary.totalAdjustedMinor, 0);
+
+  const other = child('Mara', 'Pop');
+  const largeRemainder = expense([other], 1600, 'fixed', { title: 'Culegere' });
+  post('collection.create', { childId: other, receivedMinor: 1400, changeMinor: 0,
+    allocations: [{ expenseId: largeRemainder, amountMinor: 1400 }] });
+  assert.throws(() => post('rounding_adjustment.create', { childId: other, expenseId: largeRemainder }), status(400));
+
+  const unpaid = expense([ianis], 50, 'fixed', { title: 'Copie' });
+  assert.throws(() => post('rounding_adjustment.create', { childId: ianis, expenseId: unpaid }), status(409));
+});
+
 test('a collection can use any available child credit alongside the received cash', t => {
   const { ledger, post, child, expense } = fixture(t);
   const id = child('Daria', 'Ion');

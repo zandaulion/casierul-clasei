@@ -79,9 +79,12 @@ flowchart TB
     F2 --> F3{Situația reală}
     F3 -- Nu participă --> F4[Excluzi copilul]
     F4 --> F5[Recalculezi părțile celorlalți]
+    F3 -- Rest de maximum 1 leu --> F9[Ajustezi rotunjirea]
+    F9 --> F10[Păstrezi numerarul real]
     F3 -- Suma este acoperită --> F6[Alegi avansul personal și suma]
     F6 --> F7[Scade datoria clasei fără numerar nou]
     F5 --> F8[Verifici și confirmi]
+    F10 --> F8
     F7 --> F8
   end
 
