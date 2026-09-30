@@ -23,7 +23,7 @@ PDF-urile nou emise au un antet pastelat cu un caiet, creion și avion de hârti
 
 Aceste ilustrații sunt desenate în cod: SVG local în `web/app.js`, respectiv primitive vectoriale PDFKit în `server/report-art.mjs`. Rămân clare la imprimare și nu adaugă dependențe, imagini raster sau servicii externe. Prezentarea nouă se aplică la emitere; PDF-urile deja arhivate păstrează conținutul și aspectul original.
 
-Cheltuielile din situația clasei, raportul individual al cheltuielii și antetul Tabelului contribuțiilor afișează acoperirea din contribuții: `collectedMinor / totalMinor`, cu bară vectorială și procent scris. Procentul folosește cel mult o zecimală, rotunjită în jos; 100% apare doar la acoperire integrală. O contribuție pozitivă sub 0,1% apare ca „<0,1%”. Pentru necesar zero se afișează „Fără sumă de acoperit” (în antetul tabelului: „—”). Plățile, finanțarea temporară și avansurile nealocate nu sunt contribuții încasate pentru cheltuială.
+Cheltuielile din situația clasei, raportul individual al cheltuielii și antetul Tabelului contribuțiilor afișează acoperirea totală: `(collectedMinor + coveredMinor) / totalMinor`, cu bară vectorială și procent scris. Încasările de la părinți și sumele acoperite definitiv din fond apar separat în detalii. Procentul folosește cel mult o zecimală, rotunjită în jos; 100% apare doar la acoperire integrală. O acoperire pozitivă sub 0,1% apare ca „<0,1%”. Pentru necesar zero se afișează „Fără sumă de acoperit” (în antetul tabelului: „—”). Plățile către furnizori, partea încă rambursabilă a finanțării temporare și avansurile nealocate ale copiilor nu intră în procent.
 
 ## Aspect adaptiv
 
