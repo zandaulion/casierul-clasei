@@ -8,6 +8,14 @@
 - Consola privată folosește prefixul `/casierul-clasei`; Caddy injectează credentialul de administrare din configurația privată. Acesta nu este trimis în paginile aplicației sau ale consolei.
 - Serviciul `casierul-clasei-preview.service` păstrează previzualizarea în directorul `preview/`, ca variantă de revenire pentru instalarea inițială.
 
+## Instalare pe alt server
+
+Aplicația nu depinde de consola privată sau de Caddy. Variantele generice:
+
+- **Docker**: `PUBLIC_BASE_URL=https://… ADMIN_TOKEN=… docker compose up -d` pornește serverul pe `127.0.0.1:8018` cu datele în volumul `data`; invitațiile se emit cu `docker compose exec app node scripts/admin.mjs …`. Publicarea prin HTTPS rămâne în sarcina unui reverse proxy.
+- **systemd**: unitățile din `deploy/` folosesc `%h/projects/casierul-clasei`; `./deploy.sh https://origine-publica` le instalează și pornește aplicația chiar și fără consola privată.
+- Variabile: `PUBLIC_BASE_URL` (obligatorie), `ADMIN_TOKEN` (fără el API-ul de administrare răspunde 404), `DATA_DIR`, `HOST`/`PORT` (implicit `127.0.0.1:8018`), `ADMIN_HOST`/`ADMIN_PORT` (implicit `127.0.0.1:8118`, rămâne pe loopback chiar dacă `HOST` este `0.0.0.0`), `COOKIE_SECURE` (`false` doar pentru teste locale fără HTTPS).
+
 ## Publicare
 
 ```
@@ -32,13 +40,18 @@ Fișierele din `web/` sunt încărcate de server la pornire. După orice modific
 - Proprietarul care creează o clasă primește automat drept de casier în ea. Ceilalți proprietari nu primesc automat acces și trebuie invitați separat.
 - Expirarea este verificată pentru fiecare drept pe clasă. Revocarea sau ștergerea din consolă afectează întregul dispozitiv și toate drepturile lui.
 
-Pentru accesuri pe clase și pentru rolurile părinte/auditor, folosește consola PWA privată: alege rolul, apoi clasa întreagă sau copilul. Comanda locală de mai jos păstrează compatibilitatea operațională și emite numai un acces de casier pentru clasa implicită:
+Pentru accesuri pe clase și pentru rolurile părinte/auditor, folosește consola PWA privată (alege rolul, apoi clasa întreagă sau copilul) sau comanda locală, care acoperă aceleași operațiuni:
 
 ```
-node scripts/admin.mjs invite "Telefonul meu"
-node scripts/admin.mjs invites
-node scripts/admin.mjs devices
+node scripts/admin.mjs options                                   # clasele și copiii care pot primi invitații
+node scripts/admin.mjs invite "Telefonul meu"                    # casier pentru clasa implicită
+node scripts/admin.mjs invite --role auditor --for classroom:<id>
+node scripts/admin.mjs invite --role parent --for child:<clasă>:<copil> --expires 2027-06-30
+node scripts/admin.mjs invites | devices
+node scripts/admin.mjs revoke-invite <id> | revoke-device <id> | restore-device <id> | delete-device <id>
 ```
+
+Scriptul citește `~/.config/casierul-clasei/app.env` sau variabilele `ADMIN_TOKEN`, `ADMIN_HOST`, `ADMIN_PORT` din mediu. Consola privată este instalată de `deploy.sh` numai dacă există pe server; pe alte instalări pasul este sărit.
 
 Codurile de invitație permit două activări și expiră la șapte zile de la emitere; prima folosire nu prelungește termenul. Deschiderea unui link nu consumă o activare. O activare reușită prin **Deschide registrul clasei** sau **Adaugă acces din invitație** folosește una dintre cele două activări. Cererile eșuate, inclusiv adăugarea unei clase deja accesibile, nu consumă activări.
 
