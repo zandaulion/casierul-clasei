@@ -1,6 +1,15 @@
 export const collator = new Intl.Collator('ro', { sensitivity: 'base', numeric: true });
 export const name = child => `${child.lastName} ${child.firstName}`;
 export const sortChildren = children => [...children].sort((a, b) => collator.compare(a.lastName, b.lastName) || collator.compare(a.firstName, b.firstName) || a.id.localeCompare(b.id));
+export function expenseNonContributors(children, expense) {
+  const participantAmounts = new Map((expense?.contributions || []).map(item => [item.childId, item.amountMinor]));
+  return sortChildren(children.filter(child => {
+    const amountMinor = participantAmounts.get(child.id);
+    if (!Number.isSafeInteger(amountMinor) || amountMinor <= 0) return false;
+    const contribution = child.contributions.find(item => item.expenseId === expense.id);
+    return contribution?.remainingMinor === amountMinor;
+  }));
+}
 export const sortTransactionsNewestFirst = transactions => [...transactions].sort((a, b) =>
   b.occurredAt.localeCompare(a.occurredAt)
   || b.createdAt.localeCompare(a.createdAt)

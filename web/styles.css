@@ -549,6 +549,11 @@ dd { margin: 0 0 0 auto; text-align: right; }
 .expense-after-payment { background: var(--sky); }
 .expense-after-payment h3 { margin: 0 0 3px; }
 .expense-after-payment .caption:last-child { margin: 9px 0 0; }
+.expense-non-contributors { margin-top: 22px; padding: 15px; border: 1px solid var(--line); border-radius: 14px; background: var(--peach); }
+.expense-non-contributors h3, .expense-non-contributors .caption { margin: 0; }
+.expense-non-contributors .row { align-items: flex-start; }
+.expense-non-contributors button { flex: 0 0 auto; }
+.expense-non-contributor-list { margin-top: 10px; }
 .expense-progress { height: 7px; margin: 14px 0 10px; border-radius: 10px; background: var(--soft); overflow: hidden; }
 .expense-progress-fill { display: block; height: 100%; border-radius: inherit; background: var(--brand); }
 .expense-totals { margin-top: 12px; font-size: 14px; }
