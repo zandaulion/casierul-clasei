@@ -10,19 +10,27 @@
       "value": "treasurer",
       "label": "Casier — acces complet",
       "description": "Poate vedea și modifica numai registrul clasei alese.",
-      "requires_child": true
+      "requires_child": false,
+      "short_label": "Casier",
+      "requires_expiry": false
     },
     {
       "value": "parent",
       "label": "Părinte — doar citire",
       "description": "Vede situația generală și numai datele copilului ales.",
-      "requires_child": true
+      "requires_child": true,
+      "short_label": "Părinte",
+      "requires_expiry": true,
+      "expiry_default": "school-year-end"
     },
     {
       "value": "auditor",
       "label": "Auditor — doar citire",
       "description": "Vede registrul și rapoartele clasei alese, fără modificări.",
-      "requires_child": true
+      "requires_child": false,
+      "short_label": "Auditor",
+      "requires_expiry": true,
+      "expiry_default": "school-year-end"
     }
   ],
   "invite_messages": {
@@ -30,8 +38,14 @@
     "auditor": "Acces doar pentru citire la Casierul clasei. Vei putea verifica registrul și rapoartele clasei alese, fără să modifici date.\n\nDeschide {link}, apoi apasă «Deschide registrul clasei».\n\nPoți instala aplicația pe ecranul principal. Același cod permite activarea a două dispozitive, de exemplu telefon și laptop, în cele {days} zile de valabilitate."
   },
   "invite_notes": {
-    "parent": "Alege copilul din clasa potrivită. Accesul este doar pentru citire, limitat la acel copil. Codul permite activarea a două dispozitive în {days} zile de la emitere.",
-    "auditor": "Alege opțiunea «întreaga clasă» pentru clasa dorită. Accesul este doar pentru citire. Codul permite activarea a două dispozitive în {days} zile de la emitere.",
-    "treasurer": "Alege opțiunea «întreaga clasă» pentru clasa dorită. Accesul permite modificarea registrului. Codul permite activarea a două dispozitive în {days} zile de la emitere."
-  }
+    "parent": "Alege clasa și copilul. Accesul este doar pentru citire, limitat la acel copil. Codul permite activarea a două dispozitive în {days} zile de la emitere.",
+    "auditor": "Alege clasa pentru verificarea registrului și a rapoartelor, doar pentru citire. Codul permite activarea a două dispozitive în {days} zile de la emitere.",
+    "treasurer": "Alege clasa al cărei registru poate fi modificat. Codul permite activarea a două dispozitive în {days} zile de la emitere."
+  },
+  "description": "Contribuții și registrul clasei",
+  "icon": "icons/apps/casierul-clasei.svg",
+  "invite_kind": "device",
+  "invite_scope": "classroom",
+  "device_delete_note": "Ștergerea elimină dispozitivul și permisiunile sale pentru toate clasele. Registrele și datele claselor se păstrează.",
+  "device_revoke_note": "Revocarea oprește accesul acestui dispozitiv la toate clasele sale. Accesul poate fi reactivat din consolă."
 }
