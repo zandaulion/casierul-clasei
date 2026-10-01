@@ -23,6 +23,8 @@ docker compose up -d
 docker compose exec app node scripts/admin.mjs invite "My phone"   # prints the first cashier invitation
 ```
 
+Deploying with an AI coding agent: point it at [AGENTS.md](AGENTS.md); the step-by-step procedure, including the reverse proxy, verification, upgrades and rollback, is in [.claude/skills/deploy/SKILL.md](.claude/skills/deploy/SKILL.md).
+
 Keep `.env` private. Before an upgrade, create a validated SQLite backup and copy it outside the Docker volume as described in [the operations guide](docs/operations.md).
 
 Without Docker: Node.js 24+, `npm ci`, `npm start`, then `node scripts/admin.mjs invite`. Configuration is through environment variables (`PUBLIC_BASE_URL`, `ADMIN_TOKEN`, `DATA_DIR`, `PORT`, `COOKIE_SECURE`); `deploy.sh` installs a systemd user service from the current checkout with daily backups. See [docs/operations.md](docs/operations.md), [docs/api.md](docs/api.md), [CONTRIBUTING.md](CONTRIBUTING.md) and [SECURITY.md](SECURITY.md).
