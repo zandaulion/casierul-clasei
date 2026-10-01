@@ -12,7 +12,7 @@ Follow [.claude/skills/deploy/SKILL.md](.claude/skills/deploy/SKILL.md) step by 
 - Web app changes: also run `node scripts/browser-check.mjs` against headless Chromium on port 9222 (see `CONTRIBUTING.md`).
 - Money is integer bani (`…Minor` fields), never floating point.
 - `server/ledger.mjs` is append-only: corrections are new transactions, never updates or deletes (enforced by SQLite triggers). Every mutation goes through `dispatch()` with `requestId` and `expectedRevision`.
-- Schema changes are migrations that run on open and must keep older code able to read the database; add a test that opens a database in the old shape.
+- Schema changes are migrations that run on open. Add a test that opens a database in the old shape, document and test rollback compatibility explicitly, and never assume an older release can read a database after a new migration.
 - User-facing text is Romanian with diacritics; escape everything interpolated into HTML with `esc()`.
 - Do not add runtime dependencies or CDN resources.
 

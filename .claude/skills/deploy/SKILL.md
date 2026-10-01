@@ -31,11 +31,11 @@ Read this whole file before running anything. Background, in Romanian, is in `do
 
 ## Hard rules
 
-- Never print, log, commit or paste `ADMIN_TOKEN`, invitation codes or `.env`/`app.env` contents into anything except your reply to the human who asked for the deployment. When you show configuration, redact the token.
+- Never print, log, commit or include `ADMIN_TOKEN` or `.env`/`app.env` contents in a response. When inspecting configuration, show only the non-secret settings needed for the decision and always redact the token. A newly issued invitation code or link may be delivered only to the human who requested it, in their private conversation.
 - Never delete, move, rename or overwrite anything in `DATA_DIR` (including `classroom-*.sqlite`, `*-wal`, `*-shm`). Restoring a backup is the human's decision; see "Rolling back".
 - Never redeem a real invitation yourself to "test" activation: it consumes one of its two activations, and on a fresh install it makes your client the owner. Use the checks in "Verify" instead.
 - Never run the app as root, never bind the admin port to anything but loopback, never open ports 8018/8118 in the firewall.
-- Ask the human before: installing system packages, using `sudo`, editing the reverse-proxy or firewall configuration, enabling lingering, or touching an existing installation's data. Say exactly what you will run.
+- An explicit request to install, upgrade or deploy authorizes routine read-only checks, dependency installation inside the checkout, a validated backup, the repository's deploy or build command, service or container restart, and the known optional console update performed by `deploy.sh`. Ask separately before installing system packages, changing reverse-proxy or firewall configuration, enabling lingering, restoring, replacing or deleting production data, or running an unexpected privileged command outside that workflow. Say exactly what you will run when separate approval is needed.
 - Take a backup before every upgrade of an existing installation.
 - Do not edit application code to make a deployment work. If something in the repository is wrong, stop and report it.
 
@@ -106,6 +106,8 @@ Continue with Step 3.
 ## Step 3 — Reverse proxy and HTTPS
 
 The proxy must send the public origin to `http://127.0.0.1:8018`, and nothing else from this app. Do not route `/api/admin` or port 8118 anywhere. Show the human the exact change before applying it; validate the configuration before reloading.
+
+For an upgrade whose public origin and proxy are unchanged, verify the existing route and leave the proxy, firewall and lingering settings alone.
 
 The app reads the client address for rate limiting from `CF-Connecting-IP`, else the first `X-Forwarded-For` entry, and only when the connection comes from loopback. A proxy that is not Cloudflare must therefore **remove `CF-Connecting-IP`** and set `X-Forwarded-For` to the real client address only.
 
@@ -186,24 +188,53 @@ It prints a code and a link valid for 7 days and two devices (e.g. phone and lap
 
 ## Upgrading an existing installation
 
-1. Confirm with the human which commit or tag to deploy, and record the current one: `git rev-parse HEAD`.
-2. Back up (see "Backups") and confirm the new backup folder exists.
-3. Make sure the checkout is clean (`git status`); if it has local changes, stop and ask.
-4. Update and redeploy:
+1. Confirm with the human which branch, commit or tag to deploy, and record the current revision with `git rev-parse HEAD`. Identify whether the existing installation uses systemd or Docker; do not run the fresh-install path over it.
+2. For systemd, inspect `~/.config/casierul-clasei/app.env` without displaying `ADMIN_TOKEN` or the complete file. `deploy/configure-env.py` preserves `PUBLIC_BASE_URL` and `ADMIN_TOKEN`, but currently writes these values on every run:
 
    ```bash
-   git fetch origin && git checkout <commit-or-tag>   # or: git pull --ff-only
+   python3 - <<'PY'
+   from pathlib import Path
+
+   path = Path.home() / ".config/casierul-clasei/app.env"
+   values = dict(line.split("=", 1) for line in path.read_text().splitlines()
+                 if "=" in line and not line.startswith("#"))
+   for key in ("PUBLIC_BASE_URL", "HOST", "PORT", "ADMIN_PORT", "DATA_DIR",
+               "COOKIE_SECURE", "NODE_ENV"):
+       print(f"{key}={values.get(key, '[missing]')}")
+   PY
+   ```
+
+   ```text
+   HOST=127.0.0.1
+   PORT=8018
+   ADMIN_PORT=8118
+   DATA_DIR=$HOME/.local/share/casierul-clasei
+   COOKIE_SECURE=true
+   NODE_ENV=production
+   ```
+
+   If the installed value for any of these settings differs, stop and explain that `deploy.sh` would replace it. Do not deploy until the human chooses whether to adopt the repository defaults or the configuration script is updated deliberately. Record only the non-secret settings needed for this comparison.
+3. Back up (see "Backups") and confirm that the command succeeded and a new dated backup folder exists before changing the checkout.
+4. Fetch without changing the working tree: `git fetch --prune origin`. Inspect `git status --short`, the incoming commit list and the paths changed between the current and target revisions.
+   - Never reset, clean, stash, discard or overwrite local work as part of an upgrade.
+   - Stop and ask if a local change overlaps an incoming path or affects runtime code, deployment files, dependencies or configuration.
+   - A local customization the human has already asked to preserve may remain only when the incoming revision does not touch that path. Record its diff or hash before updating and verify it afterwards.
+   - An untracked file at a path the target revision will create is a collision; stop before updating.
+5. Update and redeploy. Use a fast-forward update for a normal branch deployment; check out an exact commit or tag only when the human explicitly requested that revision:
+
+   ```bash
+   git pull --ff-only
    npm ci
    ./deploy.sh            # systemd; the origin is remembered in app.env
    ```
 
    Docker: `docker compose up -d --build`, then wait for `healthy`.
-5. Run every check in "Verify". Read the startup logs for migration errors (`journalctl --user -u casierul-clasei.service -n 50 --no-pager`, or `docker compose logs --tail 50 app`).
-6. Installed PWAs pick up the new version automatically on their next visit; nothing to do on the phones.
+6. Run every check in "Verify". Read the startup logs for migration errors (`journalctl --user -u casierul-clasei.service -n 50 --no-pager`, or `docker compose logs --tail 50 app`). Verify that the public origin, data location, listener ports and other recorded non-secret settings are unchanged.
+7. Do not create a first invitation during an upgrade. Installed PWAs pick up the new version automatically on their next visit; nothing needs changing on the phones.
 
 ## Rolling back
 
-Code rollback (data stays as it is): check out the commit recorded before the upgrade, `npm ci`, `./deploy.sh` (or rebuild the container), verify. The migrations in this repository so far only add tables or columns, so older code runs on a migrated database; before rolling back, check `git log -p <old>..<new> -- server/ledger.mjs server/auth.mjs` for schema changes and tell the human if there are any.
+Do not assume that older code can read a database that newer code has opened. Before a code rollback, inspect the changes to `server/ledger.mjs`, `server/auth.mjs`, classroom storage and migrations between the two revisions. If database behavior changed, establish compatibility with an existing test or test the old revision against a copy of the post-upgrade database; otherwise stop and explain that a safe code-only rollback has not been established. Only then check out the revision recorded before the upgrade, run `npm ci`, redeploy and verify.
 
 Data restore is a last resort that loses everything entered since the backup. Only do it when the human explicitly asks, following "Copii de siguranță" in `docs/operations.md`: stop the app, copy the whole current data directory aside, replace `auth.sqlite` and **all** classroom databases with files from the **same** dated backup folder, remove stale `-wal`/`-shm` files next to them, keep ownership and `0600`/`0700` permissions, start the app and have the human check each classroom's balance.
 
