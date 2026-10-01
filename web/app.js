@@ -608,6 +608,8 @@ function renderLedger() {
 }
 function renderReports() {
   const reports = state.reports || [];
+  const recentReports = reports.filter(report => !report.archived);
+  const archivedReports = reports.filter(report => report.archived);
   const paymentItems = paymentShareItems(state.settings);
   const debtors = state.children.filter(item => item.dueMinor > 0);
   const hasExpenses = state.expenses.some(expense => !expense.cancelled);
@@ -628,16 +630,18 @@ function renderReports() {
     <path d="m67 10 2 5 5 2-5 2-2 5-2-5-5-2 5-2Z" fill="var(--sunshine)" stroke="currentColor" stroke-width="1.2"/>
     <circle cx="140" cy="87" r="4" fill="var(--peach)"/>
   </svg>`;
+  const reportCards = entries => entries.map(report => `<article class="card report-card ${report.replacedById ? 'replaced' : ''}">
+    <div class="row"><h3>${esc(reportTypeLabels[report.type])}</h3><span class="badge">${report.replacedById ? report.archived ? 'Arhivat · Înlocuit' : 'Înlocuit' : report.archived ? 'Arhivat' : 'Emis'}</span></div>
+    <div>${esc(report.subjectLabel)}</div><div class="caption">${dateText(report.createdAt)}</div>
+    <div class="caption">${esc(report.code)} · revizia ${report.stateRevision}${report.replacesId ? ' · Raport corectiv' : ''}</div>
+    <div class="report-actions"><button class="primary" data-action="view-report" data-id="${esc(report.id)}">Vizualizează</button><button data-action="share-report" data-id="${esc(report.id)}">Partajează PDF</button><a href="${esc(scopedUrl(`/api/reports/${encodeURIComponent(report.id)}/pdf`))}" download="${esc(report.filename)}">Descarcă</a>${canWrite() && !report.replacedById ? `<button data-action="replace-report" data-id="${esc(report.id)}">Emite corecție</button>` : ''}</div>
+  </article>`).join('');
   $('#main').innerHTML = `<section class="reports-intro" aria-labelledby="reports-title"><div class="reports-intro-copy"><h1 id="reports-title">Rapoarte de împărtășit</h1><p>Fiecare contribuție, la locul ei. Situații clare, pregătite pentru consultare și partajare.</p>${canWrite() ? `<button type="button" class="context-help-link" data-action="help" data-help-topic="reports">${icon('help')}Cum emit un raport?</button>` : ''}</div>${stationery}</section>
     ${canWrite() ? `<section class="payment-details card" aria-labelledby="payment-details-title"><div class="row"><div><h2 id="payment-details-title">Detalii de plată</h2><p class="caption">Trimite fiecare informație separat, ca părinții să poată deschide linkul sau copia ușor datele bancare.</p></div><button data-action="settings">${paymentItems.length ? 'Editează' : 'Configurează'}</button></div>${paymentItems.length ? `<div class="payment-detail-list">${paymentItems.map(item => `<article class="payment-detail"><div><strong>${esc(item.label)}</strong>${item.key === 'revolut' ? `<a href="${esc(item.value)}" target="_blank" rel="noopener noreferrer">${esc(item.value)}</a>` : `<span class="payment-detail-value">${esc(item.value)}</span>`}</div><div class="payment-detail-actions"><a class="whatsapp-link compact" href="${esc(whatsappShareUrl(item.message))}" target="_blank" rel="noopener noreferrer" aria-label="Trimite ${esc(item.label)} prin WhatsApp">${icon('message')}WhatsApp</a><button type="button" data-copy-payment="${esc(item.key)}">Copiază</button></div></article>`).join('')}</div>` : '<div class="empty"><p>Adaugă linkul Revolut.me, numele beneficiarului și IBAN-ul în setările clasei.</p></div>'}</section>` : ''}
     ${canWrite() ? `<div class="report-types">${reportTypes.map(item => `<button class="card card-button report-type report-type-${item.type}" data-action="report-${item.type}" ${item.available ? '' : 'disabled'}><span class="report-icon">${icon(item.icon)}</span><span class="report-type-copy"><h3>${item.title}</h3><span class="caption">${item.description}</span></span></button>`).join('')}</div>` : '<p>Consultă, descarcă sau partajează rapoartele emise de casier la care ai acces.</p>'}
-    <section class="report-archive" aria-labelledby="report-archive-title"><div class="report-archive-heading"><h2 id="report-archive-title">${icon('reports')}Rapoarte emise</h2></div><p class="caption">„Partajează PDF” deschide selectorul telefonului; de acolo poți alege WhatsApp și grupul părinților.</p>
-      <div class="stack report-archive-list">${reports.length ? reports.map(report => `<article class="card report-card ${report.replacedById ? 'replaced' : ''}">
-        <div class="row"><h3>${esc(reportTypeLabels[report.type])}</h3><span class="badge">${report.replacedById ? 'Înlocuit' : 'Emis'}</span></div>
-        <div>${esc(report.subjectLabel)}</div><div class="caption">${dateText(report.createdAt)}</div>
-        <div class="caption">${esc(report.code)} · revizia ${report.stateRevision}${report.replacesId ? ' · Raport corectiv' : ''}</div>
-        <div class="report-actions"><button class="primary" data-action="view-report" data-id="${esc(report.id)}">Vizualizează</button><button data-action="share-report" data-id="${esc(report.id)}">Partajează PDF</button><a href="${esc(scopedUrl(`/api/reports/${encodeURIComponent(report.id)}/pdf`))}" download="${esc(report.filename)}">Descarcă</a>${canWrite() && !report.replacedById ? `<button data-action="replace-report" data-id="${esc(report.id)}">Emite corecție</button>` : ''}</div>
-      </article>`).join('') : `<div class="empty report-empty"><span class="report-empty-icon">${icon('reports')}</span><p>${canWrite() ? 'Alege un tip de raport de mai sus. PDF-urile emise se păstrează aici, împreună cu istoricul lor.' : 'Rapoartele vor apărea aici după ce sunt emise de casier.'}</p></div>`}</div>
+    <section class="report-archive" aria-labelledby="report-archive-title"><div class="report-archive-heading"><h2 id="report-archive-title">${icon('reports')}Rapoarte recente</h2></div><p class="caption">Sunt păstrate aici cele mai noi 10 PDF-uri ale clasei. „Partajează PDF” deschide selectorul telefonului.</p>
+      <div class="stack report-archive-list">${recentReports.length ? reportCards(recentReports) : `<div class="empty report-empty"><span class="report-empty-icon">${icon('reports')}</span><p>${canWrite() ? 'Alege un tip de raport de mai sus. PDF-urile emise se păstrează aici, împreună cu istoricul lor.' : 'Rapoartele vor apărea aici după ce sunt emise de casier.'}</p></div>`}</div>
+      ${archivedReports.length ? `<details class="archived-reports"><summary>Arhivă rapoarte · ${archivedReports.length}</summary><p class="caption">Rapoartele mai vechi rămân disponibile pentru vizualizare, partajare și descărcare.</p><div class="stack report-archive-list">${reportCards(archivedReports)}</div></details>` : ''}
     </section>`;
 }
 function reportModal(type, replacesId = null, subjectId = null) {

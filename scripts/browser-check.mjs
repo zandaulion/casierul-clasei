@@ -544,6 +544,21 @@ try {
   assert.match(afterPaymentText, /Mai este de colectat\s*50 lei/u);
   assert.equal(await evaluate('document.querySelector(".expense-after-payment").nextElementSibling.matches(".expense-non-contributors")'), true, 'non-contributors card follows the after-payment card');
   await click('[data-action=close-modal]');
+  while (snapshot().reports.length < 11) {
+    await app.ledger.createReport({ requestId: randomUUID(), type: 'class' }, { id: 'archive-test-device', label: 'Verificare arhivă' });
+  }
+  await reloadPage('reload after report rolling archive');
+  await click('[data-tab=reports]');
+  await until('document.querySelector(".archived-reports")', 'archived report section');
+  assert.equal(snapshot().reports.filter(report => !report.archived).length, 10);
+  assert.equal(snapshot().reports.filter(report => report.archived).length, 1);
+  assert.equal(await evaluate('document.querySelectorAll(".report-archive > .report-archive-list > .report-card").length'), 10);
+  assert.equal(await evaluate('document.querySelectorAll(".archived-reports .report-card").length'), 1);
+  assert.match(await evaluate('document.querySelector(".archived-reports summary").textContent'), /Arhivă rapoarte · 1/u);
+  await click('.archived-reports summary');
+  await click('.archived-reports [data-action=view-report]');
+  await until('document.querySelector("#pdf-preview-pages figure[data-rendered=true] canvas")', 'archived PDF rendered inside the app', 350);
+  await click('[data-action=close-modal]');
   await until('navigator.serviceWorker.getRegistration().then(r => !!r?.active)', 'shared PWA worker installed');
 
   // Separate browser contexts model a phone and laptop with independent cookies.
@@ -583,7 +598,7 @@ try {
     assert.equal(await evaluate('fetch("/api/auth/me").then(r => r.status)'), 200, 'phone remains signed in independently');
   }
   assert.equal(exceptions.length, 0, JSON.stringify(exceptions));
-  console.log('Browser checks passed: invitation/setup, two-device activation with independent sessions and third-device rejection, logo upload, classroom creation/switching, navigation, roster, direct WhatsApp reminders with two contacts, separate WhatsApp payment details, individual text-only sharing and copied-message PDF fallback, direct beneficiary payment without cash movement, post-payment expense indicator, split opt-out recalculation before the first contribution, expense editing before and after linked money, manual allocation, quick collection with existing child credit and small-difference settlement, lost-response retry across reauthentication, temporary fund advances and repayments, expense/payment document attachments, payment/refund/credit/correction, PDF report generation, in-app viewing and sharing, stale-data protection, reload, offline protection, mobile/dark layout, and PWA worker.');
+  console.log('Browser checks passed: invitation/setup, two-device activation with independent sessions and third-device rejection, logo upload, classroom creation/switching, navigation, roster, direct WhatsApp reminders with two contacts, separate WhatsApp payment details, individual text-only sharing and copied-message PDF fallback, direct beneficiary payment without cash movement, post-payment expense indicator, split opt-out recalculation before the first contribution, expense editing before and after linked money, manual allocation, quick collection with existing child credit and small-difference settlement, lost-response retry across reauthentication, temporary fund advances and repayments, expense/payment document attachments, payment/refund/credit/correction, PDF report generation, rolling archive retrieval, in-app viewing and sharing, stale-data protection, reload, offline protection, mobile/dark layout, and PWA worker.');
 } finally {
   if (contextId) await send('Target.disposeBrowserContext', { browserContextId: contextId });
   socket.close();
