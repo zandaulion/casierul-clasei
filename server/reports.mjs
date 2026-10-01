@@ -19,6 +19,11 @@ export const reportCode = serial => `R-${String(serial).padStart(4, '0')}`;
 const money = minor => `${moneyFormat.format(minor / 100)} lei`;
 const personName = child => `${child.lastName} ${child.firstName}`;
 const activeTransactions = state => state.transactions.filter(tx => tx.type !== 'reversal' && !tx.reversed);
+const correctionTitles = {
+  collection: 'Încasare anulată', direct_payment: 'Plată directă anulată', payment: 'Plată către beneficiar anulată',
+  credit_apply: 'Repartizare din avans anulată', rounding_adjustment: 'Ajustare de rotunjire anulată', refund: 'Restituire de avans anulată',
+  fund_advance: 'Sumă avansată anulată', advance_repayment: 'Restituire a sumei avansate anulată', advance_waiver: 'Acoperire din fond anulată',
+};
 const sum = values => values.reduce((total, value) => total + value, 0);
 const sharedAttachments = (state, entityType, entityId) => (state.attachments || [])
   .filter(item => item.visibility === 'class' && item.entityType === entityType && item.entityId === entityId);
@@ -347,8 +352,22 @@ export async function renderReportPdf(report, state, branding = {}) {
     }
     const corrections = state.transactions.filter(tx => tx.type === 'reversal');
     if (corrections.length) {
-      section('Corecții înregistrate');
-      for (const correction of corrections) item('Corecție', money(correction.amountMinor), dateTimeFormat.format(new Date(correction.occurredAt)), correction.comment, 'correction');
+      section('Corecții păstrate în istoric');
+      note('Corecțiile asigură trasabilitatea registrului. Operațiunile și valorile anulate de mai jos nu mai influențează soldurile curente. Înregistrările corecte refăcute ulterior sunt incluse separat în totalurile curente.');
+      for (const correction of corrections) {
+        const original = state.transactions.find(tx => tx.id === correction.reversesId);
+        const valueMinor = original?.type === 'collection' ? original.amountMinor - original.changeMinor : original?.amountMinor ?? correction.amountMinor;
+        const allocations = (original?.allocations || correction.allocations || []).map(allocation => {
+          const expense = state.expenses.find(entry => entry.id === allocation.expenseId);
+          return `${expense?.title || 'Cheltuială'}: ${money(allocation.amountMinor)}`;
+        }).join(' · ');
+        const expense = original?.expenseId ? state.expenses.find(entry => entry.id === original.expenseId) : null;
+        const details = [dateTimeFormat.format(new Date(correction.occurredAt)), `Valoare anulată ${money(valueMinor)}`,
+          original?.destination ? `Destinație: ${original.destination}` : '', allocations ? `Repartizare: ${allocations}` : expense ? `Cheltuială: ${expense.title}` : '',
+          `Impact curent asupra soldurilor: ${money(0)}`].filter(Boolean).join(' · ');
+        item(correctionTitles[original?.type] || 'Operațiune anulată', '', details,
+          correction.comment ? `Motiv: ${correction.comment}` : '', 'correction');
+      }
     }
   }
 
