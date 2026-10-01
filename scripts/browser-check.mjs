@@ -53,6 +53,11 @@ async function until(expression, label = expression, attempts = 100) {
   const info = await evaluate('({page:document.body.innerText,modal:document.getElementById("modal-error")?.textContent,pdfStatus:document.getElementById("pdf-preview-status")?.textContent})');
   throw new Error('Timed out: ' + label + '\n' + JSON.stringify(info));
 }
+async function reloadPage(label = 'page reload') {
+  await evaluate('window.__browserCheckReloadPending = true');
+  await page('Page.reload', { ignoreCache: true });
+  await until('window.__browserCheckReloadPending !== true && document.readyState === "complete"', label);
+}
 const click = selector => evaluate('document.querySelector(' + JSON.stringify(selector) + ').click()');
 const fill = (selector, value) => evaluate('(() => {const el=document.querySelector(' + JSON.stringify(selector) + ');el.value=' + JSON.stringify(value) + ';el.dispatchEvent(new Event("input",{bubbles:true}));el.dispatchEvent(new Event("change",{bubbles:true}));})()');
 const getValue = selector => evaluate('document.querySelector(' + JSON.stringify(selector) + ').value');
@@ -455,7 +460,7 @@ try {
   await page('Network.emulateNetworkConditions', { offline: true, latency: 0, downloadThroughput: 0, uploadThroughput: 0 });
   await until('document.getElementById("collection-save").disabled', 'offline save disabled');
   await page('Network.emulateNetworkConditions', { offline: false, latency: 0, downloadThroughput: -1, uploadThroughput: -1 });
-  await page('Page.reload', { ignoreCache: true });
+  await reloadPage('reload after direct ledger update');
   await until('document.getElementById("collection-form") && document.querySelector("h1")?.textContent.includes("Bălan David")', 'session, data and current screen persist on reload');
   assert.equal(snapshot().summary.balanceMinor, 15000);
 
@@ -475,7 +480,7 @@ try {
     requestId: randomUUID(), expectedRevision: result.state.revision, amountMinor: 10000,
     destination: 'Furnizor test', expenseId: optOutExpenseId, occurredAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
   }, { id: 'second-test-device', label: 'Second test device' });
-  await page('Page.reload', { ignoreCache: true });
+  await reloadPage('reload before split opt-out edit');
   await until('document.getElementById("collection-form")', 'reload after linked split expense');
   await evaluate('history.back()');
   await until('document.querySelector(".children")', 'return to roster for opt-out check');
@@ -494,7 +499,7 @@ try {
     allocations: [{ expenseId: optOutExpenseId, amountMinor: 100 }],
   }, { id: 'second-test-device', label: 'Second test device' });
   const optOutCollectionId = collectionResult.transactionId;
-  await page('Page.reload', { ignoreCache: true });
+  await reloadPage('reload after first split contribution');
   await until('document.querySelector("[data-expense=\\"' + optOutExpenseId + '\\"]")', 'split expense after first contribution');
   await click('[data-expense="' + optOutExpenseId + '"]');
   await click('[data-action=edit-expense]');
@@ -502,7 +507,7 @@ try {
   app.ledger.dispatch('transaction.reverse', {
     requestId: randomUUID(), expectedRevision: snapshot().revision, transactionId: optOutCollectionId, comment: 'Curățare verificare browser',
   }, { id: 'second-test-device', label: 'Second test device' });
-  await page('Page.reload', { ignoreCache: true });
+  await reloadPage('reload after split contribution cleanup');
   await until('document.querySelector("[data-expense=\\"' + optOutExpenseId + '\\"]")', 'cleanup after opt-out check');
   assert.equal(snapshot().summary.balanceMinor, 15000);
 
