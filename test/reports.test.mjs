@@ -277,6 +277,32 @@ test('a corrective PDF visibly identifies its predecessor and preserves its amou
   assert.equal(correction.report.replacesId, original.report.id);
 });
 
+test('class report explains corrections without presenting cancelled values as current money', async t => {
+  const data = await fixture(t);
+  data.post('expense.create', { title: 'Echipament sportiv', type: 'fixed', amountMinor: 1414,
+    participants: [{ childId: data.own.id }] });
+  const expense = data.ledger.getState().expenses.find(item => item.title === 'Echipament sportiv');
+  const mistaken = data.post('collection.create', { childId: data.own.id, receivedMinor: 1414, changeMinor: 0,
+    allocations: [{ expenseId: expense.id, amountMinor: 1414 }] });
+  data.post('transaction.reverse', { transactionId: mistaken.transactionId, comment: 'A predat doar 14 lei; încasarea a fost refăcută.' });
+  data.post('collection.create', { childId: data.own.id, receivedMinor: 1400, changeMinor: 0,
+    allocations: [{ expenseId: expense.id, amountMinor: 1400 }] });
+  data.post('transaction.reverse', { transactionId: data.paymentId, comment: 'Plată introdusă greșit.' });
+
+  const result = await inspectPdf(data, 'class', 'explained-corrections');
+  assertLayout(result, 'class');
+  assertPrivacy(result, data, 'class');
+  assertText(result, 'Corecții păstrate în istoric', 'correction section explains its historical role');
+  assertText(result, 'Operațiunile și valorile anulate de mai jos nu mai influențează soldurile curente.', 'cancelled values are explicitly excluded from current totals');
+  assertText(result, 'Înregistrările corecte refăcute ulterior sunt incluse separat în totalurile curente.', 'replacement entries are explained without inferring an unsafe link');
+  assertText(result, 'Încasare anulată', 'cancelled collection names the original operation');
+  assertText(result, `Valoare anulată ${money(1414)} · Repartizare: Echipament sportiv: ${money(1414)} · Impact curent asupra soldurilor: ${money(0)}`, 'collection correction identifies the expense and zero current impact');
+  assertText(result, 'Motiv: A predat doar 14 lei; încasarea a fost refăcută.', 'correction reason is clearly labelled');
+  assertText(result, 'Plată către beneficiar anulată', 'cancelled payment names the original operation');
+  assertText(result, `Destinație: Furnizorul activității · Cheltuială: Fotografii de clasă · Impact curent asupra soldurilor: ${money(0)}`, 'payment correction identifies destination, expense and zero current impact');
+  assert.equal(result.text.includes(`Corecție ${money(1414)}`), false, 'cancelled amount is not presented as an unexplained current correction');
+});
+
 test('expense coverage counts allocated contributions, with honest zero, tiny, near-complete and complete percentages', async t => {
   const data = await fixture(t);
   const createExpense = (title, totalMinor) => {
