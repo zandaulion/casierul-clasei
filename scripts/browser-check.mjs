@@ -149,6 +149,14 @@ try {
     await fill('[data-quantity="' + anaId + '"]', '2');
   });
   await click('[data-expense="' + booksId + '"]');
+  await evaluate(`(() => {
+    window.__copiedExpenseList = '';
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async text => { window.__copiedExpenseList = text; } } });
+  })()`);
+  assert.match(await evaluate('document.querySelector(".expense-non-contributors").textContent'), /Nu au contribuit încă[\s\S]*2 copii fără nicio sumă achitată[\s\S]*Avram Ana[\s\S]*Exemplu Ioana/u);
+  assert.equal(await evaluate('document.querySelector(".expense-non-contributors").textContent.includes("Bălan David")'), false, 'non-participants are excluded from the list');
+  await click('[data-action=copy-expense-non-contributors]');
+  assert.equal(await evaluate('window.__copiedExpenseList'), 'Avram Ana\nExemplu Ioana');
   await click('[data-action=edit-expense]');
   await fill('#modal-form [name=title]', 'Culegeri școlare');
   await fill('#modal-form [name=dueDate]', '2026-10-15');

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { money, parseMoney, roundUp, collectionResult, creditSettlement, smallSettlement, expensePreview, sortChildren, sortTransactionsNewestFirst, unpaid, whatsappReminder, whatsappUrl, whatsappShareUrl, paymentShareItems, reportShareMessage } from '../web/helpers.mjs';
+import { money, parseMoney, roundUp, collectionResult, creditSettlement, smallSettlement, expensePreview, sortChildren, expenseNonContributors, sortTransactionsNewestFirst, unpaid, whatsappReminder, whatsappUrl, whatsappShareUrl, paymentShareItems, reportShareMessage } from '../web/helpers.mjs';
 const child = { dueMinor: 8500, contributions: [
   { expenseId: 'books', title: 'Culegeri', dueDate: '2026-10-02', remainingMinor: 6000 },
   { expenseId: 'trip', title: 'Excursie', dueDate: '2026-10-01', remainingMinor: 2500 },
@@ -86,6 +86,20 @@ test('exact split distributes every ban by lexical child ID independent of input
 test('surname order uses Romanian collation and paid contributions are excluded', () => {
   assert.deepEqual(sortChildren([{ id:'1',lastName:'Șerban',firstName:'Ana' },{ id:'2',lastName:'Avram',firstName:'Dan' },{ id:'3',lastName:'Bălan',firstName:'Ioana' }]).map(c => c.id), ['2','3','1']);
   assert.equal(unpaid({ contributions: [{expenseId:'paid',remainingMinor:0}, ...child.contributions] }).length, 2);
+});
+test('expense non-contributors include only participants with no covered amount, in name order', () => {
+  const children = [
+    { id: 'paid', lastName: 'Șerban', firstName: 'Ana', contributions: [{ expenseId: 'expense', remainingMinor: 0 }] },
+    { id: 'none-b', lastName: 'Bălan', firstName: 'Ioana', contributions: [{ expenseId: 'expense', remainingMinor: 1000 }] },
+    { id: 'partial', lastName: 'Avram', firstName: 'Dan', contributions: [{ expenseId: 'expense', remainingMinor: 500 }] },
+    { id: 'none-a', lastName: 'Avram', firstName: 'Ana', contributions: [{ expenseId: 'expense', remainingMinor: 1000 }] },
+    { id: 'other', lastName: 'Pop', firstName: 'Mara', contributions: [] },
+  ];
+  const expense = { id: 'expense', contributions: [
+    { childId: 'paid', amountMinor: 1000 }, { childId: 'none-b', amountMinor: 1000 },
+    { childId: 'partial', amountMinor: 1000 }, { childId: 'none-a', amountMinor: 1000 },
+  ] };
+  assert.deepEqual(expenseNonContributors(children, expense).map(item => item.id), ['none-a', 'none-b']);
 });
 test('transaction history is ordered newest first with deterministic ties', () => {
   const transactions = [
