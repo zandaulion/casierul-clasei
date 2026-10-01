@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
@@ -239,6 +239,87 @@ test('PDF reports are immutable, idempotent and keep correction history', async 
   assert.equal(correction.reports.find(report => report.id === first.report.id).replacedById, correction.report.id);
   await assert.rejects(ledger.createReport({ requestId: randomUUID(), type: 'class', replacesId: first.report.id }, actor), status(409));
   assert.throws(() => post('settings.update', { schoolLogo: 'data:image/png;base64,invalid' }), status(400));
+});
+
+test('generated PDFs roll into a private byte-identical archive while recent reports stay in SQLite', async t => {
+  const directory = mkdtempSync(join(tmpdir(), 'casierul-report-archive-'));
+  const path = join(directory, 'ledger.sqlite');
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  const ledger = new Ledger(path, { reportPdfHotLimit: 2 });
+  t.after(() => { try { ledger.close(); } catch {} });
+  const originals = new Map();
+  for (let index = 0; index < 4; index++) {
+    const issued = await ledger.createReport({ requestId: randomUUID(), type: 'class' }, actor);
+    originals.set(issued.report.id, ledger.getReportPdf(issued.report.id).pdf);
+  }
+  const state = ledger.getState();
+  assert.equal(state.reports.filter(report => !report.archived).length, 2);
+  assert.equal(state.reports.filter(report => report.archived).length, 2);
+  for (const report of state.reports) {
+    const stored = ledger.getReportPdf(report.id).pdf;
+    assert.deepEqual(stored, originals.get(report.id));
+    assert.equal(createHash('sha256').update(stored).digest('hex'), report.sha256);
+    assert.equal(stored.length, report.size);
+  }
+  const archiveFiles = readdirSync(join(directory, 'report-archive', 'ledger'));
+  assert.equal(archiveFiles.length, 2);
+  assert.ok(archiveFiles.every(name => /^[a-f0-9]{64}\.pdf$/u.test(name)));
+  const check = new DatabaseSync(path, { readOnly: true });
+  assert.equal(check.prepare('SELECT count(*) AS count FROM reports WHERE archived_size IS NOT NULL').get().count, 2);
+  assert.equal(check.prepare('SELECT count(*) AS count FROM reports WHERE archived_size IS NULL').get().count, 2);
+  check.close();
+  ledger.close();
+  const reopened = new Ledger(path, { reportPdfHotLimit: 2 });
+  t.after(() => reopened.close());
+  for (const report of reopened.getState().reports) assert.deepEqual(reopened.getReportPdf(report.id).pdf, originals.get(report.id));
+});
+
+test('report archive migration preserves legacy reports and old-style inserts', t => {
+  const directory = mkdtempSync(join(tmpdir(), 'casierul-report-migration-'));
+  const path = join(directory, 'ledger.sqlite');
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  const pdf = Buffer.from('%PDF-1.4\nlegacy report\n%%EOF\n');
+  const sha256 = createHash('sha256').update(pdf).digest('hex');
+  const legacy = new DatabaseSync(path);
+  legacy.exec(`CREATE TABLE reports (
+    serial INTEGER PRIMARY KEY AUTOINCREMENT,
+    id TEXT NOT NULL UNIQUE,
+    request_id TEXT NOT NULL UNIQUE,
+    request_fingerprint TEXT NOT NULL,
+    type TEXT NOT NULL CHECK(type IN ('class', 'expense', 'child', 'matrix')),
+    subject_id TEXT,
+    subject_label TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    state_revision INTEGER NOT NULL CHECK(state_revision >= 0),
+    created_by_label TEXT NOT NULL,
+    replaces_id TEXT UNIQUE REFERENCES reports(id),
+    replaced_by_id TEXT REFERENCES reports(id),
+    filename TEXT NOT NULL,
+    sha256 TEXT NOT NULL,
+    snapshot TEXT NOT NULL,
+    pdf BLOB NOT NULL
+  ) STRICT`);
+  const insertLegacy = legacy.prepare(`INSERT INTO reports (id, request_id, request_fingerprint, type, subject_id,
+    subject_label, created_at, state_revision, created_by_label, replaces_id, replaced_by_id, filename, sha256, snapshot, pdf)
+    VALUES (?, ?, ?, 'class', NULL, 'IX A', '2026-10-01T08:00:00.000Z', 0, 'Test', NULL, NULL, ?, ?, '{}', ?)`);
+  insertLegacy.run('legacy-report-1', 'legacy-request-1', 'legacy-fingerprint-1', 'situatia-clasei-R-0001.pdf', sha256, pdf);
+  legacy.close();
+
+  const migrated = new Ledger(path);
+  assert.equal(migrated.getState().reports[0].archived, false);
+  assert.deepEqual(migrated.getReportPdf('legacy-report-1').pdf, pdf);
+  migrated.close();
+
+  const compatible = new DatabaseSync(path);
+  const columns = compatible.prepare("PRAGMA table_info('reports')").all().map(column => column.name);
+  assert.ok(columns.includes('archived_size'));
+  // A rolled-back release still omits the appended nullable column when it creates a new report.
+  compatible.prepare(`INSERT INTO reports (id, request_id, request_fingerprint, type, subject_id,
+    subject_label, created_at, state_revision, created_by_label, replaces_id, replaced_by_id, filename, sha256, snapshot, pdf)
+    VALUES (?, ?, ?, 'class', NULL, 'IX A', '2026-10-01T09:00:00.000Z', 0, 'Test', NULL, NULL, ?, ?, '{}', ?)`)
+    .run('legacy-report-2', 'legacy-request-2', 'legacy-fingerprint-2', 'situatia-clasei-R-0002.pdf', sha256, pdf);
+  assert.equal(compatible.prepare('SELECT archived_size FROM reports WHERE id = ?').get('legacy-report-2').archived_size, null);
+  compatible.close();
 });
 
 test('collection can earmark one expense and retain excess; applying credit has no cash movement', t => {

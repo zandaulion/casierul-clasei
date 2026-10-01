@@ -3,6 +3,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { REPORT_TYPES, renderReportPdf, reportCode, reportFilename, reportSubject } from './reports.mjs';
+import { ARCHIVED_REPORT_PLACEHOLDER, REPORT_PDF_HOT_LIMIT, readArchivedReport, storeArchivedReport } from './report-archive.mjs';
 
 const MAX_MONEY = 1_000_000_000_000;
 // A real class has a few dozen children; the cap keeps state payloads and PDF tables responsive.
@@ -233,7 +234,8 @@ CREATE TABLE IF NOT EXISTS reports (
   filename TEXT NOT NULL,
   sha256 TEXT NOT NULL,
   snapshot TEXT NOT NULL,
-  pdf BLOB NOT NULL
+  pdf BLOB NOT NULL,
+  archived_size INTEGER CHECK(archived_size IS NULL OR archived_size > 0)
 ) STRICT;
 CREATE TABLE IF NOT EXISTS branding (
   kind TEXT PRIMARY KEY CHECK(kind IN ('school', 'class')),
@@ -391,12 +393,29 @@ function migrateReports(db) {
   }
 }
 
+function migrateReportArchive(db) {
+  if (db.prepare("PRAGMA table_info('reports')").all().some(column => column.name === 'archived_size')) return;
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    // Nullable and appended so a pre-archive release can still insert ordinary reports after a code rollback.
+    db.exec('ALTER TABLE reports ADD COLUMN archived_size INTEGER CHECK(archived_size IS NULL OR archived_size > 0); COMMIT;');
+  } catch (error) {
+    try { db.exec('ROLLBACK'); } catch { /* Transaction may already be closed. */ }
+    throw error;
+  }
+}
+
 /** Persistent treasury ledger. All public operations are synchronous SQLite transactions. */
 export class Ledger {
   #db;
+  #dbPath;
+  #reportPdfHotLimit;
 
-  constructor(dbPath) {
+  constructor(dbPath, { reportPdfHotLimit = REPORT_PDF_HOT_LIMIT } = {}) {
     if (typeof dbPath !== 'string' || !dbPath) throw new TypeError('A database path is required.');
+    if (!Number.isSafeInteger(reportPdfHotLimit) || reportPdfHotLimit < 1) throw new TypeError('The report PDF hot limit must be a positive integer.');
+    this.#dbPath = dbPath === ':memory:' ? null : resolve(dbPath);
+    this.#reportPdfHotLimit = reportPdfHotLimit;
     if (dbPath !== ':memory:') mkdirSync(dirname(resolve(dbPath)), { recursive: true, mode: 0o700 });
     this.#db = new DatabaseSync(dbPath);
     this.#db.exec('PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000; PRAGMA journal_mode = WAL; PRAGMA synchronous = FULL;');
@@ -406,6 +425,8 @@ export class Ledger {
     this.#db.exec('CREATE INDEX IF NOT EXISTS transactions_advance ON transactions(advance_id)');
     migrateSettlements(this.#db);
     migrateReports(this.#db);
+    migrateReportArchive(this.#db);
+    this.#archiveReportPdfs(true);
   }
 
   close() { this.#db.close(); }
@@ -512,14 +533,44 @@ export class Ledger {
 
   #reports() {
     return this.#all(`SELECT serial, id, type, subject_id, subject_label, created_at, state_revision,
-      created_by_label, replaces_id, replaced_by_id, filename, sha256, length(pdf) AS size
+      created_by_label, replaces_id, replaced_by_id, filename, sha256,
+      COALESCE(archived_size, length(pdf)) AS size, archived_size IS NOT NULL AS archived
       FROM reports ORDER BY serial DESC`).map(row => ({
       id: row.id, serial: row.serial, code: reportCode(row.serial), type: row.type,
       subjectId: row.subject_id, subjectLabel: row.subject_label, createdAt: row.created_at,
       stateRevision: row.state_revision, createdByLabel: row.created_by_label,
       replacesId: row.replaces_id, replacedById: row.replaced_by_id,
-      filename: row.filename, sha256: row.sha256, size: row.size,
+      filename: row.filename, sha256: row.sha256, size: row.size, archived: !!row.archived,
     }));
+  }
+
+  #archiveReportPdfs(compact = false) {
+    if (!this.#dbPath) return 0;
+    const active = this.#all(`SELECT id, sha256, pdf FROM reports
+      WHERE archived_size IS NULL ORDER BY serial DESC`);
+    const candidates = active.slice(this.#reportPdfHotLimit);
+    if (!candidates.length) return 0;
+    const archived = candidates.map(row => {
+      const pdf = Buffer.from(row.pdf);
+      const sha256 = createHash('sha256').update(pdf).digest('hex');
+      if (sha256 !== row.sha256) throw new Error('PDF-ul emis nu corespunde amprentei din registru.');
+      storeArchivedReport(this.#dbPath, row.sha256, pdf);
+      return { id: row.id, size: pdf.length };
+    });
+    this.#db.exec('BEGIN IMMEDIATE');
+    try {
+      const statement = this.#db.prepare('UPDATE reports SET pdf = ?, archived_size = ? WHERE id = ? AND archived_size IS NULL');
+      for (const row of archived) statement.run(ARCHIVED_REPORT_PLACEHOLDER, row.size, row.id);
+      this.#db.exec('COMMIT');
+    } catch (error) {
+      try { this.#db.exec('ROLLBACK'); } catch { /* Transaction may already be closed. */ }
+      throw error;
+    }
+    if (compact) {
+      this.#db.exec('PRAGMA wal_checkpoint(TRUNCATE)');
+      this.#db.exec('VACUUM');
+    }
+    return archived.length;
   }
 
   async createReport(body, actor) {
@@ -544,7 +595,10 @@ export class Ledger {
     // The write below only commits if the ledger is still exactly what the PDF was rendered from.
     for (let attempt = 0; attempt < 3; attempt++) {
       const repeated = repeatedReport();
-      if (repeated) return repeated;
+      if (repeated) {
+        this.#archiveReportPdfs();
+        return repeatedReport();
+      }
       const { reports: _reports, ...reportState } = this.getState();
       const state = withoutPrivateContacts(reportState);
       const subject = reportSubject(state, type, subjectId);
@@ -565,9 +619,15 @@ export class Ledger {
       const sha256 = createHash('sha256').update(pdf).digest('hex');
       const filename = reportFilename(report);
       this.#db.exec('BEGIN IMMEDIATE');
+      let committed = false;
       try {
         const repeatedMeanwhile = repeatedReport();
-        if (repeatedMeanwhile) { this.#db.exec('COMMIT'); return repeatedMeanwhile; }
+        if (repeatedMeanwhile) {
+          this.#db.exec('COMMIT');
+          committed = true;
+          this.#archiveReportPdfs();
+          return repeatedReport();
+        }
         const currentRevision = this.#one('SELECT revision FROM metadata WHERE singleton = 1').revision;
         const currentSerial = Number(this.#one('SELECT COALESCE(MAX(serial), 0) + 1 AS value FROM reports').value);
         const replacedMeanwhile = replaced && this.#one('SELECT replaced_by_id FROM reports WHERE id = ?', replaced.id)?.replaced_by_id;
@@ -581,11 +641,13 @@ export class Ledger {
         serial, id, requestId, fingerprint, type, subject.id, subject.label, createdAt, state.revision,
         actorLabel, replaced?.id ?? null, filename, sha256, JSON.stringify(state), pdf);
         if (replaced) this.#run('UPDATE reports SET replaced_by_id = ? WHERE id = ?', id, replaced.id);
-        const reports = this.#reports();
         this.#db.exec('COMMIT');
+        committed = true;
+        this.#archiveReportPdfs();
+        const reports = this.#reports();
         return { report: reports.find(item => item.id === id), reports };
       } catch (error) {
-        this.#db.exec('ROLLBACK');
+        if (!committed) this.#db.exec('ROLLBACK');
         throw error;
       }
     }
@@ -594,9 +656,10 @@ export class Ledger {
 
   getReportPdf(reportId) {
     const id = text(reportId, 'Raportul', 128);
-    const row = this.#one('SELECT filename, pdf FROM reports WHERE id = ?', id);
+    const row = this.#one('SELECT filename, sha256, archived_size, pdf FROM reports WHERE id = ?', id);
     if (!row) fail('Raportul nu există.', 404);
-    return { filename: row.filename, pdf: Buffer.from(row.pdf) };
+    const pdf = row.archived_size == null ? Buffer.from(row.pdf) : readArchivedReport(this.#dbPath, row.sha256, row.archived_size);
+    return { filename: row.filename, pdf };
   }
 
   #state() {

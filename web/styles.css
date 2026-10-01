@@ -651,6 +651,9 @@ dd { margin: 0 0 0 auto; text-align: right; }
 .report-archive-heading { border-bottom: 2px solid var(--lavender); }
 .report-archive-heading h2 { display: inline-flex; align-items: center; gap: 9px; max-width: 100%; margin: 0; padding: 9px 15px 7px; border-radius: 13px 13px 0 0; background: var(--lavender); font-size: 20px; }
 .report-archive-list { padding-top: 15px; }
+.archived-reports { margin-top: 20px; padding: 0 15px 15px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--bg); }
+.archived-reports > summary { color: var(--text); font-weight: 700; }
+.archived-reports > .caption { margin: 0; }
 .report-card { border-left: 3px solid var(--lavender); }
 .report-card > .row { flex-wrap: wrap; }
 .report-empty { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 12px; padding: 20px; border: 1px dashed var(--input-line); border-radius: var(--radius); background: var(--surface); }
