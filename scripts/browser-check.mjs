@@ -542,6 +542,7 @@ try {
   assert.match(afterPaymentText, /Strâns în fond de atunci\s*0 lei/u);
   assert.match(afterPaymentText, /Plătit direct de atunci\s*50 lei/u);
   assert.match(afterPaymentText, /Mai este de colectat\s*50 lei/u);
+  assert.equal(await evaluate('document.querySelector(".expense-after-payment").nextElementSibling.matches(".expense-non-contributors")'), true, 'non-contributors card follows the after-payment card');
   await click('[data-action=close-modal]');
   await until('navigator.serviceWorker.getRegistration().then(r => !!r?.active)', 'shared PWA worker installed');
 
