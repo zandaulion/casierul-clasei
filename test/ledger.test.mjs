@@ -567,6 +567,10 @@ test('an expense tracks collections and direct payments after its latest active 
     destination: 'Doamna dirigintă', occurredAt: '2026-10-01T10:00:00.000Z' });
   assert.equal(tracked.collectedAfterLatestPaymentMinor, 2000);
   assert.equal(tracked.directAfterLatestPaymentMinor, 4000);
+  assert.deepEqual(tracked.contributorsAfterLatestPayment, [
+    { childId: ana, collectedMinor: 2000, directMinor: 0 },
+    { childId: david, collectedMinor: 0, directMinor: 4000 },
+  ].sort((a, b) => a.childId.localeCompare(b.childId)));
   assert.equal(tracked.dueMinor, 10000);
 
   const secondPayment = post('payment.create', { expenseId: emblems, amountMinor: 5000,
@@ -578,6 +582,9 @@ test('an expense tracks collections and direct payments after its latest active 
   assert.equal(tracked.latestPayment.id, secondPayment);
   assert.equal(tracked.collectedAfterLatestPaymentMinor, 1000);
   assert.equal(tracked.directAfterLatestPaymentMinor, 0);
+  assert.deepEqual(tracked.contributorsAfterLatestPayment, [
+    { childId: david, collectedMinor: 1000, directMinor: 0 },
+  ].sort((a, b) => a.childId.localeCompare(b.childId)));
   assert.equal(tracked.dueMinor, 9000);
 
   post('transaction.reverse', { transactionId: secondPayment, comment: 'Plată introdusă greșit' });
@@ -585,12 +592,17 @@ test('an expense tracks collections and direct payments after its latest active 
   assert.equal(tracked.latestPayment.id, firstPayment);
   assert.equal(tracked.collectedAfterLatestPaymentMinor, 3000);
   assert.equal(tracked.directAfterLatestPaymentMinor, 4000);
+  assert.deepEqual(tracked.contributorsAfterLatestPayment, [
+    { childId: ana, collectedMinor: 2000, directMinor: 0 },
+    { childId: david, collectedMinor: 1000, directMinor: 4000 },
+  ].sort((a, b) => a.childId.localeCompare(b.childId)));
 
   post('transaction.reverse', { transactionId: firstPayment, comment: 'Plată introdusă greșit' });
   tracked = ledger.getState().expenses.find(item => item.id === emblems);
   assert.equal(tracked.latestPayment, null);
   assert.equal(tracked.collectedAfterLatestPaymentMinor, 0);
   assert.equal(tracked.directAfterLatestPaymentMinor, 0);
+  assert.deepEqual(tracked.contributorsAfterLatestPayment, []);
 });
 
 test('a collection can use any available child credit alongside the received cash', t => {

@@ -549,6 +549,13 @@ dd { margin: 0 0 0 auto; text-align: right; }
 .expense-after-payment { background: var(--sky); }
 .expense-after-payment h3 { margin: 0 0 3px; }
 .expense-after-payment .caption:last-child { margin: 9px 0 0; }
+.expense-recent-contributors { margin-top: 22px; padding: 15px; border: 1px solid var(--line); border-radius: 14px; background: var(--soft); }
+.expense-recent-contributors h3, .expense-recent-contributors .caption { margin: 0; }
+.expense-recent-contributors > .row { align-items: flex-start; }
+.expense-recent-contributors button { flex: 0 0 auto; }
+.expense-recent-contributor-list { margin-top: 10px; }
+.expense-recent-contributor-list small { display: block; color: var(--muted); }
+.expense-recent-contributor-empty { margin-top: 10px !important; }
 .expense-non-contributors { margin-top: 22px; padding: 15px; border: 1px solid var(--line); border-radius: 14px; background: var(--peach); }
 .expense-non-contributors h3, .expense-non-contributors .caption { margin: 0; }
 .expense-non-contributors .row { align-items: flex-start; }

@@ -72,6 +72,7 @@ Business endpoints accept `?classroom=<id>`. Omitting it selects `default` when 
  contacts: [{childId,position,label,phone}], // treasurer state only; omitted for auditor/parent
  expenses: [{id,title,type,amountMinor,totalMinor,collectedMinor,directMinor,coveredMinor,adjustedMinor,paidOutMinor,dueMinor,
    latestPayment:{id,amountMinor,destination,occurredAt}|null,collectedAfterLatestPaymentMinor,directAfterLatestPaymentMinor,
+   contributorsAfterLatestPayment:[{childId,collectedMinor,directMinor}], // omitted from parent state
    occurredAt,dueDate,comment,cancelled,
    contributions:[{childId,amountMinor,quantity}]}],
  transactions: [{id,type,occurredAt,createdAt,childId,expenseId,destination,comment,

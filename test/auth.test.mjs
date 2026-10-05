@@ -275,7 +275,8 @@ test('parent state exposes class totals and only the associated child', () => {
     contacts: [{ childId: 'ana', position: 1, label: 'Mama', phone: '+40722111222' }],
     expenses: [{ id: 'expense-1', title: 'Poze', comment: 'notă internă', dueMinor: 2000,
       latestPayment: { id: 'payment', amountMinor: 2000, destination: 'Fotograf', occurredAt: '2026-09-30T10:00:00.000Z' },
-      collectedAfterLatestPaymentMinor: 500, directAfterLatestPaymentMinor: 0, contributions: [
+      collectedAfterLatestPaymentMinor: 500, directAfterLatestPaymentMinor: 0,
+      contributorsAfterLatestPayment: [{ childId: 'ion', collectedMinor: 500, directMinor: 0 }], contributions: [
       { childId: 'ana', amountMinor: 1000 }, { childId: 'ion', amountMinor: 1000 }], totalMinor: 2000 }],
     advances: [{ id: 'advance', person: 'Casier', comment: 'notă internă' }],
     attachments: [{ id: 'internal-doc', visibility: 'internal' }, { id: 'class-doc', visibility: 'class' }], transactions: [
@@ -293,6 +294,7 @@ test('parent state exposes class totals and only the associated child', () => {
   assert.equal(view.expenses[0].participantCount, 2);
   assert.deepEqual(view.expenses[0].contributions.map((item) => item.childId), ['ana']);
   assert.equal(view.expenses[0].collectedAfterLatestPaymentMinor, 500, 'parent keeps the class aggregate calculated before child scoping');
+  assert.equal(Object.hasOwn(view.expenses[0], 'contributorsAfterLatestPayment'), false, 'parent cannot inspect classmates who contributed');
   assert.equal(view.expenses[0].dueMinor, 2000);
   assert.deepEqual(view.transactions.map((item) => item.id), ['own', 'payment', 'advance', 'repayment']);
   assert.equal(view.transactions[1].comment, '');

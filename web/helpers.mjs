@@ -10,6 +10,15 @@ export function expenseNonContributors(children, expense) {
     return contribution?.remainingMinor === amountMinor;
   }));
 }
+export function expenseContributorsAfterLatestPayment(children, expense) {
+  const amounts = new Map((expense?.contributorsAfterLatestPayment || []).map(item => [item.childId, item]));
+  return sortChildren(children.filter(child => amounts.has(child.id))).map(child => {
+    const contribution = amounts.get(child.id);
+    const collectedMinor = Number.isSafeInteger(contribution.collectedMinor) ? contribution.collectedMinor : 0;
+    const directMinor = Number.isSafeInteger(contribution.directMinor) ? contribution.directMinor : 0;
+    return { child, collectedMinor, directMinor, totalMinor: collectedMinor + directMinor };
+  }).filter(item => item.totalMinor > 0);
+}
 export const sortTransactionsNewestFirst = transactions => [...transactions].sort((a, b) =>
   b.occurredAt.localeCompare(a.occurredAt)
   || b.createdAt.localeCompare(a.createdAt)

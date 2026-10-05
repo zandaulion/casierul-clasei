@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { money, parseMoney, roundUp, collectionResult, creditSettlement, smallSettlement, expensePreview, sortChildren, expenseNonContributors, sortTransactionsNewestFirst, unpaid, whatsappReminder, whatsappUrl, whatsappShareUrl, paymentShareItems, reportShareMessage } from '../web/helpers.mjs';
+import { money, parseMoney, roundUp, collectionResult, creditSettlement, smallSettlement, expensePreview, sortChildren, expenseNonContributors, expenseContributorsAfterLatestPayment, sortTransactionsNewestFirst, unpaid, whatsappReminder, whatsappUrl, whatsappShareUrl, paymentShareItems, reportShareMessage } from '../web/helpers.mjs';
 const child = { dueMinor: 8500, contributions: [
   { expenseId: 'books', title: 'Culegeri', dueDate: '2026-10-02', remainingMinor: 6000 },
   { expenseId: 'trip', title: 'Excursie', dueDate: '2026-10-01', remainingMinor: 2500 },
@@ -100,6 +100,23 @@ test('expense non-contributors include only participants with no covered amount,
     { childId: 'partial', amountMinor: 1000 }, { childId: 'none-a', amountMinor: 1000 },
   ] };
   assert.deepEqual(expenseNonContributors(children, expense).map(item => item.id), ['none-a', 'none-b']);
+});
+test('contributors after the latest payment include fund and direct amounts in name order', () => {
+  const children = [
+    { id: 'david', lastName: 'Bălan', firstName: 'David' },
+    { id: 'ana', lastName: 'Avram', firstName: 'Ana' },
+    { id: 'other', lastName: 'Pop', firstName: 'Mara' },
+  ];
+  const expense = { contributorsAfterLatestPayment: [
+    { childId: 'david', collectedMinor: 1000, directMinor: 4000 },
+    { childId: 'ana', collectedMinor: 2000, directMinor: 0 },
+  ] };
+  assert.deepEqual(expenseContributorsAfterLatestPayment(children, expense).map(item => ({
+    childId: item.child.id, collectedMinor: item.collectedMinor, directMinor: item.directMinor, totalMinor: item.totalMinor,
+  })), [
+    { childId: 'ana', collectedMinor: 2000, directMinor: 0, totalMinor: 2000 },
+    { childId: 'david', collectedMinor: 1000, directMinor: 4000, totalMinor: 5000 },
+  ]);
 });
 test('transaction history is ordered newest first with deterministic ties', () => {
   const transactions = [

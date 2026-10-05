@@ -542,7 +542,15 @@ try {
   assert.match(afterPaymentText, /Strâns în fond de atunci\s*0 lei/u);
   assert.match(afterPaymentText, /Plătit direct de atunci\s*50 lei/u);
   assert.match(afterPaymentText, /Mai este de colectat\s*50 lei/u);
-  assert.equal(await evaluate('document.querySelector(".expense-after-payment").nextElementSibling.matches(".expense-non-contributors")'), true, 'non-contributors card follows the after-payment card');
+  assert.match(await evaluate('document.querySelector(".expense-recent-contributors").textContent'), /Au contribuit după ultima plată[\s\S]*1 copil · 50 lei în total[\s\S]*Avram Ana[\s\S]*Plătit direct 50 lei/u);
+  assert.equal(await evaluate('document.querySelector(".expense-after-payment").nextElementSibling.matches(".expense-recent-contributors")'), true, 'recent contributors card follows the after-payment summary');
+  assert.equal(await evaluate('document.querySelector(".expense-recent-contributors").nextElementSibling.matches(".expense-non-contributors")'), true, 'non-contributors card follows the recent contributors card');
+  await evaluate(`(() => {
+    window.__copiedRecentContributorList = '';
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async text => { window.__copiedRecentContributorList = text; } } });
+  })()`);
+  await click('[data-action=copy-expense-recent-contributors]');
+  assert.equal(await evaluate('window.__copiedRecentContributorList'), 'Avram Ana — direct 50 lei');
   await click('[data-action=close-modal]');
   while (snapshot().reports.length < 11) {
     await app.ledger.createReport({ requestId: randomUUID(), type: 'class' }, { id: 'archive-test-device', label: 'Verificare arhivă' });

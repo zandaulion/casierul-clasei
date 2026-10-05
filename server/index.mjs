@@ -276,12 +276,15 @@ export function projectState(state, device) {
   if (device.role !== 'parent') return safeState;
   const ownChild = safeState.children.find((child) => child.id === device.child_id);
   if (!ownChild) throw httpError(403, 'Copilul asociat acestui acces nu mai este disponibil.');
-  const expenses = safeState.expenses.map((expense) => ({
-    ...expense,
-    comment: '',
-    participantCount: expense.contributions.length,
-    contributions: expense.contributions.filter((contribution) => contribution.childId === device.child_id),
-  }));
+  const expenses = safeState.expenses.map((expense) => {
+    const { contributorsAfterLatestPayment: _contributorsAfterLatestPayment, ...publicExpense } = expense;
+    return {
+      ...publicExpense,
+      comment: '',
+      participantCount: expense.contributions.length,
+      contributions: expense.contributions.filter((contribution) => contribution.childId === device.child_id),
+    };
+  });
   const transactions = safeState.transactions.filter((transaction) =>
     ['payment', 'fund_advance', 'advance_repayment'].includes(transaction.type) || transaction.childId === device.child_id).map((transaction) => ({
     ...transaction,

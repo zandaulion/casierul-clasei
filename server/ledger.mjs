@@ -759,12 +759,16 @@ export class Ledger {
     }
     const collectedAfterPayment = new Map();
     const directAfterPayment = new Map();
+    const collectedAfterPaymentByChild = new Map();
+    const directAfterPaymentByChild = new Map();
     for (const tx of activeTransactions) {
       if (!['collection', 'direct_payment'].includes(tx.type)) continue;
       for (const allocation of tx.allocations) {
         const latestPayment = latestExpensePayment.get(allocation.expenseId);
         if (!latestPayment || compareTransactionTime(tx, latestPayment) <= 0) continue;
         bump(tx.type === 'collection' ? collectedAfterPayment : directAfterPayment, allocation.expenseId, allocation.amountMinor);
+        const childKey = `${allocation.expenseId}:${tx.childId}`;
+        bump(tx.type === 'collection' ? collectedAfterPaymentByChild : directAfterPaymentByChild, childKey, allocation.amountMinor);
       }
     }
     const contributionsByExpense = new Map(), contributionsByChild = new Map();
@@ -785,6 +789,11 @@ export class Ledger {
       } : null,
       collectedAfterLatestPaymentMinor: collectedAfterPayment.get(row.id) ?? 0,
       directAfterLatestPaymentMinor: directAfterPayment.get(row.id) ?? 0,
+      contributorsAfterLatestPayment: (contributionsByExpense.get(row.id) ?? []).map(contribution => ({
+        childId: contribution.child_id,
+        collectedMinor: collectedAfterPaymentByChild.get(`${row.id}:${contribution.child_id}`) ?? 0,
+        directMinor: directAfterPaymentByChild.get(`${row.id}:${contribution.child_id}`) ?? 0,
+      })).filter(contribution => contribution.collectedMinor > 0 || contribution.directMinor > 0),
       occurredAt: row.occurred_at, dueDate: row.due_date, comment: row.comment,
       cancelled: Boolean(row.cancelled),
       contributions: (contributionsByExpense.get(row.id) ?? []).map(c => ({
