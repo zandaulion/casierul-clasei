@@ -634,7 +634,7 @@ function renderReports() {
     <div class="row"><h3>${esc(reportTypeLabels[report.type])}</h3><span class="badge">${report.replacedById ? report.archived ? 'Arhivat · Înlocuit' : 'Înlocuit' : report.archived ? 'Arhivat' : 'Emis'}</span></div>
     <div>${esc(report.subjectLabel)}</div><div class="caption">${dateText(report.createdAt)}</div>
     <div class="caption">${esc(report.code)} · revizia ${report.stateRevision}${report.replacesId ? ' · Raport corectiv' : ''}</div>
-    <div class="report-actions"><button class="primary" data-action="view-report" data-id="${esc(report.id)}">Vizualizează</button><button data-action="share-report" data-id="${esc(report.id)}">Partajează PDF</button><a href="${esc(scopedUrl(`/api/reports/${encodeURIComponent(report.id)}/pdf`))}" download="${esc(report.filename)}">Descarcă</a>${canWrite() && !report.replacedById ? `<button data-action="replace-report" data-id="${esc(report.id)}">Emite corecție</button>` : ''}</div>
+    <div class="report-actions"><button class="primary" data-action="view-report" data-id="${esc(report.id)}">Vizualizează</button><button data-action="share-report" data-id="${esc(report.id)}">Partajează PDF</button><a href="${esc(scopedUrl(`/api/reports/${encodeURIComponent(report.id)}/pdf`))}" download="${esc(report.filename)}" data-report-download>Descarcă</a>${canWrite() && !report.replacedById ? `<button data-action="replace-report" data-id="${esc(report.id)}">Emite corecție</button>` : ''}</div>
   </article>`).join('');
   $('#main').innerHTML = `<section class="reports-intro" aria-labelledby="reports-title"><div class="reports-intro-copy"><h1 id="reports-title">Rapoarte de împărtășit</h1><p>Fiecare contribuție, la locul ei. Situații clare, pregătite pentru consultare și partajare.</p>${canWrite() ? `<button type="button" class="context-help-link" data-action="help" data-help-topic="reports">${icon('help')}Cum emit un raport?</button>` : ''}</div>${stationery}</section>
     ${canWrite() ? `<section class="payment-details card" aria-labelledby="payment-details-title"><div class="row"><div><h2 id="payment-details-title">Detalii de plată</h2><p class="caption">Trimite fiecare informație separat, ca părinții să poată deschide linkul sau copia ușor datele bancare.</p></div><button data-action="settings">${paymentItems.length ? 'Editează' : 'Configurează'}</button></div>${paymentItems.length ? `<div class="payment-detail-list">${paymentItems.map(item => `<article class="payment-detail"><div><strong>${esc(item.label)}</strong>${item.key === 'revolut' ? `<a href="${esc(item.value)}" target="_blank" rel="noopener noreferrer">${esc(item.value)}</a>` : `<span class="payment-detail-value">${esc(item.value)}</span>`}</div><div class="payment-detail-actions"><a class="whatsapp-link compact" href="${esc(whatsappShareUrl(item.message))}" target="_blank" rel="noopener noreferrer" aria-label="Trimite ${esc(item.label)} prin WhatsApp">${icon('message')}WhatsApp</a><button type="button" data-copy-payment="${esc(item.key)}">Copiază</button></div></article>`).join('')}</div>` : '<div class="empty"><p>Adaugă linkul Revolut.me, numele beneficiarului și IBAN-ul în setările clasei.</p></div>'}</section>` : ''}
@@ -660,6 +660,26 @@ function reportModal(type, replacesId = null, subjectId = null) {
     reportType: type, replacesId, subjectId: fixedSubject, requestId: crypto.randomUUID(),
   });
   if (type === 'child' && !replaced) updateChildReportOptions();
+}
+function actionFeedback(control, label) {
+  if (!control || control.dataset.feedbackActive) return () => {};
+  const originalLabel = control.textContent;
+  const originalAriaDisabled = control.getAttribute('aria-disabled');
+  control.dataset.feedbackActive = 'true';
+  control.classList.add('action-in-progress');
+  control.setAttribute('aria-busy', 'true');
+  control.textContent = label;
+  if (control instanceof HTMLButtonElement) control.disabled = true;
+  else control.setAttribute('aria-disabled', 'true');
+  return () => {
+    delete control.dataset.feedbackActive;
+    control.classList.remove('action-in-progress');
+    control.removeAttribute('aria-busy');
+    control.textContent = originalLabel;
+    if (control instanceof HTMLButtonElement) control.disabled = false;
+    else if (originalAriaDisabled === null) control.removeAttribute('aria-disabled');
+    else control.setAttribute('aria-disabled', originalAriaDisabled);
+  };
 }
 function updateChildReportOptions() {
   if (modal?.type !== 'report' || modal.reportType !== 'child' || !$('#modal-form').elements.debtFilter) return;
@@ -1371,6 +1391,12 @@ async function refresh(review = false) {
   updateNotices();
 }
 document.addEventListener('click', async event => {
+  const reportDownload = event.target.closest('a[data-report-download]');
+  if (reportDownload) {
+    const clearFeedback = actionFeedback(reportDownload, 'Se descarcă…');
+    setTimeout(clearFeedback, 1800);
+    return;
+  }
   const button = event.target.closest('button'); if (!button || button.disabled) return;
   const action = button.dataset.action;
   if (button.dataset.copyPayment) { await copyPaymentDetail(button.dataset.copyPayment); return; }
@@ -1454,9 +1480,17 @@ document.addEventListener('click', async event => {
     case 'report-expense': reportModal('expense'); break;
     case 'report-child': reportModal('child'); break;
     case 'view-report': viewReport(button.dataset.id); break;
-    case 'share-report': await shareReport(button.dataset.id); break;
+    case 'share-report': {
+      const clearFeedback = actionFeedback(button, 'Se pregătește…');
+      try { await shareReport(button.dataset.id); } finally { clearFeedback(); }
+      break;
+    }
     case 'share-child-text': await shareChildText(button.dataset.id); break;
-    case 'share-child-report': await shareChildReport(button.dataset.id); break;
+    case 'share-child-report': {
+      const clearFeedback = actionFeedback(button, 'Se pregătește…');
+      try { await shareChildReport(button.dataset.id); } finally { clearFeedback(); }
+      break;
+    }
     case 'replace-report': {
       const report = (state.reports || []).find(item => item.id === button.dataset.id);
       if (report) reportModal(report.type, report.id);

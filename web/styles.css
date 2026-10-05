@@ -680,6 +680,23 @@ dd { margin: 0 0 0 auto; text-align: right; }
   text-align: center;
 }
 .report-actions .primary { background: var(--brand); color: var(--on-brand); border-color: var(--brand); }
+.report-actions .action-in-progress {
+  gap: 8px;
+  border-color: var(--brand);
+  background: var(--soft);
+  color: var(--text);
+  opacity: 1;
+  pointer-events: none;
+}
+.report-actions .action-in-progress::before, .pdf-preview-status::before {
+  content: "";
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+}
 .report-card.replaced { background: var(--bg); border-style: dashed; }
 .report-card h3 { margin-right: auto; }
 .badge { padding: 4px 8px; border-radius: 8px; background: var(--soft); font-size: 12px; white-space: nowrap; }
@@ -955,7 +972,7 @@ dialog::backdrop { background: #13271e88; }
 .help-dialog { width: min(760px, calc(100vw - 20px)); }
 .pdf-dialog .dialog-heading { position: sticky; top: -14px; z-index: 2; margin: -14px -14px 10px; padding: 14px; border-bottom: 1px solid var(--line); background: var(--bg); }
 .pdf-dialog .dialog-actions { position: sticky; bottom: -14px; z-index: 2; margin: 12px -14px -14px; padding: 10px 14px 14px; border-top: 1px solid var(--line); background: var(--bg); }
-.pdf-preview-status { padding: 18px; text-align: center; }
+.pdf-preview-status { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 18px; text-align: center; }
 .pdf-preview-pages { display: grid; justify-items: center; gap: 14px; }
 .pdf-preview-pages figure { display: flex; justify-content: center; width: 100%; margin: 0; }
 .pdf-preview-pages canvas { display: block; max-width: 100%; height: auto !important; background: #fff; box-shadow: 0 2px 12px #0003; }
@@ -984,9 +1001,13 @@ dialog::backdrop { background: #13271e88; }
   .child:hover, .card-button:hover { background: var(--soft); }
   .tabs button:not([aria-current]):hover { background: var(--bg); }
 }
+.report-actions button:not(:disabled):active, .report-actions a:active { filter: brightness(.9); }
 @media (prefers-reduced-motion: no-preference) {
-  button, .report-actions a { transition: background .15s, border-color .15s, box-shadow .15s; }
+  button, .report-actions a { transition: background .15s, border-color .15s, box-shadow .15s, transform .08s; }
+  .report-actions button:not(:disabled):active, .report-actions a:active { transform: translateY(1px) scale(.99); }
+  .report-actions .action-in-progress::before, .pdf-preview-status::before { animation: action-spin .7s linear infinite; }
 }
+@keyframes action-spin { to { transform: rotate(360deg); } }
 
 /* Reflow narrow phones and enlarged text without hiding financial controls. */
 @media (max-width: 600px) {

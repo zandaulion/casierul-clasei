@@ -400,15 +400,25 @@ try {
   await evaluate(`(() => {
     window.__sharedReport = null;
     window.__copiedText = '';
+    window.__holdReportShare = true;
+    window.__finishReportShare = null;
     Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async text => { window.__copiedText = text; } } });
     Object.defineProperty(navigator, 'canShare', { configurable: true, value: () => true });
-    Object.defineProperty(navigator, 'share', { configurable: true, value: async data => { const file=data.files?.[0]; window.__sharedReport = { name: file?.name || '', type: file?.type || '', size: file?.size || 0, text: data.text || '', title: data.title || '' }; } });
+    Object.defineProperty(navigator, 'share', { configurable: true, value: data => { const file=data.files?.[0]; window.__sharedReport = { name: file?.name || '', type: file?.type || '', size: file?.size || 0, text: data.text || '', title: data.title || '' }; return window.__holdReportShare ? new Promise(resolve => { window.__finishReportShare = resolve; }) : Promise.resolve(); } });
   })()`);
   await click('[data-action=share-report]');
   await until('window.__sharedReport?.type === "application/pdf"', 'PDF shared through native share');
+  assert.equal(await evaluate('document.querySelector("[data-action=share-report]").textContent'), 'Se pregătește…');
+  assert.equal(await evaluate('document.querySelector("[data-action=share-report]").disabled && document.querySelector("[data-action=share-report]").getAttribute("aria-busy") === "true"'), true, 'sharing button visibly stays busy while the native share is pending');
   assert.match(await evaluate('window.__sharedReport.name'), /\.pdf$/u);
   assert.ok(await evaluate('window.__sharedReport.size > 1000'));
   assert.match(await evaluate('window.__sharedReport.text'), /situația fondului clasei III A[\s\S]*Raport R-0001/u);
+  await evaluate('window.__holdReportShare = false; window.__finishReportShare()');
+  await until('document.querySelector("[data-action=share-report]").textContent === "Partajează PDF" && !document.querySelector("[data-action=share-report]").disabled', 'share button feedback clears');
+  assert.equal(await evaluate('document.querySelector("[data-report-download]").textContent'), 'Descarcă');
+  await click('[data-report-download]');
+  assert.equal(await evaluate('document.querySelector("[data-report-download]").textContent'), 'Se descarcă…');
+  assert.equal(await evaluate('document.querySelector("[data-report-download]").getAttribute("aria-busy")'), 'true');
   await screenshot('reports');
   await click('[data-tab=children]'); await click('[data-child="' + anaId + '"]');
   assert.ok(await evaluate('document.querySelector("[data-action=create-child-report]")'));
