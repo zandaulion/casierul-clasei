@@ -273,6 +273,97 @@ export async function renderReportPdf(report, state, branding = {}) {
     note(closingNote);
   };
 
+  const classExecutiveSummary = () => {
+    const left = doc.page.margins.left;
+    const balanceMinor = state.summary.balanceMinor;
+    const outstandingAdvanceMinor = state.summary.totalAdvanceOutstandingMinor ?? 0;
+    const netBalanceMinor = state.summary.netBalanceMinor ?? balanceMinor;
+    const dueMinor = state.summary.totalDueMinor;
+    const debtorCount = state.children.filter(child => child.dueMinor > 0).length;
+    const expenses = state.expenses.filter(expense => !expense.cancelled).map(expense => ({
+      expense, due: expenseStatus(state, expense), coverage: expenseCoverage(expense),
+    }));
+    const completeCount = expenses.filter(entry => entry.due.amountMinor === 0).length;
+    const openCount = expenses.length - completeCount;
+    const visibleExpenses = [...expenses].sort((a, b) => Number(a.due.amountMinor === 0) - Number(b.due.amountMinor === 0)
+      || b.due.amountMinor - a.due.amountMinor || b.expense.occurredAt.localeCompare(a.expense.occurredAt)).slice(0, 4);
+
+    section('Pe scurt');
+    let y = doc.y;
+    const bannerTone = netBalanceMinor < 0 ? tones.negative : tones.info;
+    doc.roundedRect(left, y, width, 56, 8).fill(bannerTone.fill);
+    doc.roundedRect(left, y, 4, 56, 2).fill(bannerTone.ink);
+    doc.font('Regular').fontSize(8.5).fillColor(bannerTone.ink).text('Numerar disponibil în fond', left + 13, y + 10,
+      { width: width * .53 });
+    doc.font('Bold').fontSize(15).fillColor(bannerTone.ink).text(money(balanceMinor), left + width * .55, y + 7,
+      { width: width * .42, align: 'right' });
+    const balanceExplanation = outstandingAdvanceMinor
+      ? `După restituirea sumelor avansate de ${money(outstandingAdvanceMinor)}, soldul ar fi ${money(netBalanceMinor)}.`
+      : 'Nu există sume avansate de restituit.';
+    doc.font('Regular').fontSize(8).fillColor(bannerTone.ink).text(balanceExplanation, left + 13, y + 34,
+      { width: width - 26, lineBreak: false, ellipsis: true });
+
+    const gap = 8, cardWidth = (width - gap * 2) / 3, cardHeight = 66;
+    y += 68;
+    const cards = [
+      { label: 'De restituit', value: money(outstandingAdvanceMinor), detail: 'pentru sume avansate', tone: outstandingAdvanceMinor ? tones.warning : tones.positive },
+      { label: 'De încasat', value: money(dueMinor), detail: `${debtorCount} ${debtorCount === 1 ? 'copil' : 'copii'}`, tone: dueMinor ? tones.negative : tones.positive },
+      { label: 'Sold după restituire', value: money(netBalanceMinor), detail: 'poziția netă a fondului', tone: netBalanceMinor < 0 ? tones.negative : tones.info },
+    ];
+    cards.forEach((card, index) => {
+      const x = left + index * (cardWidth + gap);
+      doc.roundedRect(x, y, cardWidth, cardHeight, 7).fill(card.tone.fill);
+      doc.font('Regular').fontSize(7.8).fillColor(card.tone.ink).text(card.label, x + 10, y + 9,
+        { width: cardWidth - 20, lineBreak: false, ellipsis: true });
+      doc.font('Bold').fontSize(12).fillColor(card.tone.ink).text(card.value, x + 10, y + 26,
+        { width: cardWidth - 20, lineBreak: false, ellipsis: true });
+      doc.font('Regular').fontSize(7).fillColor(card.tone.ink).text(card.detail, x + 10, y + 47,
+        { width: cardWidth - 20, lineBreak: false, ellipsis: true });
+    });
+
+    y += cardHeight + 19;
+    doc.font('Bold').fontSize(11).fillColor(dark).text('Starea cheltuielilor', left, y, { width: width * .58, lineBreak: false });
+    doc.font('Regular').fontSize(8).fillColor(muted).text(`${completeCount} ${completeCount === 1 ? 'acoperită integral' : 'acoperite integral'} · ${openCount} în colectare`,
+      left + width * .58, y + 2, { width: width * .42, align: 'right', lineBreak: false });
+    y += 23;
+    if (!expenses.length) {
+      doc.font('Regular').fontSize(8.5).fillColor(muted).text('Nu există cheltuieli active.', left, y, { width });
+      y += 28;
+    } else {
+      for (const { expense, due, coverage: expenseCoverageValue } of visibleExpenses) {
+        const titleWidth = width * .62;
+        doc.font('Bold').fontSize(8.5).fillColor(due.amountMinor ? tones.warning.ink : tones.positive.ink)
+          .text(expense.title, left, y, { width: titleWidth, height: 13, lineBreak: false, ellipsis: true });
+        doc.font('Bold').fontSize(8.5).fillColor(due.amountMinor ? tones.warning.ink : tones.positive.ink)
+          .text(expenseCoverageValue.label, left + titleWidth, y, { width: width - titleWidth, align: 'right', lineBreak: false });
+        drawCoverageBar(left, y + 16, width, 6, expenseCoverageValue.ratio);
+        const status = due.amountMinor
+          ? `De încasat ${money(due.amountMinor)} · ${due.count} ${due.count === 1 ? 'copil' : 'copii'}`
+          : 'Acoperită integral';
+        doc.font('Regular').fontSize(7.3).fillColor(muted).text(status, left, y + 27,
+          { width, lineBreak: false, ellipsis: true });
+        y += 43;
+      }
+      if (expenses.length > visibleExpenses.length) {
+        doc.font('Regular').fontSize(7.5).fillColor(muted)
+          .text(`Încă ${expenses.length - visibleExpenses.length} ${expenses.length - visibleExpenses.length === 1 ? 'cheltuială apare' : 'cheltuieli apar'} în detalii.`, left, y, { width });
+        y += 17;
+      }
+    }
+
+    const attentionTone = dueMinor || outstandingAdvanceMinor ? tones.warning : tones.positive;
+    const attentionParts = [dueMinor ? `${money(dueMinor)} de încasat de la ${debtorCount} ${debtorCount === 1 ? 'copil' : 'copii'}` : '',
+      outstandingAdvanceMinor ? `${money(outstandingAdvanceMinor)} de restituit pentru sume avansate` : ''].filter(Boolean);
+    const attentionText = attentionParts.length ? attentionParts.join(' · ') : 'Nu există sume de încasat sau avansuri de restituit.';
+    doc.roundedRect(left, y + 3, width, 42, 7).fill(attentionTone.fill);
+    doc.font('Bold').fontSize(8).fillColor(attentionTone.ink).text('DE URMĂRIT', left + 11, y + 11,
+      { width: 70, lineBreak: false, characterSpacing: .6 });
+    doc.font('Regular').fontSize(8).fillColor(attentionTone.ink).text(attentionText, left + 88, y + 10,
+      { width: width - 99, height: 25, ellipsis: true });
+    doc.y = y + 58; doc.x = left;
+    note('Detaliile, reconcilierea și istoricul complet urmează în paginile următoare.');
+  };
+
   const headerY = doc.y, logoSize = 42, centerInset = logoSize + 14;
   if (branding.school) doc.image(branding.school, doc.page.margins.left, headerY, { fit: [logoSize, logoSize], align: 'center', valign: 'center' });
   if (branding.class) doc.image(branding.class, doc.page.width - doc.page.margins.right - logoSize, headerY, { fit: [logoSize, logoSize], align: 'center', valign: 'center' });
@@ -305,6 +396,11 @@ export async function renderReportPdf(report, state, branding = {}) {
   const transactions = activeTransactions(state);
   if (report.type === 'matrix') matrixReport();
   if (report.type === 'class') {
+    classExecutiveSummary();
+    doc.addPage();
+    doc.font('Bold').fontSize(15).fillColor(dark).text('Detalii și reconciliere', doc.page.margins.left, doc.y, { width });
+    doc.moveDown(.25);
+    note('Valorile de mai jos explică rezumatul și păstrează trasabilitatea completă a fondului clasei.');
     section('Situația fondului');
     metric('Sold inițial', money(state.settings.openingBalanceMinor));
     metric('Bani primiți și păstrați în fond', money(state.summary.totalReceivedMinor));

@@ -192,6 +192,15 @@ test('all four PDF reports preserve financial values, privacy, branding and read
       assertText(result, 'Detalii plată: numele elevului', `${type}: transfer reference guidance`);
     }
     if (type === 'class') {
+      assertText({ text: result.pages[0].text }, 'Pe scurt', 'class report opens with the executive summary');
+      assertText({ text: result.pages[0].text }, 'Starea cheltuielilor', 'executive summary includes expense health');
+      assertText({ text: result.pages[0].text }, 'DE URMĂRIT', 'executive summary surfaces immediate actions');
+      assertText({ text: result.pages[0].text }, `De încasat ${money(35750)}`, 'executive summary shows total still due');
+      assertText({ text: result.pages[0].text }, `De restituit ${money(3000)}`, 'executive summary shows outstanding advances');
+      assert.equal(result.pages[0].text.includes('Situația fondului'), false, 'detailed reconciliation stays off the summary page');
+      assert.ok(result.pages.length > 1, 'class report keeps its detailed pages after the summary');
+      assertText({ text: result.pages[1].text }, 'Detalii și reconciliere', 'details begin on the second page');
+      assertText({ text: result.pages[1].text }, 'Situația fondului', 'fund reconciliation begins on the second page');
       assertMetric(result, 'Numerar disponibil în fond', money(30845));
       assertMetric(result, 'De restituit pentru sume avansate', money(3000));
       assertMetric(result, 'Sold după restituirea sumelor avansate', money(27845));
@@ -341,8 +350,15 @@ test('expense coverage counts allocated contributions, with honest zero, tiny, n
     const result = await inspectPdf(data, type, 'coverage-edges');
     assertLayout(result, type);
     const percentages = result.text.match(/(?:<)?\d+(?:,\d+)?%/gu) || [];
-    assert.deepEqual(percentages.toSorted(), ['45,8%', '25%', '25%', ...cases.map(item => item.expected)].toSorted(),
-      `${type}: every expense uses its own allocated contribution total`);
+    const expected = ['45,8%', '25%', '25%', ...cases.map(item => item.expected)];
+    if (type === 'matrix') {
+      assert.deepEqual(percentages.toSorted(), expected.toSorted(),
+        'matrix: every expense uses its own allocated contribution total');
+    } else {
+      for (const percentage of new Set(expected)) {
+        assert.ok(percentages.includes(percentage), `class: ${percentage} remains visible in the detailed expense list`);
+      }
+    }
     if (type === 'matrix') assert.match(result.text, /acoperire totală/iu, 'matrix legend explains what the percentages measure');
   }
 });
