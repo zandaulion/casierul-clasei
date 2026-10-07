@@ -96,6 +96,7 @@ export async function renderReportPdf(report, state, branding = {}) {
   const tones = {
     positive: { ink: '#17623b', fill: '#e3f3e8' },
     warning: { ink: '#8a5a00', fill: '#fff1c7' },
+    collection: { ink: '#a44a12', fill: '#fce8d5' },
     negative: { ink: '#9b2c25', fill: '#f9dfdc' },
     info: { ink: '#245c7a', fill: '#e2f0f7' },
     correction: { ink: '#8a4b08', fill: '#f8e7d2' },
@@ -290,7 +291,7 @@ export async function renderReportPdf(report, state, branding = {}) {
 
     section('Pe scurt');
     let y = doc.y;
-    const bannerTone = netBalanceMinor < 0 ? tones.negative : tones.info;
+    const bannerTone = tones.info;
     doc.roundedRect(left, y, width, 56, 8).fill(bannerTone.fill);
     doc.roundedRect(left, y, 4, 56, 2).fill(bannerTone.ink);
     doc.font('Regular').fontSize(8.5).fillColor(bannerTone.ink).text('Numerar disponibil în fond', left + 13, y + 10,
@@ -307,7 +308,7 @@ export async function renderReportPdf(report, state, branding = {}) {
     y += 68;
     const cards = [
       { label: 'De restituit', value: money(outstandingAdvanceMinor), detail: 'pentru sume avansate', tone: outstandingAdvanceMinor ? tones.warning : tones.positive },
-      { label: 'De încasat', value: money(dueMinor), detail: `${debtorCount} ${debtorCount === 1 ? 'copil' : 'copii'}`, tone: dueMinor ? tones.negative : tones.positive },
+      { label: 'De încasat', value: money(dueMinor), detail: `${debtorCount} ${debtorCount === 1 ? 'copil' : 'copii'}`, tone: dueMinor ? tones.collection : tones.positive },
       { label: 'Sold după restituire', value: money(netBalanceMinor), detail: 'poziția netă a fondului', tone: netBalanceMinor < 0 ? tones.negative : tones.info },
     ];
     cards.forEach((card, index) => {
@@ -351,7 +352,7 @@ export async function renderReportPdf(report, state, branding = {}) {
       }
     }
 
-    const attentionTone = dueMinor || outstandingAdvanceMinor ? tones.warning : tones.positive;
+    const attentionTone = dueMinor ? tones.collection : outstandingAdvanceMinor ? tones.warning : tones.positive;
     const attentionParts = [dueMinor ? `${money(dueMinor)} de încasat de la ${debtorCount} ${debtorCount === 1 ? 'copil' : 'copii'}` : '',
       outstandingAdvanceMinor ? `${money(outstandingAdvanceMinor)} de restituit pentru sume avansate` : ''].filter(Boolean);
     const attentionText = attentionParts.length ? attentionParts.join(' · ') : 'Nu există sume de încasat sau avansuri de restituit.';
