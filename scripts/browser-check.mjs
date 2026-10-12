@@ -353,6 +353,18 @@ try {
   assert.equal(snapshot().summary.balanceMinor, 3000);
   assert.equal(snapshot().children.find(c => c.id === anaId).creditMinor, 0);
   assert.equal(snapshot().children.find(c => c.id === anaId).dueMinor, 3750);
+  assert.equal(await evaluate('document.querySelector(".child-history")?.tagName'), 'SECTION',
+    'selected child transaction history is visible without expanding a disclosure');
+  assert.match(await evaluate('document.querySelector(".child-history h2").textContent'), /Istoricul tranzacțiilor/u);
+  assert.deepEqual(await evaluate('[...document.querySelectorAll(".child-history [data-transaction]")].map(item => item.dataset.transaction)'),
+    [...snapshot().transactions].filter(item => item.childId === anaId)
+      .sort((a, b) => b.occurredAt.localeCompare(a.occurredAt) || b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id))
+      .map(item => item.id),
+    'selected child history contains only that child and is newest first');
+  assert.match(await evaluate('document.querySelector("[data-action=show-child-history]").textContent'), /Istoric · \d+/u);
+  await click('[data-action=show-child-history]');
+  await until('Math.abs(document.querySelector(".child-history").getBoundingClientRect().top) < 2', 'child history shortcut scroll');
+  await screenshot('child-history');
   await click('[data-tab=ledger]');
   await click('[data-transaction="' + paymentId + '"]');
   await click('[data-action=reverse]');

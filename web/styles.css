@@ -581,6 +581,10 @@ dd { margin: 0 0 0 auto; text-align: right; }
 .ledger-history h2 { margin-bottom: 14px; }
 .ledger-history .card .row { align-items: flex-start; }
 .history { margin-top: 24px; }
+.child-history > .row { align-items: flex-start; margin-bottom: 14px; }
+.child-history h2, .child-history p { margin: 0; }
+.child-history .badge { flex: 0 0 auto; }
+.child-actions { flex: 0 0 auto; margin: 0; }
 .transaction-muted { background: var(--bg); border-style: dashed; }
 .transaction-muted .caption { color: var(--muted); }
 
