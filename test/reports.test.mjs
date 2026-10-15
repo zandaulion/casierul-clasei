@@ -127,7 +127,7 @@ async function inspectBytes(pdf, report, filename, type, prefix) {
 function assertLayout(result, type) {
   assert.ok(result.pages.length > 0);
   for (const page of result.pages) {
-    assert.equal(page.width > page.height, type === 'matrix' || (type === 'collection_sheet' && !result.report.subjectId), `${type}: orientation`);
+    assert.equal(page.width > page.height, type === 'matrix', `${type}: orientation`);
     if (type === 'matrix') assert.ok(page.text.includes('Acoperire totală'), 'matrix pages keep a table header instead of an isolated closing note');
     assert.ok(page.text.includes(`${result.report.code} · pagina ${page.number}/${result.pages.length}`), `${type}: numbered footer on page ${page.number}`);
     const offPage = page.items.filter(item => item.transform[4] < -1 || item.transform[4] + item.width > page.width + 1
@@ -483,7 +483,9 @@ test('monochrome cash sheets show settled contributions and leave room for handw
   const all = await inspectPdf(data, 'collection_sheet', 'cash-sheet-all');
   assertLayout(all, 'collection_sheet');
   for (const child of children) assertText(all, `${child.lastName} ${child.firstName}`, 'cash sheet includes roster');
-  for (const label of ['ACHITAT', 'PARȚIAL', 'NEACHITAT', 'NU PARTICIPĂ', '25 / 30 lei', 'rest 5', 'Cash:', 'Data:', 'foaia nu actualizează registrul']) assertText(all, label, 'printable status or writing guide');
+  assert.equal(all.pages.length, 1, 'all expenses fit on one portrait A4 sheet');
+  for (const label of ['OK', 'P 5', 'Cash nou', 'Data', 'Foaia nu actualizează registrul']) assertText(all, label, 'printable status or writing guide');
+  assert.ok(all.pages[0].items.some(item => item.str === '30'), 'unpaid amount is shown directly');
   assert.equal(all.text.includes('NOTĂ PRIVATĂ DAVID'), false);
   assert.equal(all.text.includes('RO49AAAA1B31007593840000'), false);
   assert.ok(all.pages.every(page => page.imageCount === 0), 'no colored logos or raster images');
@@ -494,7 +496,7 @@ test('monochrome cash sheets show settled contributions and leave room for handw
   assert.equal(single.text.includes('Vizită la muzeu'), false, 'single-expense sheet does not expose other expenses');
   assertText(single, 'Cash primit (lei)', 'dedicated handwriting column');
   assertText(single, 'Data / observații', 'dedicated date column');
-  assertText(single, '0 / 10 lei', 'unpaid allocated amount');
+  assertText(single, 'Rest 10', 'unpaid amount');
   assert.deepEqual(data.ledger.getState().transactions, before.transactions, 'issuing a sheet never records money');
   assert.deepEqual(data.ledger.getState().summary, before.summary);
 });
@@ -517,16 +519,41 @@ test('cash sheets keep selected archived debts and zero shares without exposing 
   await assert.rejects(data.ledger.createReport({ requestId: randomUUID(), type: 'collection_sheet', subjectId: cancelled }, actor), { status: 404 });
 });
 
-test('cash sheets repeat roster and headers across expense groups and pages without clipping', async t => {
+test('a class of 29 children and three expenses fits one portrait A4 sheet with handwriting space', async t => {
+  const data = await fixture(t);
+  data.post('children.create', { children: Array.from({ length: 25 }, (_, index) => ({ lastName: `ElevDemonstrativ${index + 1}`, firstName: `Prenume${index + 1}` })) });
+  const result = await inspectPdf(data, 'collection_sheet', 'cash-sheet-29-portrait');
+  assertLayout(result, 'collection_sheet');
+  assert.equal(result.pages.length, 1);
+  assert.ok(Math.abs(result.pages[0].width - 595.28) < 1 && Math.abs(result.pages[0].height - 841.89) < 1, 'A4 portrait dimensions');
+  const baselines = data.ledger.getState().children.map(child => {
+    const item = result.pages[0].items.find(item => item.str === `${child.lastName} ${child.firstName}`);
+    assert.ok(item, 'every full synthetic child name is printed');
+    assert.ok(item.height >= 8, 'normal class roster remains readable');
+    return item.transform[5];
+  }).sort((a, b) => b - a);
+  assert.equal(baselines.length, 29);
+  for (let index = 1; index < baselines.length; index++) assert.ok(baselines[index - 1] - baselines[index] >= 18, 'at least 6 mm per handwriting row');
+  assert.equal(result.pages[0].items.filter(item => item.str === 'Cash nou').length, 3, 'one blank cash column per expense');
+});
+
+test('cash sheets reject an unreadably large roster instead of silently adding pages or omitting children', async t => {
+  const data = await fixture(t);
+  data.post('children.create', { children: Array.from({ length: 96 }, (_, index) => ({ lastName: `ElevDemonstrativ${index + 1}`, firstName: `Prenume${index + 1}` })) });
+  await assert.rejects(data.ledger.createReport({ requestId: randomUUID(), type: 'collection_sheet' }, actor), error => error.status === 400 && /singură pagină A4/u.test(error.message));
+  assert.equal(data.ledger.getState().reports.length, 0, 'no incomplete PDF is issued');
+});
+
+test('cash sheets fit long names and ten expenses on one portrait page without clipping', async t => {
   const data = await fixture(t, true);
   const result = await inspectPdf(data, 'collection_sheet', 'cash-sheet-multipage');
   assertLayout(result, 'collection_sheet');
-  assert.ok(result.pages.length > 3);
+  assert.equal(result.pages.length, 1);
   assertText(result, expenseEnd, 'long expense name is complete');
   assertText(result, 'Familie36 Copil36', 'last child is present');
   assertText(result, 'Atelier 10:', 'last expense group is present');
   for (const page of result.pages) {
-    assertText({ text: page.text }, 'Situație / cash primit', 'table headers repeat');
+    assertText({ text: page.text }, 'Cash', 'cash handwriting columns remain present');
     assert.ok(page.items.some(item => /Copil\d+|David|Ioana|Vlad|Ștefania/u.test(item.str)), 'every page includes child rows');
   }
 });

@@ -623,7 +623,7 @@ function renderReports() {
   const reportTypes = [
     { type: 'class', icon: 'reports', title: 'Situația clasei', description: 'Sold, cheltuieli și contribuții de primit, fără numele copiilor.', available: true },
     { type: 'matrix', icon: 'table', title: 'Tabelul contribuțiilor', description: 'Fiecare copil și fiecare cheltuială. Pentru verificare internă.', available: hasExpenses && state.children.length },
-    { type: 'collection_sheet', icon: 'table', title: 'Fișă de încasări · alb-negru', description: 'Pentru imprimantă: toate cheltuielile sau una singură, cu spațiu pentru cash și dată.', available: hasExpenses && state.children.length },
+    { type: 'collection_sheet', icon: 'table', title: 'Fișă de încasări · alb-negru', description: 'O singură pagină A4 verticală: toate cheltuielile sau una singură, cu spațiu pentru cash.', available: hasExpenses && state.children.length },
     { type: 'expense', icon: 'receipt', title: 'Situația unei cheltuieli', description: 'Necesar, încasat și plătit, fără numele copiilor.', available: hasExpenses },
     { type: 'child', icon: 'child', title: 'Fișa copilului', description: `${debtors.length} copii au de achitat ${money(debtors.reduce((total, item) => total + item.dueMinor, 0))}. Pentru trimitere privată.`, available: state.children.length },
   ];
@@ -660,7 +660,7 @@ function reportModal(type, replacesId = null, subjectId = null) {
     const expenses = [...state.expenses].filter(expense => !expense.cancelled).reverse();
     selector = replaced ? `<p><strong>${esc(replaced.subjectId ? replaced.subjectLabel : 'Toate cheltuielile')}</strong></p>`
       : `<label>Ce tipărești?<select name="subjectId"><option value="">Toate cheltuielile</option>${expenses.map(expense => `<option value="${esc(expense.id)}">${esc(expense.title)}</option>`).join('')}</select></label>`;
-    selector += '<div class="summary"><strong>A4, pentru imprimare alb-negru</strong><p class="caption">Marcaje text pentru achitat, parțial și neparticipant. O singură cheltuială folosește pagina pe verticală; mai multe folosesc pagina pe orizontală, în grupe de cel mult patru coloane. Rândurile lasă loc pentru notarea cash-ului primit și a datei.</p><p class="caption">Notițele de pe hârtie trebuie înregistrate ulterior în aplicație. Fișa nu înregistrează încasări.</p></div>';
+    selector += '<div class="summary"><strong>O singură pagină A4 verticală, alb-negru</strong><p class="caption">Tabel compact: OK = contribuție stinsă, P = rest după plată parțială, suma = rest de achitat. Fiecare cheltuială are o coloană separată pentru cash-ul nou primit. Data foii se completează sus; pentru până la patru cheltuieli există și o coloană de dată pe rând.</p><p class="caption">Notițele de pe hârtie trebuie înregistrate ulterior în aplicație. Fișa nu înregistrează încasări.</p></div>';
   } else if (type === 'expense') {
     const expenses = [...state.expenses].filter(expense => !expense.cancelled).reverse();
     selector = replaced ? `<p><strong>${esc(replaced.subjectLabel)}</strong></p>` : `<label>Cheltuiala<select name="subjectId" required>${expenses.map(expense => `<option value="${esc(expense.id)}">${esc(expense.title)}</option>`).join('')}</select></label>`;
