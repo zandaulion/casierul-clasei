@@ -16,9 +16,9 @@ const labels = { collection: 'Încasare', direct_payment: 'Plată directă benef
   fund_advance: 'Sumă avansată fondului', advance_repayment: 'Restituire sumă avansată',
   advance_waiver: 'Acoperire din sumă avansată', reversal: 'Corecție' };
 const typeLabels = { fixed: 'Sumă fixă / copil', split: 'Total împărțit', quantity: 'Cantitate × preț' };
-const reportTypeLabels = { class: 'Situația clasei', matrix: 'Tabelul contribuțiilor', expense: 'Situația unei cheltuieli', child: 'Fișa copilului' };
+const reportTypeLabels = { class: 'Situația clasei', matrix: 'Tabelul contribuțiilor', expense: 'Situația unei cheltuieli', child: 'Fișa copilului', collection_sheet: 'Fișă de încasări · alb-negru' };
 const writeActions = new Set(['add-child', 'edit-child', 'edit-contacts', 'edit-reminder-contact', 'whatsapp-reminders', 'create-child-report', 'bulk-children', 'add-expense', 'edit-expense', 'payment', 'direct-payment', 'fund-advance', 'repay-advance', 'attach-document',
-  'expense-payment', 'stop-collection', 'apply-credit', 'refund', 'report-class', 'report-matrix', 'report-expense', 'report-child',
+  'expense-payment', 'stop-collection', 'apply-credit', 'refund', 'report-class', 'report-matrix', 'report-expense', 'report-child', 'report-collection_sheet',
   'replace-report', 'reverse', 'cancel-expense', 'remove-logo', 'add-classroom']);
 const pendingKey = 'casierul.pending.v1';
 const navigationKey = 'casierulNavigation';
@@ -125,11 +125,11 @@ const simpleHelpFlows = {
     ['Apeși Trimite în WhatsApp', 'Expedierea rămâne sub controlul tău.'],
   ] },
   reports: { label: 'Emiterea și partajarea rapoartelor', steps: [
-    ['Deschizi Rapoarte', 'Alegi situația clasei, tabelul, cheltuiala sau copilul.'],
-    ['Alegi subiectul', 'Pentru raportul unei cheltuieli sau al unui copil.'],
+    ['Deschizi Rapoarte', 'Alegi situația clasei, tabelul, fișa alb-negru pentru încasări, cheltuiala sau copilul.'],
+    ['Alegi subiectul', 'Pentru fișa alb-negru alegi toate cheltuielile sau una singură; celelalte rapoarte au subiectul propriu.'],
     ['Generezi PDF-ul', 'Datele, siglele și revizia sunt înghețate la emitere.'],
     ['Previzualizezi', 'Verifici sumele și procentul de acoperire.'],
-    ['Partajezi sau descarci', 'Mesajul potrivit raportului este deja completat.'],
+    ['Partajezi sau descarci', 'Fișa alb-negru se descarcă și se tipărește pe A4. Notițele cash se introduc ulterior în aplicație.'],
     ['Emiți corecție dacă este nevoie', 'Raportul nou rămâne legat de cel înlocuit.'],
   ] },
   classrooms: { label: 'Mai multe clase și roluri', steps: [
@@ -623,6 +623,7 @@ function renderReports() {
   const reportTypes = [
     { type: 'class', icon: 'reports', title: 'Situația clasei', description: 'Sold, cheltuieli și contribuții de primit, fără numele copiilor.', available: true },
     { type: 'matrix', icon: 'table', title: 'Tabelul contribuțiilor', description: 'Fiecare copil și fiecare cheltuială. Pentru verificare internă.', available: hasExpenses && state.children.length },
+    { type: 'collection_sheet', icon: 'table', title: 'Fișă de încasări · alb-negru', description: 'Pentru imprimantă: toate cheltuielile sau una singură, cu spațiu pentru cash și dată.', available: hasExpenses && state.children.length },
     { type: 'expense', icon: 'receipt', title: 'Situația unei cheltuieli', description: 'Necesar, încasat și plătit, fără numele copiilor.', available: hasExpenses },
     { type: 'child', icon: 'child', title: 'Fișa copilului', description: `${debtors.length} copii au de achitat ${money(debtors.reduce((total, item) => total + item.dueMinor, 0))}. Pentru trimitere privată.`, available: state.children.length },
   ];
@@ -655,14 +656,19 @@ function reportModal(type, replacesId = null, subjectId = null) {
   const replaced = replacesId ? (state.reports || []).find(report => report.id === replacesId) : null;
   const fixedSubject = replaced?.subjectId || subjectId || null;
   let selector = '';
-  if (type === 'expense') {
+  if (type === 'collection_sheet') {
+    const expenses = [...state.expenses].filter(expense => !expense.cancelled).reverse();
+    selector = replaced ? `<p><strong>${esc(replaced.subjectId ? replaced.subjectLabel : 'Toate cheltuielile')}</strong></p>`
+      : `<label>Ce tipărești?<select name="subjectId"><option value="">Toate cheltuielile</option>${expenses.map(expense => `<option value="${esc(expense.id)}">${esc(expense.title)}</option>`).join('')}</select></label>`;
+    selector += '<div class="summary"><strong>A4, pentru imprimare alb-negru</strong><p class="caption">Marcaje text pentru achitat, parțial și neparticipant. O singură cheltuială folosește pagina pe verticală; mai multe folosesc pagina pe orizontală, în grupe de cel mult patru coloane. Rândurile lasă loc pentru notarea cash-ului primit și a datei.</p><p class="caption">Notițele de pe hârtie trebuie înregistrate ulterior în aplicație. Fișa nu înregistrează încasări.</p></div>';
+  } else if (type === 'expense') {
     const expenses = [...state.expenses].filter(expense => !expense.cancelled).reverse();
     selector = replaced ? `<p><strong>${esc(replaced.subjectLabel)}</strong></p>` : `<label>Cheltuiala<select name="subjectId" required>${expenses.map(expense => `<option value="${esc(expense.id)}">${esc(expense.title)}</option>`).join('')}</select></label>`;
   } else if (type === 'child') {
     const fixedChild = fixedSubject ? state.children.find(item => item.id === fixedSubject) : null;
     selector = fixedSubject ? `<p><strong>${esc(replaced?.subjectLabel || (fixedChild ? name(fixedChild) : 'Copil'))}</strong></p>` : `<label>Filtrează lista<select name="debtFilter"><option value="due">Doar copiii cu sume de achitat</option><option value="all">Toți copiii</option><option value="paid">Doar copiii cu totul achitat</option></select></label><label>Copilul<select name="subjectId" required></select></label><p id="report-child-count" class="caption"></p>`;
   }
-  const privacy = type === 'child' ? 'Fișa conține numele copilului și este destinată trimiterii private.' : type === 'matrix' ? 'Raportul conține numele tuturor copiilor și este destinat verificării interne de către tine și dirigintă.' : 'Restanțele apar doar ca număr de copii și sumă totală, fără nume sau inițiale.';
+  const privacy = type === 'child' ? 'Fișa conține numele copilului și este destinată trimiterii private.' : type === 'collection_sheet' ? 'Fișa conține numele copiilor și este destinată notării încasărilor pe hârtie, pentru uz intern.' : type === 'matrix' ? 'Raportul conține numele tuturor copiilor și este destinat verificării interne de către tine și dirigintă.' : 'Restanțele apar doar ca număr de copii și sumă totală, fără nume sau inițiale.';
   openModal('report', replaced ? 'Emite raport corectiv' : reportTypeLabels[type], `${selector}<div class="summary"><strong>Situație la momentul emiterii</strong><p class="caption">PDF-ul va păstra exact datele și revizia actuală a registrului.</p></div><p class="caption">${privacy}</p>${replaced ? `<p class="caption">Noul raport va marca faptul că înlocuiește ${esc(replaced.code)}. Raportul vechi rămâne în arhivă.</p>` : ''}<details class="context-help"><summary>${icon('help')}Cum se emite raportul?</summary>${simpleHelpFlow('reports', true)}</details>`, 'Generează PDF', {
     reportType: type, replacesId, subjectId: fixedSubject, requestId: crypto.randomUUID(),
   });
@@ -1492,6 +1498,7 @@ document.addEventListener('click', async event => {
     case 'refund': refundModal(); break;
     case 'report-class': reportModal('class'); break;
     case 'report-matrix': reportModal('matrix'); break;
+    case 'report-collection_sheet': reportModal('collection_sheet'); break;
     case 'report-expense': reportModal('expense'); break;
     case 'report-child': reportModal('child'); break;
     case 'view-report': viewReport(button.dataset.id); break;

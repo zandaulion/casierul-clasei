@@ -129,6 +129,8 @@ Migrarea arhivei adaugă coloana opțională `reports.archived_size`, astfel în
 
 Exportul JSON din aplicație conține datele registrului și istoricul, fără credentiale sau contactele copiilor. Pentru documente include metadatele și amprentele SHA-256, nu conținutul fișierelor. Este util pentru verificare și păstrarea unei copii lizibile; restaurarea automată din JSON nu este implementată. Pentru restaurarea contactelor este necesară copia SQLite privată.
 
+Fișa alb-negru de încasări adaugă tipul `collection_sheet` în restricția `reports.type`. Migrarea reconstruiește numai tabela rapoartelor, păstrând seriile, PDF-urile, amprentele, snapshoturile, legăturile dintre rapoartele corective și `archived_size`. Nu modifică tabelele sau revizia operațiunilor financiare. Testele deschid schema anterioară atât fără, cât și cu arhivare și verifică păstrarea PDF-urilor și a legăturilor de corecție; inserările în formatul vechi rămân valide. Versiunile anterioare nu cunosc noul tip în interfață și nu pot genera sau corecta aceste fișe. Un rollback complet de cod necesită în continuare verificare pe o copie; compatibilitatea structurii nu garantează suportul vechii interfețe pentru rapoarte noi.
+
 ## Verificări
 
 ```

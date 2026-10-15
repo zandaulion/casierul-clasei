@@ -74,6 +74,7 @@ export function reportShareMessage(report, className = '') {
   const description = report.type === 'class' ? `situația fondului clasei${className ? ` ${className}` : ''}`
     : report.type === 'expense' ? `situația cheltuielii „${report.subjectLabel}”${classSuffix}`
       : report.type === 'matrix' ? `tabelul contribuțiilor${classSuffix}, pentru verificare`
+        : report.type === 'collection_sheet' ? `fișa de încasări pentru tipărire${report.subjectId ? ` — ${report.subjectLabel}` : ''}${classSuffix}, pentru uz intern`
         : `fișa individuală pentru ${report.subjectLabel}`;
   return `Bună ziua,\n\nVă trimit ${description}.\nRaport ${report.code}. Documentul reflectă situația de la momentul emiterii.\n\nMulțumesc!`;
 }

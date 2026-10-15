@@ -633,6 +633,7 @@ dd { margin: 0 0 0 auto; text-align: right; }
 }
 .report-type-class { --report-accent: var(--soft); }
 .report-type-matrix { --report-accent: var(--sky); }
+.report-type-collection_sheet { --report-accent: var(--soft); }
 .report-type-expense { --report-accent: var(--peach); }
 .report-type-child { --report-accent: var(--lavender); }
 .report-type::before {

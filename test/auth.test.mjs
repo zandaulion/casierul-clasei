@@ -287,6 +287,8 @@ test('parent state exposes class totals and only the associated child', () => {
       { id: 'repayment', type: 'advance_repayment', childId: null, comment: 'intern' },
     ], reports: [
       { id: 'class', type: 'class', subjectId: null }, { id: 'matrix', type: 'matrix', subjectId: null },
+      { id: 'cash-sheet', type: 'collection_sheet', subjectId: null },
+      { id: 'cash-sheet-expense', type: 'collection_sheet', subjectId: 'expense-1' },
       { id: 'own-report', type: 'child', subjectId: 'ana' }, { id: 'other-report', type: 'child', subjectId: 'ion' },
     ] };
   const view = projectState(state, { role: 'parent', child_id: 'ana' });

@@ -83,10 +83,11 @@ async function fixture(t, stress = false) {
   return { ledger, post, own, other, primary, title, paymentId: payment.transactionId };
 }
 
-async function inspectPdf(fixture, type, prefix, { replacesId } = {}) {
+async function inspectPdf(fixture, type, prefix, { replacesId, subjectId } = {}) {
   const request = { requestId: randomUUID(), type, ...(replacesId ? { replacesId } : {}) };
   if (type === 'child') request.subjectId = fixture.own.id;
   if (type === 'expense') request.subjectId = fixture.primary;
+  if (subjectId) request.subjectId = subjectId;
   const { report } = await fixture.ledger.createReport(request, actor);
   const { pdf, filename } = fixture.ledger.getReportPdf(report.id);
   return inspectBytes(pdf, report, filename, type, prefix);
@@ -113,6 +114,7 @@ async function inspectBytes(pdf, report, filename, type, prefix) {
       const items = content.items.filter(item => typeof item.str === 'string' && item.str.trim());
       pages.push({ number: index, width: viewport.width, height: viewport.height, items,
         text: normalize(items.map(item => item.str).join(' ')),
+        colors: operators.fnArray.flatMap((operator, index) => [OPS.setFillRGBColor, OPS.setStrokeRGBColor].includes(operator) ? [operators.argsArray[index]] : []),
         imageCount: operators.fnArray.filter(operator => [OPS.paintImageXObject, OPS.paintInlineImageXObject, OPS.paintImageXObjectRepeat].includes(operator)).length });
       page.cleanup();
     }
@@ -125,7 +127,7 @@ async function inspectBytes(pdf, report, filename, type, prefix) {
 function assertLayout(result, type) {
   assert.ok(result.pages.length > 0);
   for (const page of result.pages) {
-    assert.equal(page.width > page.height, type === 'matrix', `${type}: orientation`);
+    assert.equal(page.width > page.height, type === 'matrix' || (type === 'collection_sheet' && !result.report.subjectId), `${type}: orientation`);
     if (type === 'matrix') assert.ok(page.text.includes('Acoperire totală'), 'matrix pages keep a table header instead of an isolated closing note');
     assert.ok(page.text.includes(`${result.report.code} · pagina ${page.number}/${result.pages.length}`), `${type}: numbered footer on page ${page.number}`);
     const offPage = page.items.filter(item => item.transform[4] < -1 || item.transform[4] + item.width > page.width + 1
@@ -144,7 +146,7 @@ function assertLayout(result, type) {
     }
     assert.deepEqual(overlapping, [], `${type}: text rows do not overlap on page ${page.number}`);
   }
-  assert.ok(result.pages[0].imageCount >= 2, `${type}: both configured logos appear`);
+  if (type !== 'collection_sheet') assert.ok(result.pages[0].imageCount >= 2, `${type}: both configured logos appear`);
 }
 function assertText(result, expected, label) {
   assert.ok(result.text.includes(normalize(expected)), `${label}: missing ${JSON.stringify(expected)}`);
@@ -469,6 +471,63 @@ test('a zero-total expense has no misleading percentage or non-finite financial 
     assert.doesNotMatch(result.text, /(?:NaN|Infinity|\d+(?:,\d+)?%)/u, `${type}: zero total has no invented percentage`);
     if (type === 'matrix') assertText(result, '—', 'zero-total matrix header uses a dash');
     else assertText(result, 'Fără sumă de acoperit', `${type}: zero-total expense is explicitly described`);
+  }
+});
+
+test('monochrome cash sheets show settled contributions and leave room for handwritten receipts', async t => {
+  const data = await fixture(t);
+  const children = data.ledger.getState().children;
+  const oneParticipant = data.post('expense.create', { title: 'Activitate opțională demonstrativă', type: 'fixed', amountMinor: 1000,
+    participants: [{ childId: data.own.id }] }).state.expenses[0].id;
+  const before = data.ledger.getState();
+  const all = await inspectPdf(data, 'collection_sheet', 'cash-sheet-all');
+  assertLayout(all, 'collection_sheet');
+  for (const child of children) assertText(all, `${child.lastName} ${child.firstName}`, 'cash sheet includes roster');
+  for (const label of ['ACHITAT', 'PARȚIAL', 'NEACHITAT', 'NU PARTICIPĂ', '25 / 30 lei', 'rest 5', 'Cash:', 'Data:', 'foaia nu actualizează registrul']) assertText(all, label, 'printable status or writing guide');
+  assert.equal(all.text.includes('NOTĂ PRIVATĂ DAVID'), false);
+  assert.equal(all.text.includes('RO49AAAA1B31007593840000'), false);
+  assert.ok(all.pages.every(page => page.imageCount === 0), 'no colored logos or raster images');
+  assert.ok(all.pages.every(page => page.colors.every(color => color[0] === color[1] && color[1] === color[2])), 'all drawing colors are monochrome');
+  const single = await inspectPdf(data, 'collection_sheet', 'cash-sheet-single', { subjectId: oneParticipant });
+  assertLayout(single, 'collection_sheet');
+  assertText(single, 'Activitate opțională demonstrativă', 'selected expense');
+  assert.equal(single.text.includes('Vizită la muzeu'), false, 'single-expense sheet does not expose other expenses');
+  assertText(single, 'Cash primit (lei)', 'dedicated handwriting column');
+  assertText(single, 'Data / observații', 'dedicated date column');
+  assertText(single, '0 / 10 lei', 'unpaid allocated amount');
+  assert.deepEqual(data.ledger.getState().transactions, before.transactions, 'issuing a sheet never records money');
+  assert.deepEqual(data.ledger.getState().summary, before.summary);
+});
+
+test('cash sheets keep selected archived debts and zero shares without exposing unrelated history', async t => {
+  const data = await fixture(t);
+  data.post('child.update', { childId: data.own.id, firstName: data.own.firstName, lastName: data.own.lastName, active: false });
+  data.post('child.update', { childId: data.other.id, firstName: data.other.firstName, lastName: data.other.lastName, active: false });
+  const selected = await inspectPdf(data, 'collection_sheet', 'cash-sheet-archived', { subjectId: data.primary });
+  assertText(selected, `${data.own.lastName} ${data.own.firstName} (arhivat)`, 'archived child with selected debt retained');
+  assert.equal(selected.text.includes(`${data.other.lastName} ${data.other.firstName}`), false, 'archived fully settled participant omitted');
+  const participants = data.ledger.getState().children.filter(child => child.active).map(child => ({ childId: child.id }));
+  const zeroExpense = data.post('expense.create', { title: 'Împărțire demonstrativă de un ban', type: 'split', amountMinor: 1, participants }).state.expenses[0].id;
+  const zero = await inspectPdf(data, 'collection_sheet', 'cash-sheet-zero-share', { subjectId: zeroExpense });
+  assertText(zero, 'FĂRĂ SUMĂ', 'zero share is explicit rather than unpaid');
+  const cancelled = data.post('expense.create', { title: 'Activitate anulată demonstrativă', type: 'fixed', amountMinor: 100, participants }).state.expenses[0].id;
+  data.post('expense.cancel', { expenseId: cancelled });
+  const all = await inspectPdf(data, 'collection_sheet', 'cash-sheet-cancelled');
+  assert.equal(all.text.includes('Activitate anulată demonstrativă'), false);
+  await assert.rejects(data.ledger.createReport({ requestId: randomUUID(), type: 'collection_sheet', subjectId: cancelled }, actor), { status: 404 });
+});
+
+test('cash sheets repeat roster and headers across expense groups and pages without clipping', async t => {
+  const data = await fixture(t, true);
+  const result = await inspectPdf(data, 'collection_sheet', 'cash-sheet-multipage');
+  assertLayout(result, 'collection_sheet');
+  assert.ok(result.pages.length > 3);
+  assertText(result, expenseEnd, 'long expense name is complete');
+  assertText(result, 'Familie36 Copil36', 'last child is present');
+  assertText(result, 'Atelier 10:', 'last expense group is present');
+  for (const page of result.pages) {
+    assertText({ text: page.text }, 'Situație / cash primit', 'table headers repeat');
+    assert.ok(page.items.some(item => /Copil\d+|David|Ioana|Vlad|Ștefania/u.test(item.str)), 'every page includes child rows');
   }
 });
 

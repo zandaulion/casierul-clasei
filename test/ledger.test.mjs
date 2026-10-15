@@ -322,6 +322,54 @@ test('report archive migration preserves legacy reports and old-style inserts', 
   compatible.close();
 });
 
+test('cash-sheet reports migrate the previous report schema without losing archives or correction links', async t => {
+  const { ledger, path, child, expense } = fixture(t, true);
+  const pupil = child('Elev', 'Demonstrativ');
+  const expenseId = expense([pupil], 1750);
+  const first = await ledger.createReport({ requestId: randomUUID(), type: 'class' }, actor);
+  const second = await ledger.createReport({ requestId: randomUUID(), type: 'class', replacesId: first.report.id }, actor);
+  const original = ledger.getReportPdf(first.report.id).pdf;
+  const revision = ledger.getState().revision;
+  ledger.close();
+  const archived = new Ledger(path, { reportPdfHotLimit: 1 });
+  assert.equal(archived.getState().reports.find(report => report.id === first.report.id).archived, true);
+  archived.close();
+  // Rebuild just the reports table with the constraint used by the deployed
+  // pre-sheet version, including archived bytes and correction references.
+  const previous = new DatabaseSync(path);
+  const sql = previous.prepare("SELECT sql FROM sqlite_master WHERE name = 'reports'").get().sql.replace(", 'collection_sheet'", '');
+  const columns = previous.prepare("PRAGMA table_info('reports')").all().map(column => column.name).join(', ');
+  previous.exec(`PRAGMA foreign_keys = OFF; BEGIN;
+    ALTER TABLE reports RENAME TO reports_before_rebuild;
+    ${sql};
+    INSERT INTO reports (${columns}) SELECT ${columns} FROM reports_before_rebuild;
+    DROP TABLE reports_before_rebuild;
+    CREATE INDEX reports_created ON reports(serial DESC);
+    COMMIT;`);
+  previous.close();
+  const migrated = new Ledger(path, { reportPdfHotLimit: 1 });
+  t.after(() => migrated.close());
+  assert.deepEqual(migrated.getReportPdf(first.report.id).pdf, original);
+  assert.equal(migrated.getState().reports.find(report => report.id === first.report.id).replacedById, second.report.id);
+  const requestId = randomUUID();
+  const sheet = await migrated.createReport({ requestId, type: 'collection_sheet', subjectId: expenseId }, actor);
+  assert.equal(sheet.report.subjectId, expenseId);
+  assert.match(sheet.report.filename, /^fisa-incasari-/u);
+  assert.equal((await migrated.createReport({ requestId, type: 'collection_sheet', subjectId: expenseId }, actor)).report.id, sheet.report.id);
+  await assert.rejects(migrated.createReport({ requestId, type: 'collection_sheet' }, actor), status(409));
+  await assert.rejects(migrated.createReport({ requestId: randomUUID(), type: 'collection_sheet', subjectId: 'missing' }, actor), status(404));
+  await assert.rejects(migrated.createReport({ requestId: randomUUID(), type: 'collection_sheet', replacesId: sheet.report.id }, actor), status(409));
+  const corrected = await migrated.createReport({ requestId: randomUUID(), type: 'collection_sheet', subjectId: expenseId, replacesId: sheet.report.id }, actor);
+  assert.equal(corrected.report.replacesId, sheet.report.id);
+  assert.equal(migrated.getReportPdf(sheet.report.id).pdf.subarray(0, 5).toString(), '%PDF-');
+  assert.equal(migrated.getState().revision, revision, 'report issuance leaves financial revision unchanged');
+  const check = new DatabaseSync(path);
+  assert.deepEqual(check.prepare('PRAGMA foreign_key_check').all(), []);
+  // Older inserts remain valid against the widened constraint and same columns.
+  assert.equal(check.prepare("SELECT sql FROM sqlite_master WHERE name = 'reports'").get().sql.includes("'matrix'"), true);
+  check.close();
+});
+
 test('collection can earmark one expense and retain excess; applying credit has no cash movement', t => {
   const { ledger, post, child, expense } = fixture(t);
   const id = child();

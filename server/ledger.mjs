@@ -223,7 +223,7 @@ CREATE TABLE IF NOT EXISTS reports (
   id TEXT NOT NULL UNIQUE,
   request_id TEXT NOT NULL UNIQUE,
   request_fingerprint TEXT NOT NULL,
-  type TEXT NOT NULL CHECK(type IN ('class', 'expense', 'child', 'matrix')),
+  type TEXT NOT NULL CHECK(type IN ('class', 'expense', 'child', 'matrix', 'collection_sheet')),
   subject_id TEXT,
   subject_label TEXT NOT NULL,
   created_at TEXT NOT NULL,
@@ -359,7 +359,8 @@ function migrateSettlements(db) {
 
 function migrateReports(db) {
   const table = db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'reports'").get();
-  if (!table?.sql || table.sql.includes("'matrix'")) return;
+  if (!table?.sql || table.sql.includes("'collection_sheet'")) return;
+  const columns = db.prepare("PRAGMA table_info('reports')").all().map(column => column.name).join(', ');
   db.exec('PRAGMA foreign_keys = OFF; BEGIN IMMEDIATE');
   try {
     db.exec(`ALTER TABLE reports RENAME TO reports_legacy;
@@ -368,7 +369,7 @@ function migrateReports(db) {
         id TEXT NOT NULL UNIQUE,
         request_id TEXT NOT NULL UNIQUE,
         request_fingerprint TEXT NOT NULL,
-        type TEXT NOT NULL CHECK(type IN ('class', 'expense', 'child', 'matrix')),
+        type TEXT NOT NULL CHECK(type IN ('class', 'expense', 'child', 'matrix', 'collection_sheet')),
         subject_id TEXT,
         subject_label TEXT NOT NULL,
         created_at TEXT NOT NULL,
@@ -379,9 +380,10 @@ function migrateReports(db) {
         filename TEXT NOT NULL,
         sha256 TEXT NOT NULL,
         snapshot TEXT NOT NULL,
-        pdf BLOB NOT NULL
+        pdf BLOB NOT NULL,
+        archived_size INTEGER CHECK(archived_size IS NULL OR archived_size > 0)
       ) STRICT;
-      INSERT INTO reports SELECT * FROM reports_legacy;
+      INSERT INTO reports (${columns}) SELECT ${columns} FROM reports_legacy;
       DROP TABLE reports_legacy;
       CREATE INDEX reports_created ON reports(serial DESC);
       COMMIT;`);
@@ -578,7 +580,8 @@ export class Ledger {
     const requestId = text(body.requestId, 'Identificatorul cererii', 128);
     const type = text(body.type, 'Tipul raportului', 20);
     if (!REPORT_TYPES.has(type)) fail('Tipul raportului nu este valid.');
-    const subjectId = ['class', 'matrix'].includes(type) ? null : text(body.subjectId, 'Subiectul raportului', 128);
+    const subjectId = ['class', 'matrix'].includes(type) || (type === 'collection_sheet' && (body.subjectId == null || body.subjectId === ''))
+      ? null : text(body.subjectId, 'Subiectul raportului', 128);
     const replacesId = body.replacesId == null || body.replacesId === '' ? null : text(body.replacesId, 'Raportul înlocuit', 128);
     const who = object(actor, 'Dispozitivul');
     const actorLabel = text(who.label, 'Numele dispozitivului', 160);

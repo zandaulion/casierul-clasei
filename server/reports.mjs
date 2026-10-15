@@ -2,6 +2,7 @@ import PDFDocument from 'pdfkit';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { drawReportNotebook, drawReportPlane } from './report-art.mjs';
+import { renderCollectionSheetPdf } from './collection-sheet.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REGULAR = path.resolve(HERE, '../assets/fonts/DejaVuSans.ttf');
@@ -14,7 +15,7 @@ const dateTimeFormat = new Intl.DateTimeFormat(locale, { dateStyle: 'medium', ti
 const compactMoneyFormat = new Intl.NumberFormat(locale, { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 const coverageFormat = new Intl.NumberFormat(locale, { maximumFractionDigits: 1 });
 
-export const REPORT_TYPES = new Set(['class', 'expense', 'child', 'matrix']);
+export const REPORT_TYPES = new Set(['class', 'expense', 'child', 'matrix', 'collection_sheet']);
 export const reportCode = serial => `R-${String(serial).padStart(4, '0')}`;
 const money = minor => `${moneyFormat.format(minor / 100)} lei`;
 const personName = child => `${child.lastName} ${child.firstName}`;
@@ -54,8 +55,8 @@ function reportedContributionMinor(expense) {
 }
 
 export function reportSubject(state, type, subjectId) {
-  if (type === 'class' || type === 'matrix') return { id: null, label: state.settings.className || 'Clasa' };
-  if (type === 'expense') {
+  if (type === 'class' || type === 'matrix' || (type === 'collection_sheet' && !subjectId)) return { id: null, label: state.settings.className || 'Clasa' };
+  if (type === 'expense' || type === 'collection_sheet') {
     const expense = state.expenses.find(item => item.id === subjectId && !item.cancelled);
     if (!expense) throw Object.assign(new Error('Cheltuiala pentru raport nu există.'), { status: 404 });
     return { id: expense.id, label: expense.title };
@@ -66,7 +67,7 @@ export function reportSubject(state, type, subjectId) {
 }
 
 export function reportFilename(report) {
-  const type = { class: 'situatia-clasei', expense: 'cheltuiala', child: 'fisa-copil', matrix: 'raport-exhaustiv' }[report.type];
+  const type = { class: 'situatia-clasei', expense: 'cheltuiala', child: 'fisa-copil', matrix: 'raport-exhaustiv', collection_sheet: 'fisa-incasari' }[report.type];
   const subject = report.subjectLabel.normalize('NFD').replace(/[\u0300-\u036f]/gu, '').replace(/[^A-Za-z0-9]+/gu, '-').replace(/^-|-$/gu, '').toLowerCase();
   return `${type}-${subject || 'raport'}-${report.code}.pdf`;
 }
@@ -79,6 +80,7 @@ function documentTitle(report) {
 }
 
 export async function renderReportPdf(report, state, branding = {}) {
+  if (report.type === 'collection_sheet') return renderCollectionSheetPdf(report, state, { regular: REGULAR, bold: BOLD });
   const doc = new PDFDocument({ size: 'A4', layout: report.type === 'matrix' ? 'landscape' : 'portrait', margins: { top: 46, right: 42, bottom: 58, left: 42 }, bufferPages: true,
     info: { Title: `${report.code} · ${documentTitle(report)}`, Author: 'Casierul clasei', CreationDate: new Date(report.createdAt) } });
   doc.registerFont('Regular', REGULAR).registerFont('Bold', BOLD);
