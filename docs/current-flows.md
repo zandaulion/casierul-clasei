@@ -1,6 +1,6 @@
 # Fluxuri implementate
 
-Inventarul descrie comportamentul disponibil în aplicație la 30 septembrie 2026. Etichetele îngroșate reproduc, pe cât posibil, denumirile din interfața în limba română.
+Inventarul descrie comportamentul disponibil în aplicație la 15 octombrie 2026. Etichetele îngroșate reproduc, pe cât posibil, denumirile din interfața în limba română.
 
 ## 1. Activarea și accesul
 
@@ -22,6 +22,7 @@ Inventarul descrie comportamentul disponibil în aplicație la 30 septembrie 202
 - Un copil poate fi editat sau arhivat. Lista permite căutarea și afișarea copiilor arhivați.
 - Pentru fiecare copil se pot salva zero, unul sau două contacte WhatsApp, cu etichetă și număr normalizat. Lista arată casierului dacă lipsește telefonul sau câte contacte sunt configurate.
 - Fișa copilului reunește contribuțiile, suma totală de achitat, avansul disponibil, istoricul, încasarea și instrumentele WhatsApp.
+- **Istoricul tranzacțiilor** este afișat direct, fără a deschide o secțiune restrânsă, și conține numai operațiunile copilului selectat, cu cele mai recente primele. Include și operațiunile corectate, marcate ca atare. Casierul are în antet scurtătura **Istoric · N**, care derulează la istoric fără a reseta încasarea în curs; secțiunea apare înaintea contactelor WhatsApp. Istoricul este vizibil și în fișa doar pentru citire.
 
 ## 4. Crearea și administrarea cheltuielilor
 
@@ -29,7 +30,8 @@ Inventarul descrie comportamentul disponibil în aplicație la 30 septembrie 202
 - Casierul selectează participanții, data, termenul și comentariul. Împărțirea lucrează în bani întregi și distribuie determinist ultimii bani.
 - La o cheltuială împărțită, participanții pot fi schimbați și sumele recalculate până la prima contribuție alocată, chiar dacă există deja o plată către furnizor sau un avans personal asociat.
 - După încasări, câmpurile descriptive rămân editabile. La calculul pe cantități sunt permise doar corecțiile care nu coboară contribuția sub suma deja stinsă și nu fac totalul incompatibil cu plățile legate.
-- După o plată asociată cheltuielii, lista arată suma strânsă în fond după cea mai recentă plată. Detaliul separă încasările noi în fond, plățile directe ulterioare și totalul rămas de colectat. O plată corectată nu mai delimitează intervalul.
+- Cea mai recentă plată sau rambursare de avans personal asociată cheltuielii delimitează intervalul de încasări noi. Cardul arată **Strâns în fond după ultima plată** sau **Strâns în fond după ultima rambursare**. Detaliul arată suma, persoana și data operațiunii-reper, încasările noi repartizate cheltuielii, plățile directe ulterioare și totalul rămas de colectat. Folosirea avansului copilului și ajustările nu sunt încasări noi. O operațiune corectată nu mai delimitează intervalul; aplicația revine la reperul activ anterior.
+- Casierul și auditorul văd **Au contribuit după ultima plată/rambursare**, cu numele și sumele fiecărui copil, separate între fond și plată directă. **Nu au contribuit încă** include doar participanții cu o contribuție pozitivă din care nu s-a achitat sau acoperit nimic. Listele sunt alfabetice, au număr de copii și buton **Copiază lista** când nu sunt goale. Nu sunt afișate părinților sau pentru o cheltuială anulată.
 - O cheltuială poate fi anulată după ce nu mai are încasări, acoperiri sau plăți active asociate.
 
 ## 5. Încasarea de la un copil
@@ -60,6 +62,8 @@ Inventarul descrie comportamentul disponibil în aplicație la 30 septembrie 202
 - Registrul arată soldul de numerar, avansurile copiilor, sumele avansate personal fondului, datoriile de restituit și soldul net după aceste datorii.
 - Casierul poate înregistra bani dați, cu destinație, dată, comentariu și asociere opțională la o cheltuială.
 - Un avans personal adaugă numerar și o datorie egală a clasei. Poate fi restituit parțial sau integral ori folosit pentru acoperirea unor contribuții.
+- Din **Sume de restituit → Restituie**, casierul poate rambursa parțial avansul personal. Dacă avansul este asociat unei cheltuieli, rambursarea preia automat asocierea și devine reper pentru încasările ulterioare ale acelei cheltuieli, dacă este cea mai recentă ieșire activă. Calculul include și rambursările deja înregistrate.
+- Suma strânsă după ultima rambursare arată încasările noi, fără eventualii bani rămași nerambursați din intervalul anterior. Pentru o nouă restituire se verifică și numerarul disponibil și avansul rămas de restituit. O rambursare fără cheltuială asociată nu resetează indicatorul unei cheltuieli.
 - Avansul unui copil poate fi aplicat contribuțiilor sau restituit.
 - Operațiunile confirmate nu se șterg. **Corecție** adaugă o anulare cu motiv și inversează efectele o singură dată.
 - Istoricul este ordonat descrescător după data operațiunii, cu cele mai recente înregistrări primele.
@@ -81,12 +85,16 @@ Inventarul descrie comportamentul disponibil în aplicație la 30 septembrie 202
 ## 10. Rapoartele
 
 - Se emit PDF-uri imuabile pentru situația clasei, o cheltuială, un copil și **Tabelul contribuțiilor**.
+- Situația clasei începe cu **Pe scurt**: numerarul disponibil, **De restituit**, **De încasat**, **Sold după restituire**, numărul cheltuielilor acoperite sau în colectare, până la patru cheltuieli cu bare de acoperire și caseta **DE URMĂRIT**. Cheltuielile încă în colectare apar primele, ordonate după suma restantă descrescător. Sumarul nu dezvăluie numele copiilor; detaliile și reconcilierea încep pe pagina următoare.
+- Culorile sumarului au roluri distincte: albastru pentru numerar și sold net nenegativ, galben pentru sumele de restituit, portocaliu pentru cele de încasat, roșu pentru sold net negativ și verde pentru obligații stinse. Soldul net negativ nu colorează în roșu numerarul pozitiv.
 - Situația clasei, raportul cheltuielii și tabelul arată procentul de acoperire. Banii încasați în fond, plățile directe către beneficiari și sumele acoperite din fond apar separat.
 - Dacă toate contribuțiile unei cheltuieli sunt identice, situația clasei și raportul cheltuielii afișează explicit **Contribuție per copil**. Pentru un total împărțit cu diferență de un ban, raportul folosește suma de bază mai mică pentru toți, iar registrul păstrează repartizarea exactă.
 - Tabelul contribuțiilor afișează lângă numele fiecărui copil totalul rămas de plată pentru toate contribuțiile active.
 - Detaliile de plată apar în rapoartele clasei, cheltuielii și copilului. Tabelul intern al contribuțiilor le omite.
 - Fiecare raport păstrează datele, siglele și culorile de la emitere. O corecție de raport creează o versiune nouă legată de cea înlocuită.
 - Rapoartele pot fi previzualizate adaptiv, descărcate și partajate.
+- **Vizualizează** deschide imediat previzualizarea cu indicator de încărcare. **Partajează PDF** și **Copiază mesajul + PDF** arată **Se pregătește…** și dezactivează temporar butonul pe durata acțiunii. **Descarcă** arată temporar **Se descarcă…**, fără a pretinde că browserul a terminat salvarea fișierului. **Emite corecție** deschide formularul de emitere; noul PDF este generat numai la confirmare.
+- **Rapoarte recente** arată cele mai noi 10 rapoarte ale clasei. Cele mai vechi rămân accesibile în **Arhivă rapoarte**, pentru vizualizare, partajare și descărcare, cu aceleași restricții de rol.
 
 ## 11. Vizualizarea pentru părinte și auditor
 

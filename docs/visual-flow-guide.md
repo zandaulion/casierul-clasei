@@ -54,6 +54,10 @@ flowchart TB
   end
 ```
 
+La consultarea fișei, **Istoricul tranzacțiilor** apare direct și conține numai operațiunile copilului, cu cele mai recente primele. Casierul poate ajunge la el prin **Istoric · N**, păstrând încasarea în curs.
+
+Pentru urmărirea cheltuielii după salvare, reperul este ultima plată sau rambursare de avans personal asociată. Cardul și detaliul indică încasările noi de atunci, iar casierul și auditorul pot consulta și copia listele contributorilor și ale celor care nu au contribuit încă. Regulile intervalului sunt în [inventarul cheltuielilor](current-flows.md#4-crearea-și-administrarea-cheltuielilor).
+
 ## Bani și corecții
 
 [![Planșa fluxurilor pentru bani și corecții](workflows/02-bani-si-corectii.svg)](workflows/02-bani-si-corectii.svg)
@@ -173,6 +177,8 @@ flowchart TB
     L9 --> L10[Emiți corecție dacă este nevoie]
   end
 ```
+
+Situația clasei nou emisă începe cu sumarul **Pe scurt**, înainte de **Detalii și reconciliere**. Sumarul arată numerarul, sumele de restituit și de încasat, soldul net și cheltuielile prioritare, fără numele copiilor. La vizualizare apare starea de încărcare, la partajarea PDF-ului **Se pregătește…**, iar la descărcare o confirmare temporară **Se descarcă…**. Raportul rămâne în forma în care a fost emis. Comportamentul complet, inclusiv arhiva, este descris în [inventarul rapoartelor](current-flows.md#10-rapoartele).
 
 ## Acces, siguranță și date
 
