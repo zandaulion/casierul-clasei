@@ -277,7 +277,7 @@ export function projectState(state, device) {
   const ownChild = safeState.children.find((child) => child.id === device.child_id);
   if (!ownChild) throw httpError(403, 'Copilul asociat acestui acces nu mai este disponibil.');
   const expenses = safeState.expenses.map((expense) => {
-    const { contributorsAfterLatestPayment: _contributorsAfterLatestPayment, ...publicExpense } = expense;
+    const { contributorsAfterLatestOutflow: _contributorsAfterLatestOutflow, ...publicExpense } = expense;
     return {
       ...publicExpense,
       comment: '',

@@ -545,7 +545,7 @@ test('a direct beneficiary payment settles a contribution without moving class c
   assert.equal(state.summary.totalDirectMinor, 0);
 });
 
-test('an expense tracks collections and direct payments after its latest active payout', t => {
+test('an expense tracks collections and direct payments after its latest active payout or advance repayment', t => {
   const { ledger, post, child, expense } = fixture(t);
   const ana = child('Ana', 'Avram');
   const david = child('David', 'Bălan');
@@ -563,11 +563,11 @@ test('an expense tracks collections and direct payments after its latest active 
 
   let state = ledger.getState();
   let tracked = state.expenses.find(item => item.id === emblems);
-  assert.deepEqual(tracked.latestPayment, { id: firstPayment, amountMinor: 15000,
+  assert.deepEqual(tracked.latestOutflow, { id: firstPayment, type: 'payment', amountMinor: 15000,
     destination: 'Doamna dirigintă', occurredAt: '2026-10-01T10:00:00.000Z' });
-  assert.equal(tracked.collectedAfterLatestPaymentMinor, 2000);
-  assert.equal(tracked.directAfterLatestPaymentMinor, 4000);
-  assert.deepEqual(tracked.contributorsAfterLatestPayment, [
+  assert.equal(tracked.collectedAfterLatestOutflowMinor, 2000);
+  assert.equal(tracked.directAfterLatestOutflowMinor, 4000);
+  assert.deepEqual(tracked.contributorsAfterLatestOutflow, [
     { childId: ana, collectedMinor: 2000, directMinor: 0 },
     { childId: david, collectedMinor: 0, directMinor: 4000 },
   ].sort((a, b) => a.childId.localeCompare(b.childId)));
@@ -579,30 +579,59 @@ test('an expense tracks collections and direct payments after its latest active 
     allocations: [{ expenseId: emblems, amountMinor: 1000 }], occurredAt: '2026-10-01T14:00:00Z' });
   state = ledger.getState();
   tracked = state.expenses.find(item => item.id === emblems);
-  assert.equal(tracked.latestPayment.id, secondPayment);
-  assert.equal(tracked.collectedAfterLatestPaymentMinor, 1000);
-  assert.equal(tracked.directAfterLatestPaymentMinor, 0);
-  assert.deepEqual(tracked.contributorsAfterLatestPayment, [
+  assert.equal(tracked.latestOutflow.id, secondPayment);
+  assert.equal(tracked.collectedAfterLatestOutflowMinor, 1000);
+  assert.equal(tracked.directAfterLatestOutflowMinor, 0);
+  assert.deepEqual(tracked.contributorsAfterLatestOutflow, [
     { childId: david, collectedMinor: 1000, directMinor: 0 },
   ].sort((a, b) => a.childId.localeCompare(b.childId)));
   assert.equal(tracked.dueMinor, 9000);
 
+  const advance = post('fund_advance.create', { expenseId: emblems, amountMinor: 2000,
+    person: 'Casier', occurredAt: '2026-10-01T09:00:00Z' }).transactionId;
+  const repayment = post('fund_advance.repay', { advanceId: advance, amountMinor: 500,
+    occurredAt: '2026-10-01T15:00:00Z' }).transactionId;
+  tracked = ledger.getState().expenses.find(item => item.id === emblems);
+  assert.deepEqual(tracked.latestOutflow, { id: repayment, type: 'advance_repayment', amountMinor: 500,
+    destination: 'Casier', occurredAt: '2026-10-01T15:00:00.000Z' });
+  assert.equal(tracked.collectedAfterLatestOutflowMinor, 0, 'partial reimbursement resets the cash collection interval');
+  assert.equal(tracked.directAfterLatestOutflowMinor, 0);
+  assert.deepEqual(tracked.contributorsAfterLatestOutflow, []);
+
+  post('collection.create', { childId: david, receivedMinor: 500, changeMinor: 0,
+    allocations: [{ expenseId: emblems, amountMinor: 500 }], occurredAt: '2026-10-01T16:00:00Z' });
+  post('direct_payment.create', { childId: ana, expenseId: emblems, amountMinor: 500,
+    destination: 'Doamna dirigintă', occurredAt: '2026-10-01T17:00:00Z' });
+  tracked = ledger.getState().expenses.find(item => item.id === emblems);
+  assert.equal(tracked.collectedAfterLatestOutflowMinor, 500);
+  assert.equal(tracked.directAfterLatestOutflowMinor, 500);
+  assert.deepEqual(tracked.contributorsAfterLatestOutflow, [
+    { childId: ana, collectedMinor: 0, directMinor: 500 },
+    { childId: david, collectedMinor: 500, directMinor: 0 },
+  ].sort((a, b) => a.childId.localeCompare(b.childId)));
+
+  post('transaction.reverse', { transactionId: repayment, comment: 'Restituire introdusă greșit' });
+  tracked = ledger.getState().expenses.find(item => item.id === emblems);
+  assert.equal(tracked.latestOutflow.id, secondPayment);
+  assert.equal(tracked.collectedAfterLatestOutflowMinor, 1500);
+  assert.equal(tracked.directAfterLatestOutflowMinor, 500);
+
   post('transaction.reverse', { transactionId: secondPayment, comment: 'Plată introdusă greșit' });
   tracked = ledger.getState().expenses.find(item => item.id === emblems);
-  assert.equal(tracked.latestPayment.id, firstPayment);
-  assert.equal(tracked.collectedAfterLatestPaymentMinor, 3000);
-  assert.equal(tracked.directAfterLatestPaymentMinor, 4000);
-  assert.deepEqual(tracked.contributorsAfterLatestPayment, [
-    { childId: ana, collectedMinor: 2000, directMinor: 0 },
-    { childId: david, collectedMinor: 1000, directMinor: 4000 },
+  assert.equal(tracked.latestOutflow.id, firstPayment);
+  assert.equal(tracked.collectedAfterLatestOutflowMinor, 3500);
+  assert.equal(tracked.directAfterLatestOutflowMinor, 4500);
+  assert.deepEqual(tracked.contributorsAfterLatestOutflow, [
+    { childId: ana, collectedMinor: 2000, directMinor: 500 },
+    { childId: david, collectedMinor: 1500, directMinor: 4000 },
   ].sort((a, b) => a.childId.localeCompare(b.childId)));
 
   post('transaction.reverse', { transactionId: firstPayment, comment: 'Plată introdusă greșit' });
   tracked = ledger.getState().expenses.find(item => item.id === emblems);
-  assert.equal(tracked.latestPayment, null);
-  assert.equal(tracked.collectedAfterLatestPaymentMinor, 0);
-  assert.equal(tracked.directAfterLatestPaymentMinor, 0);
-  assert.deepEqual(tracked.contributorsAfterLatestPayment, []);
+  assert.equal(tracked.latestOutflow, null);
+  assert.equal(tracked.collectedAfterLatestOutflowMinor, 0);
+  assert.equal(tracked.directAfterLatestOutflowMinor, 0);
+  assert.deepEqual(tracked.contributorsAfterLatestOutflow, []);
 });
 
 test('a collection can use any available child credit alongside the received cash', t => {

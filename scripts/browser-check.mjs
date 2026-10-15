@@ -498,9 +498,14 @@ try {
     requestId: randomUUID(), expectedRevision: result.state.revision, amountMinor: 10000,
     person: 'Părinte test', expenseId: optOutExpenseId,
   }, { id: 'second-test-device', label: 'Second test device' });
+  const optOutAdvanceId = result.transactionId;
   result = app.ledger.dispatch('payment.create', {
     requestId: randomUUID(), expectedRevision: result.state.revision, amountMinor: 10000,
     destination: 'Furnizor test', expenseId: optOutExpenseId, occurredAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+  }, { id: 'second-test-device', label: 'Second test device' });
+  result = app.ledger.dispatch('fund_advance.repay', {
+    requestId: randomUUID(), expectedRevision: result.state.revision, advanceId: optOutAdvanceId, amountMinor: 1000,
+    occurredAt: new Date(Date.now() - 30 * 60 * 1000).toISOString(), comment: 'Restituire parțială de verificare',
   }, { id: 'second-test-device', label: 'Second test device' });
   await reloadPage('reload before split opt-out edit');
   await until('document.getElementById("collection-form")', 'reload after linked split expense');
@@ -531,7 +536,7 @@ try {
   }, { id: 'second-test-device', label: 'Second test device' });
   await reloadPage('reload after split contribution cleanup');
   await until('document.querySelector("[data-expense=\\"' + optOutExpenseId + '\\"]")', 'cleanup after opt-out check');
-  assert.equal(snapshot().summary.balanceMinor, 15000);
+  assert.equal(snapshot().summary.balanceMinor, 14000);
 
   await click('[data-tab=children]');
   await click('[data-child="' + anaId + '"]');
@@ -546,7 +551,7 @@ try {
   const directPayment = snapshot().transactions.find(transaction => transaction.type === 'direct_payment');
   assert.ok(directPayment);
   assert.equal(directPayment.destination, 'Doamna dirigintă');
-  assert.equal(snapshot().summary.balanceMinor, 15000, 'direct payment does not change class cash');
+  assert.equal(snapshot().summary.balanceMinor, 14000, 'direct payment does not change class cash');
   assert.equal(snapshot().summary.totalDirectMinor, 5000);
   const directContribution = snapshot().children.find(child => child.id === anaId).contributions.find(item => item.expenseId === optOutExpenseId);
   assert.equal(directContribution.directMinor, 5000);
@@ -556,15 +561,22 @@ try {
   assert.match(await evaluate('document.getElementById("modal-content").textContent'), /Beneficiar:\s*Doamna dirigintă/u);
   await click('[data-action=close-modal]');
   await click('[data-action=back]');
+  app.ledger.dispatch('collection.create', {
+    requestId: randomUUID(), expectedRevision: snapshot().revision, childId: davidId, receivedMinor: 1200, changeMinor: 0,
+    allocations: [{ expenseId: optOutExpenseId, amountMinor: 1200 }],
+  }, { id: 'second-test-device', label: 'Second test device' });
+  await reloadPage('reload after a cash contribution following partial reimbursement');
+  await until('document.querySelector(".children")', 'roster refreshed after reimbursement contribution');
   await click('[data-tab=expenses]');
-  assert.match(await evaluate('document.querySelector("[data-expense=\\"' + optOutExpenseId + '\\"]").textContent'), /Strâns în fond după ultima plată\s*0 lei/u);
+  assert.match(await evaluate('document.querySelector("[data-expense=\\"' + optOutExpenseId + '\\"]").textContent'), /Strâns în fond după ultima rambursare\s*12 lei/u);
   await click('[data-expense="' + optOutExpenseId + '"]');
-  const afterPaymentText = await evaluate('document.getElementById("modal-content").textContent');
-  assert.match(afterPaymentText, /După ultima plată/u);
-  assert.match(afterPaymentText, /Strâns în fond de atunci\s*0 lei/u);
-  assert.match(afterPaymentText, /Plătit direct de atunci\s*50 lei/u);
-  assert.match(afterPaymentText, /Mai este de colectat\s*50 lei/u);
-  assert.match(await evaluate('document.querySelector(".expense-recent-contributors").textContent'), /Au contribuit după ultima plată[\s\S]*1 copil · 50 lei în total[\s\S]*Avram Ana[\s\S]*Plătit direct 50 lei/u);
+  const afterOutflowText = await evaluate('document.getElementById("modal-content").textContent');
+  assert.match(afterOutflowText, /După ultima rambursare/u);
+  assert.match(afterOutflowText, /10 lei restituiți către Părinte test/u);
+  assert.match(afterOutflowText, /Strâns în fond de atunci\s*12 lei/u);
+  assert.match(afterOutflowText, /Plătit direct de atunci\s*50 lei/u);
+  assert.match(afterOutflowText, /Mai este de colectat\s*38 lei/u);
+  assert.match(await evaluate('document.querySelector(".expense-recent-contributors").textContent'), /Au contribuit după ultima rambursare[\s\S]*2 copii · 62 lei în total[\s\S]*Avram Ana[\s\S]*Plătit direct 50 lei[\s\S]*Bălan David[\s\S]*În fond 12 lei/u);
   assert.equal(await evaluate('document.querySelector(".expense-after-payment").nextElementSibling.matches(".expense-recent-contributors")'), true, 'recent contributors card follows the after-payment summary');
   assert.equal(await evaluate('document.querySelector(".expense-recent-contributors").nextElementSibling.matches(".expense-non-contributors")'), true, 'non-contributors card follows the recent contributors card');
   await evaluate(`(() => {
@@ -572,7 +584,9 @@ try {
     Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async text => { window.__copiedRecentContributorList = text; } } });
   })()`);
   await click('[data-action=copy-expense-recent-contributors]');
-  assert.equal(await evaluate('window.__copiedRecentContributorList'), 'Avram Ana — direct 50 lei');
+  assert.equal(await evaluate('window.__copiedRecentContributorList'), 'Avram Ana — direct 50 lei\nBălan David — în fond 12 lei');
+  await evaluate('document.querySelector(".expense-after-payment").scrollIntoView({block:"start"})');
+  await screenshot('expense-after-repayment');
   await click('[data-action=close-modal]');
   while (snapshot().reports.length < 11) {
     await app.ledger.createReport({ requestId: randomUUID(), type: 'class' }, { id: 'archive-test-device', label: 'Verificare arhivă' });
@@ -612,7 +626,7 @@ try {
         const secondDevice = await evaluate('fetch("/api/auth/me").then(r => r.json()).then(r => r.device)');
         assert.notEqual(secondDevice.id, primaryDeviceId);
         assert.equal(secondDevice.label, 'Laptop');
-        assert.equal(await evaluate('fetch("/api/state").then(r => r.json()).then(r => r.summary.balanceMinor)'), 15000);
+        assert.equal(await evaluate('fetch("/api/state").then(r => r.json()).then(r => r.summary.balanceMinor)'), 15200);
         app.auth.setDeviceRevoked(secondDevice.id, true);
         assert.equal(await evaluate('fetch("/api/auth/me").then(r => r.status)'), 401);
       } else {

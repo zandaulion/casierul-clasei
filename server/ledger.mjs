@@ -751,24 +751,24 @@ export class Ledger {
       }
     }
     const activeTransactions = transactions.filter(tx => tx.type !== 'reversal' && !tx.reversed);
-    const latestExpensePayment = new Map();
+    const latestExpenseOutflow = new Map();
     for (const tx of activeTransactions) {
-      if (tx.type !== 'payment' || !tx.expenseId) continue;
-      const previous = latestExpensePayment.get(tx.expenseId);
-      if (!previous || compareTransactionTime(tx, previous) > 0) latestExpensePayment.set(tx.expenseId, tx);
+      if (!['payment', 'advance_repayment'].includes(tx.type) || !tx.expenseId) continue;
+      const previous = latestExpenseOutflow.get(tx.expenseId);
+      if (!previous || compareTransactionTime(tx, previous) > 0) latestExpenseOutflow.set(tx.expenseId, tx);
     }
-    const collectedAfterPayment = new Map();
-    const directAfterPayment = new Map();
-    const collectedAfterPaymentByChild = new Map();
-    const directAfterPaymentByChild = new Map();
+    const collectedAfterOutflow = new Map();
+    const directAfterOutflow = new Map();
+    const collectedAfterOutflowByChild = new Map();
+    const directAfterOutflowByChild = new Map();
     for (const tx of activeTransactions) {
       if (!['collection', 'direct_payment'].includes(tx.type)) continue;
       for (const allocation of tx.allocations) {
-        const latestPayment = latestExpensePayment.get(allocation.expenseId);
-        if (!latestPayment || compareTransactionTime(tx, latestPayment) <= 0) continue;
-        bump(tx.type === 'collection' ? collectedAfterPayment : directAfterPayment, allocation.expenseId, allocation.amountMinor);
+        const latestOutflow = latestExpenseOutflow.get(allocation.expenseId);
+        if (!latestOutflow || compareTransactionTime(tx, latestOutflow) <= 0) continue;
+        bump(tx.type === 'collection' ? collectedAfterOutflow : directAfterOutflow, allocation.expenseId, allocation.amountMinor);
         const childKey = `${allocation.expenseId}:${tx.childId}`;
-        bump(tx.type === 'collection' ? collectedAfterPaymentByChild : directAfterPaymentByChild, childKey, allocation.amountMinor);
+        bump(tx.type === 'collection' ? collectedAfterOutflowByChild : directAfterOutflowByChild, childKey, allocation.amountMinor);
       }
     }
     const contributionsByExpense = new Map(), contributionsByChild = new Map();
@@ -783,16 +783,17 @@ export class Ledger {
       collectedMinor: expenseCollected.get(row.id) ?? 0, adjustedMinor: expenseAdjusted.get(row.id) ?? 0,
       directMinor: expenseDirect.get(row.id) ?? 0, coveredMinor: expenseCovered.get(row.id) ?? 0,
       paidOutMinor: expensePaid.get(row.id) ?? 0,
-      latestPayment: latestExpensePayment.has(row.id) ? {
-        id: latestExpensePayment.get(row.id).id, amountMinor: latestExpensePayment.get(row.id).amountMinor,
-        destination: latestExpensePayment.get(row.id).destination, occurredAt: latestExpensePayment.get(row.id).occurredAt,
+      latestOutflow: latestExpenseOutflow.has(row.id) ? {
+        id: latestExpenseOutflow.get(row.id).id, type: latestExpenseOutflow.get(row.id).type,
+        amountMinor: latestExpenseOutflow.get(row.id).amountMinor,
+        destination: latestExpenseOutflow.get(row.id).destination, occurredAt: latestExpenseOutflow.get(row.id).occurredAt,
       } : null,
-      collectedAfterLatestPaymentMinor: collectedAfterPayment.get(row.id) ?? 0,
-      directAfterLatestPaymentMinor: directAfterPayment.get(row.id) ?? 0,
-      contributorsAfterLatestPayment: (contributionsByExpense.get(row.id) ?? []).map(contribution => ({
+      collectedAfterLatestOutflowMinor: collectedAfterOutflow.get(row.id) ?? 0,
+      directAfterLatestOutflowMinor: directAfterOutflow.get(row.id) ?? 0,
+      contributorsAfterLatestOutflow: (contributionsByExpense.get(row.id) ?? []).map(contribution => ({
         childId: contribution.child_id,
-        collectedMinor: collectedAfterPaymentByChild.get(`${row.id}:${contribution.child_id}`) ?? 0,
-        directMinor: directAfterPaymentByChild.get(`${row.id}:${contribution.child_id}`) ?? 0,
+        collectedMinor: collectedAfterOutflowByChild.get(`${row.id}:${contribution.child_id}`) ?? 0,
+        directMinor: directAfterOutflowByChild.get(`${row.id}:${contribution.child_id}`) ?? 0,
       })).filter(contribution => contribution.collectedMinor > 0 || contribution.directMinor > 0),
       occurredAt: row.occurred_at, dueDate: row.due_date, comment: row.comment,
       cancelled: Boolean(row.cancelled),
