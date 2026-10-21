@@ -42,12 +42,10 @@ Datele afișate în capturi sunt integral sintetice. Setul surprinde și contact
   </tr>
 </table>
 
-<table>
-  <tr>
-    <td align="center"><img src="docs/screenshots/03-cheltuieli-tableta-768x1024.png" alt="Cheltuieli pe tabletă" width="440"><br><strong>Cheltuieli · 768×1024</strong></td>
-    <td align="center"><img src="docs/screenshots/04-rapoarte-tableta-1024x768.png" alt="Detalii de plată și rapoarte pe tabletă" width="440"><br><strong>Detalii de plată și rapoarte · 1024×768</strong></td>
-  </tr>
-</table>
+<p align="center">
+  <img src="docs/screenshots/03-cheltuieli-tableta-768x1024.png" alt="Cheltuieli pe tabletă" width="440"><br>
+  <strong>Cheltuieli · 768×1024</strong>
+</p>
 
 <p align="center">
   <img src="docs/screenshots/05-registru-desktop-1440x900.png" alt="Registrul clasei cu operațiunile recente afișate primele" width="900"><br>
