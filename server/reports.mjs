@@ -1,0 +1,568 @@
+import PDFDocument from 'pdfkit';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { drawReportNotebook, drawReportPlane } from './report-art.mjs';
+import { renderCollectionSheetPdf } from './collection-sheet.mjs';
+
+const HERE = path.dirname(fileURLToPath(import.meta.url));
+const REGULAR = path.resolve(HERE, '../assets/fonts/DejaVuSans.ttf');
+const BOLD = path.resolve(HERE, '../assets/fonts/DejaVuSans-Bold.ttf');
+const locale = 'ro-RO';
+const zone = 'Europe/Bucharest';
+const moneyFormat = new Intl.NumberFormat(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const dateFormat = new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeZone: zone });
+const dateTimeFormat = new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short', timeZone: zone });
+const compactMoneyFormat = new Intl.NumberFormat(locale, { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+const coverageFormat = new Intl.NumberFormat(locale, { maximumFractionDigits: 1 });
+
+export const REPORT_TYPES = new Set(['class', 'expense', 'child', 'matrix', 'collection_sheet']);
+export const reportCode = serial => `R-${String(serial).padStart(4, '0')}`;
+const money = minor => `${moneyFormat.format(minor / 100)} lei`;
+const personName = child => `${child.lastName} ${child.firstName}`;
+const activeTransactions = state => state.transactions.filter(tx => tx.type !== 'reversal' && !tx.reversed);
+const correctionTitles = {
+  collection: 'Încasare anulată', direct_payment: 'Plată directă anulată', payment: 'Plată către beneficiar anulată',
+  credit_apply: 'Repartizare din avans anulată', rounding_adjustment: 'Ajustare de rotunjire anulată', refund: 'Restituire de avans anulată',
+  fund_advance: 'Sumă avansată anulată', advance_repayment: 'Restituire a sumei avansate anulată', advance_waiver: 'Acoperire din fond anulată',
+};
+const sum = values => values.reduce((total, value) => total + value, 0);
+const sharedAttachments = (state, entityType, entityId) => (state.attachments || [])
+  .filter(item => item.visibility === 'class' && item.entityType === entityType && item.entityId === entityId);
+
+function expenseCoverage(expense) {
+  if (expense.totalMinor <= 0) return { ratio: 0, label: 'Fără sumă de acoperit', shortLabel: '—' };
+  const covered = Math.max(0, Math.min(expense.totalMinor, expense.collectedMinor + (expense.directMinor ?? 0) + (expense.coveredMinor ?? 0)));
+  const ratio = covered / expense.totalMinor;
+  // Keep 100% reserved for a fully covered expense, even with just one ban due.
+  const percent = Number(BigInt(covered) * 1000n / BigInt(expense.totalMinor)) / 10;
+  const label = ratio > 0 && percent === 0 ? '<0,1%' : `${coverageFormat.format(percent)}%`;
+  return { ratio, label, shortLabel: label };
+}
+
+function expenseStatus(state, expense) {
+  const contributions = state.children.map(child => child.contributions.find(item => item.expenseId === expense.id)).filter(Boolean);
+  const outstanding = contributions.filter(item => item.remainingMinor > 0);
+  return { count: outstanding.length, amountMinor: sum(outstanding.map(item => item.remainingMinor)) };
+}
+
+function reportedContributionMinor(expense) {
+  if (!expense.contributions.length) return null;
+  const amounts = expense.contributions.map(contribution => contribution.amountMinor);
+  const minimum = Math.min(...amounts), maximum = Math.max(...amounts);
+  if (minimum <= 0) return null;
+  if (minimum === maximum) return minimum;
+  return expense.type === 'split' && maximum - minimum === 1 ? minimum : null;
+}
+
+export function reportSubject(state, type, subjectId) {
+  if (type === 'class' || type === 'matrix' || (type === 'collection_sheet' && !subjectId)) return { id: null, label: state.settings.className || 'Clasa' };
+  if (type === 'expense' || type === 'collection_sheet') {
+    const expense = state.expenses.find(item => item.id === subjectId && !item.cancelled);
+    if (!expense) throw Object.assign(new Error('Cheltuiala pentru raport nu există.'), { status: 404 });
+    return { id: expense.id, label: expense.title };
+  }
+  const child = state.children.find(item => item.id === subjectId);
+  if (!child) throw Object.assign(new Error('Copilul pentru raport nu există.'), { status: 404 });
+  return { id: child.id, label: personName(child) };
+}
+
+export function reportFilename(report) {
+  const type = { class: 'situatia-clasei', expense: 'cheltuiala', child: 'fisa-copil', matrix: 'raport-exhaustiv', collection_sheet: 'fisa-incasari' }[report.type];
+  const subject = report.subjectLabel.normalize('NFD').replace(/[\u0300-\u036f]/gu, '').replace(/[^A-Za-z0-9]+/gu, '-').replace(/^-|-$/gu, '').toLowerCase();
+  return `${type}-${subject || 'raport'}-${report.code}.pdf`;
+}
+
+function documentTitle(report) {
+  if (report.type === 'class') return 'Situația clasei';
+  if (report.type === 'matrix') return 'Tabelul contribuțiilor';
+  if (report.type === 'expense') return `Situația cheltuielii „${report.subjectLabel}”`;
+  return `Fișa copilului — ${report.subjectLabel}`;
+}
+
+export async function renderReportPdf(report, state, branding = {}) {
+  if (report.type === 'collection_sheet') return renderCollectionSheetPdf(report, state, { regular: REGULAR, bold: BOLD });
+  const doc = new PDFDocument({ size: 'A4', layout: report.type === 'matrix' ? 'landscape' : 'portrait', margins: { top: 46, right: 42, bottom: 58, left: 42 }, bufferPages: true,
+    info: { Title: `${report.code} · ${documentTitle(report)}`, Author: 'Casierul clasei', CreationDate: new Date(report.createdAt) } });
+  doc.registerFont('Regular', REGULAR).registerFont('Bold', BOLD);
+  const chunks = [];
+  doc.on('data', chunk => chunks.push(chunk));
+  const complete = new Promise((resolve, reject) => { doc.on('end', () => resolve(Buffer.concat(chunks))); doc.on('error', reject); });
+  const width = doc.page.width - doc.page.margins.left - doc.page.margins.right;
+  const green = '#23634d', dark = '#243c32', muted = '#59665f', line = '#dce3dd';
+  const paper = {
+    class: { fill: '#edf4e9', ink: '#356048', tab: '#c4ddba' },
+    matrix: { fill: '#eaf3f8', ink: '#3a6378', tab: '#bedae7' },
+    expense: { fill: '#fff0e6', ink: '#85513b', tab: '#edc1a7' },
+    child: { fill: '#efebf7', ink: '#63517d', tab: '#d5c8e6' },
+  }[report.type];
+  const tones = {
+    positive: { ink: '#17623b', fill: '#e3f3e8' },
+    warning: { ink: '#8a5a00', fill: '#fff1c7' },
+    collection: { ink: '#a44a12', fill: '#fce8d5' },
+    negative: { ink: '#9b2c25', fill: '#f9dfdc' },
+    info: { ink: '#245c7a', fill: '#e2f0f7' },
+    correction: { ink: '#8a4b08', fill: '#f8e7d2' },
+  };
+
+  const ensure = height => { if (doc.y + height > doc.page.height - doc.page.margins.bottom) doc.addPage(); };
+  const rule = () => { doc.moveDown(.3).strokeColor(line).lineWidth(.7).moveTo(doc.page.margins.left, doc.y).lineTo(doc.page.width - doc.page.margins.right, doc.y).stroke().moveDown(.5); };
+  const section = title => {
+    ensure(76); const y = doc.y + 7, left = doc.page.margins.left;
+    doc.roundedRect(left, y + 1, 6, 16, 2).fill(paper.tab);
+    doc.font('Bold').fontSize(12).fillColor(dark).text(title, left + 15, y, { width: width - 15 });
+    doc.x = left; rule();
+  };
+  const note = text => {
+    doc.font('Regular').fontSize(8.5);
+    ensure(doc.heightOfString(text, { width, lineGap: 2 }) + 8);
+    doc.fillColor(muted).text(text, doc.page.margins.left, doc.y, { width, lineGap: 2 }); doc.moveDown(.4);
+  };
+  const metric = (label, value, tone = null) => {
+    const color = tones[tone];
+    const inset = color ? 10 : 0, labelWidth = width * .58 - inset - 8;
+    doc.font('Regular').fontSize(9.5);
+    const labelHeight = doc.heightOfString(label, { width: labelWidth });
+    doc.font('Bold').fontSize(10);
+    const valueHeight = doc.heightOfString(value, { width: width * .40 });
+    const height = Math.max(24, labelHeight + 9, valueHeight + 9);
+    ensure(height); const y = doc.y;
+    if (color) {
+      doc.roundedRect(doc.page.margins.left, y - 3, width, height - 3, 5).fill(color.fill);
+      doc.roundedRect(doc.page.margins.left, y - 3, 3, height - 3, 1).fill(color.ink);
+    }
+    doc.font('Regular').fontSize(9.5).fillColor(color?.ink || muted).text(label, doc.page.margins.left + inset, y, { width: labelWidth });
+    doc.font('Bold').fontSize(10).fillColor(color?.ink || dark).text(value, doc.page.margins.left + width * .58, y, { width: width * .40, align: 'right' });
+    doc.y = y + height; doc.x = doc.page.margins.left;
+  };
+  const coverageHeight = 33;
+  const coverage = (expense, left = doc.page.margins.left, availableWidth = width) => {
+    ensure(coverageHeight); const y = doc.y;
+    const { ratio, label } = expenseCoverage(expense);
+    doc.font('Regular').fontSize(8).fillColor(muted).text('Acoperire totală', left, y, { width: availableWidth * .55 });
+    doc.font('Bold').fontSize(8.5).fillColor(ratio === 1 ? green : dark).text(label, left + availableWidth * .55, y,
+      { width: availableWidth * .45, align: 'right' });
+    drawCoverageBar(left, y + 15, availableWidth, 6, ratio);
+    doc.y = y + coverageHeight; doc.x = doc.page.margins.left;
+  };
+  const drawCoverageBar = (left, top, barWidth, height, ratio) => {
+    doc.save();
+    doc.roundedRect(left, top, barWidth, height, height / 2).fill('#e7ece5');
+    if (ratio > 0) {
+      doc.roundedRect(left, top, barWidth, height, height / 2).clip();
+      doc.rect(left, top, barWidth * ratio, height).fill(ratio === 1 ? green : '#bd8a32');
+    }
+    doc.restore();
+  };
+  const item = (title, amount, details, comment = '', tone = null, expense = null) => {
+    const color = tones[tone];
+    const inset = color ? 9 : 0;
+    const titleWidth = width * .72 - inset - 8, textWidth = width - inset;
+    doc.font('Bold').fontSize(10);
+    const titleHeight = Math.max(doc.heightOfString(title, { width: titleWidth }), doc.heightOfString(amount, { width: width * .28 }));
+    doc.font('Regular').fontSize(8.5);
+    const detailsHeight = doc.heightOfString(details, { width: textWidth, lineGap: 2 });
+    const commentHeight = comment ? doc.heightOfString(comment, { width: textWidth, lineGap: 2 }) : 0;
+    // Keep ordinary entries together; very long comments may flow over a page.
+    const progressHeight = expense ? coverageHeight : 0;
+    ensure(Math.min(titleHeight + progressHeight + detailsHeight + commentHeight + 19, doc.page.height - doc.page.margins.top - doc.page.margins.bottom));
+    const y = doc.y;
+    if (color) doc.roundedRect(doc.page.margins.left, y, 3, Math.min(titleHeight + progressHeight + detailsHeight, doc.page.height - y - doc.page.margins.bottom), 1).fill(color.ink);
+    doc.font('Bold').fontSize(10).fillColor(color?.ink || dark).text(title, doc.page.margins.left + inset, y, { width: titleWidth });
+    doc.font('Bold').fontSize(10).fillColor(color?.ink || dark).text(amount, doc.page.margins.left + width * .72, y, { width: width * .28, align: 'right' });
+    doc.y = y + titleHeight + 3;
+    if (expense) coverage(expense, doc.page.margins.left + inset, textWidth);
+    doc.font('Regular').fontSize(8.5).fillColor(muted).text(details, doc.page.margins.left + inset, doc.y, { width: textWidth, lineGap: 2 });
+    if (comment) doc.font('Regular').fontSize(8.5).fillColor(dark).text(comment, doc.page.margins.left + inset, doc.y, { width: textWidth, lineGap: 2 });
+    doc.moveDown(.4); doc.strokeColor(line).lineWidth(.4).moveTo(doc.page.margins.left, doc.y).lineTo(doc.page.width - doc.page.margins.right, doc.y).stroke().moveDown(.45);
+  };
+  const paymentDetails = () => {
+    const settings = state.settings;
+    if (!settings.paymentRevolutUrl && !settings.paymentBeneficiary && !settings.paymentIban) return;
+    section('Cum poți plăti');
+    if (settings.paymentRevolutUrl) {
+      ensure(66);
+      doc.font('Bold').fontSize(10).fillColor(dark).text('Revolut.me', doc.page.margins.left, doc.y, { width });
+      doc.moveDown(.15).font('Regular').fontSize(9).fillColor(tones.info.ink)
+        .text(settings.paymentRevolutUrl, doc.page.margins.left, doc.y, { width, link: settings.paymentRevolutUrl, underline: true });
+      doc.moveDown(.15).font('Regular').fontSize(8.5).fillColor(muted)
+        .text('Poți plăti și cu cardul direct din link, fără cont Revolut. Detalii plată: numele elevului.', doc.page.margins.left, doc.y, { width, lineGap: 2 });
+      doc.x = doc.page.margins.left; rule();
+    }
+    if (settings.paymentBeneficiary || settings.paymentIban) {
+      const details = [settings.paymentBeneficiary ? `Beneficiar: ${settings.paymentBeneficiary}` : '',
+        settings.paymentIban ? `IBAN: ${settings.paymentIban}` : '', 'Detalii plată: numele elevului'].filter(Boolean).join('\n');
+      item('Transfer bancar', '', details, '', 'info');
+    }
+  };
+  const matrixReport = () => {
+    const expenses = state.expenses.filter(entry => !entry.cancelled).sort((a, b) => a.occurredAt.localeCompare(b.occurredAt) || a.title.localeCompare(b.title, locale));
+    if (!expenses.length) { note('Nu există cheltuieli active pentru tabel.'); return; }
+    const children = state.children;
+    const left = doc.page.margins.left, nameWidth = 188, totalWidth = 62, minimumCellWidth = 92;
+    const childNameWidth = nameWidth - totalWidth - 14;
+    const columnsPerGroup = Math.max(1, Math.floor((width - nameWidth) / minimumCellWidth));
+    const groups = Array.from({ length: Math.ceil(expenses.length / columnsPerGroup) }, (_, index) => expenses.slice(index * columnsPerGroup, (index + 1) * columnsPerGroup));
+    const colors = { paid: '#d9f0e1', partial: '#fff0bf', unpaid: '#f7d6d2', none: '#eeeeea' };
+    const rowHeight = 23, headerHeight = 68;
+    const closingNote = `Raport nominal pentru verificare internă, generat din registrul „Casierul clasei”. Sumele sunt în lei. Total de plată arată suma rămasă de achitat de fiecare copil pentru toate contribuțiile active. Celulele includ banii încasați în fond, plățile directe către beneficiari, sumele acoperite din fond și ajustările de rotunjire; barele și procentele includ încasările, plățile directe și acoperirile din fond.${expenses.some(expense => expense.totalMinor === 0) ? ' „—” în antet: fără sumă de acoperit.' : ''}`;
+    doc.font('Regular').fontSize(8.5);
+    const closingHeight = doc.heightOfString(closingNote, { width, lineGap: 2 }) + 16;
+    const compactMoney = minor => compactMoneyFormat.format(minor / 100);
+    const legend = () => {
+      const entries = [['Închis', colors.paid], ['Parțial', colors.partial], ['Neachitat', colors.unpaid], ['Nu participă', colors.none]];
+      let x = left;
+      doc.font('Regular').fontSize(7.5).fillColor(muted).text('Celulă: închis / datorat, în lei', x, doc.y, { lineBreak: false });
+      x += 185;
+      for (const [label, color] of entries) {
+        doc.rect(x, doc.y - 1, 10, 10).fillAndStroke(color, line);
+        doc.fillColor(muted).text(label, x + 14, doc.y, { lineBreak: false });
+        x += doc.widthOfString(label) + 31;
+      }
+      doc.y += 18; doc.x = left;
+    };
+    const groupHeading = (groupIndex, continued = false) => {
+      doc.font('Bold').fontSize(10).fillColor(dark).text(`${continued ? 'Tabelul contribuțiilor · ' : ''}Cheltuieli ${groupIndex * columnsPerGroup + 1}–${Math.min(expenses.length, (groupIndex + 1) * columnsPerGroup)} din ${expenses.length}`, left, doc.y, { width });
+      doc.moveDown(.3); legend();
+    };
+    const tableHeader = group => {
+      const cellWidth = Math.min(118, (width - nameWidth) / group.length), tableWidth = nameWidth + cellWidth * group.length;
+      let x = left, y = doc.y;
+      doc.rect(x, y, nameWidth, headerHeight).fillAndStroke(paper.fill, line);
+      doc.font('Bold').fontSize(8).fillColor(dark).text('Copil', x + 5, y + 18, { width: childNameWidth, ellipsis: true, lineBreak: false });
+      doc.font('Bold').fontSize(7.2).fillColor(dark).text('Total de\nplată', x + nameWidth - totalWidth - 4, y + 14, { width: totalWidth, align: 'right', lineGap: 1 });
+      doc.font('Regular').fontSize(7).fillColor(muted).text('Acoperire totală', x + 5, y + 48, { width: nameWidth - 10 });
+      x += nameWidth;
+      for (const expense of group) {
+        doc.rect(x, y, cellWidth, headerHeight).fillAndStroke(paper.fill, line);
+        doc.font('Bold').fontSize(7.2).fillColor(dark).text(expense.title, x + 4, y + 6, { width: cellWidth - 8, height: 36, align: 'center', ellipsis: true });
+        const { ratio, shortLabel } = expenseCoverage(expense);
+        doc.font('Bold').fontSize(7.5).fillColor(ratio === 1 ? green : dark).text(shortLabel, x + 4, y + 47, { width: cellWidth - 8, align: 'center' });
+        drawCoverageBar(x + 10, y + 60, cellWidth - 20, 5, ratio);
+        x += cellWidth;
+      }
+      doc.y = y + headerHeight; doc.x = left;
+      return { cellWidth, tableWidth };
+    };
+    const newMatrixPage = (group, groupIndex) => {
+      doc.addPage();
+      groupHeading(groupIndex, true);
+      return tableHeader(group);
+    };
+    groups.forEach((group, groupIndex) => {
+      if (groupIndex) doc.addPage();
+      groupHeading(groupIndex, groupIndex > 0);
+      let geometry = tableHeader(group);
+      for (const [childIndex, child] of children.entries()) {
+        const isLastRow = groupIndex === groups.length - 1 && childIndex === children.length - 1;
+        // Keep the explanation with the final row instead of creating a note-only page.
+        if (doc.y + rowHeight + (isLastRow ? closingHeight : 0) > doc.page.height - doc.page.margins.bottom - 4) geometry = newMatrixPage(group, groupIndex);
+        const y = doc.y;
+        doc.rect(left, y, nameWidth, rowHeight).fillAndStroke('#fffdf7', line);
+        doc.font('Regular').fontSize(7.5).fillColor(dark).text(`${personName(child)}${child.active ? '' : ' · arhivat'}`, left + 5, y + 7, { width: childNameWidth, height: rowHeight - 8, ellipsis: true, lineBreak: false });
+        doc.font('Bold').fontSize(7.2).fillColor(child.dueMinor ? dark : green).text(`${compactMoney(child.dueMinor)} lei`, left + nameWidth - totalWidth - 4, y + 7, { width: totalWidth, align: 'right', lineBreak: false });
+        group.forEach((expense, index) => {
+          const contribution = child.contributions.find(entry => entry.expenseId === expense.id);
+          const settledMinor = contribution ? contribution.paidMinor + (contribution.directMinor ?? 0) + (contribution.coveredMinor ?? 0) + (contribution.adjustedMinor ?? 0) : 0;
+          const status = !contribution ? 'none' : contribution.remainingMinor === 0 ? 'paid' : settledMinor > 0 ? 'partial' : 'unpaid';
+          const x = left + nameWidth + geometry.cellWidth * index;
+          doc.rect(x, y, geometry.cellWidth, rowHeight).fillAndStroke(colors[status], line);
+          const value = contribution ? `${compactMoney(settledMinor)} / ${compactMoney(contribution.amountMinor)}` : '—';
+          doc.font(contribution ? 'Bold' : 'Regular').fontSize(7.5).fillColor(dark).text(value, x + 3, y + 7, { width: geometry.cellWidth - 6, align: 'center', lineBreak: false });
+        });
+        doc.y = y + rowHeight; doc.x = left;
+      }
+      doc.moveDown(.6);
+    });
+    note(closingNote);
+  };
+
+  const classExecutiveSummary = () => {
+    const left = doc.page.margins.left;
+    const balanceMinor = state.summary.balanceMinor;
+    const outstandingAdvanceMinor = state.summary.totalAdvanceOutstandingMinor ?? 0;
+    const netBalanceMinor = state.summary.netBalanceMinor ?? balanceMinor;
+    const dueMinor = state.summary.totalDueMinor;
+    const debtorCount = state.children.filter(child => child.dueMinor > 0).length;
+    const expenses = state.expenses.filter(expense => !expense.cancelled).map(expense => ({
+      expense, due: expenseStatus(state, expense), coverage: expenseCoverage(expense),
+    }));
+    const completeCount = expenses.filter(entry => entry.due.amountMinor === 0).length;
+    const openCount = expenses.length - completeCount;
+    const visibleExpenses = [...expenses].sort((a, b) => Number(a.due.amountMinor === 0) - Number(b.due.amountMinor === 0)
+      || b.due.amountMinor - a.due.amountMinor || b.expense.occurredAt.localeCompare(a.expense.occurredAt)).slice(0, 4);
+
+    section('Pe scurt');
+    let y = doc.y;
+    const bannerTone = tones.info;
+    doc.roundedRect(left, y, width, 56, 8).fill(bannerTone.fill);
+    doc.roundedRect(left, y, 4, 56, 2).fill(bannerTone.ink);
+    doc.font('Regular').fontSize(8.5).fillColor(bannerTone.ink).text('Numerar disponibil în fond', left + 13, y + 10,
+      { width: width * .53 });
+    doc.font('Bold').fontSize(15).fillColor(bannerTone.ink).text(money(balanceMinor), left + width * .55, y + 7,
+      { width: width * .42, align: 'right' });
+    const balanceExplanation = outstandingAdvanceMinor
+      ? `După restituirea sumelor avansate de ${money(outstandingAdvanceMinor)}, soldul ar fi ${money(netBalanceMinor)}.`
+      : 'Nu există sume avansate de restituit.';
+    doc.font('Regular').fontSize(8).fillColor(bannerTone.ink).text(balanceExplanation, left + 13, y + 34,
+      { width: width - 26, lineBreak: false, ellipsis: true });
+
+    const gap = 8, cardWidth = (width - gap * 2) / 3, cardHeight = 66;
+    y += 68;
+    const cards = [
+      { label: 'De restituit', value: money(outstandingAdvanceMinor), detail: 'pentru sume avansate', tone: outstandingAdvanceMinor ? tones.warning : tones.positive },
+      { label: 'De încasat', value: money(dueMinor), detail: `${debtorCount} ${debtorCount === 1 ? 'copil' : 'copii'}`, tone: dueMinor ? tones.collection : tones.positive },
+      { label: 'Sold după restituire', value: money(netBalanceMinor), detail: 'poziția netă a fondului', tone: netBalanceMinor < 0 ? tones.negative : tones.info },
+    ];
+    cards.forEach((card, index) => {
+      const x = left + index * (cardWidth + gap);
+      doc.roundedRect(x, y, cardWidth, cardHeight, 7).fill(card.tone.fill);
+      doc.font('Regular').fontSize(7.8).fillColor(card.tone.ink).text(card.label, x + 10, y + 9,
+        { width: cardWidth - 20, lineBreak: false, ellipsis: true });
+      doc.font('Bold').fontSize(12).fillColor(card.tone.ink).text(card.value, x + 10, y + 26,
+        { width: cardWidth - 20, lineBreak: false, ellipsis: true });
+      doc.font('Regular').fontSize(7).fillColor(card.tone.ink).text(card.detail, x + 10, y + 47,
+        { width: cardWidth - 20, lineBreak: false, ellipsis: true });
+    });
+
+    y += cardHeight + 19;
+    doc.font('Bold').fontSize(11).fillColor(dark).text('Starea cheltuielilor', left, y, { width: width * .58, lineBreak: false });
+    doc.font('Regular').fontSize(8).fillColor(muted).text(`${completeCount} ${completeCount === 1 ? 'acoperită integral' : 'acoperite integral'} · ${openCount} în colectare`,
+      left + width * .58, y + 2, { width: width * .42, align: 'right', lineBreak: false });
+    y += 23;
+    if (!expenses.length) {
+      doc.font('Regular').fontSize(8.5).fillColor(muted).text('Nu există cheltuieli active.', left, y, { width });
+      y += 28;
+    } else {
+      for (const { expense, due, coverage: expenseCoverageValue } of visibleExpenses) {
+        const titleWidth = width * .62;
+        doc.font('Bold').fontSize(8.5).fillColor(due.amountMinor ? tones.warning.ink : tones.positive.ink)
+          .text(expense.title, left, y, { width: titleWidth, height: 13, lineBreak: false, ellipsis: true });
+        doc.font('Bold').fontSize(8.5).fillColor(due.amountMinor ? tones.warning.ink : tones.positive.ink)
+          .text(expenseCoverageValue.label, left + titleWidth, y, { width: width - titleWidth, align: 'right', lineBreak: false });
+        drawCoverageBar(left, y + 16, width, 6, expenseCoverageValue.ratio);
+        const status = due.amountMinor
+          ? `De încasat ${money(due.amountMinor)} · ${due.count} ${due.count === 1 ? 'copil' : 'copii'}`
+          : 'Acoperită integral';
+        doc.font('Regular').fontSize(7.3).fillColor(muted).text(status, left, y + 27,
+          { width, lineBreak: false, ellipsis: true });
+        y += 43;
+      }
+      if (expenses.length > visibleExpenses.length) {
+        doc.font('Regular').fontSize(7.5).fillColor(muted)
+          .text(`Încă ${expenses.length - visibleExpenses.length} ${expenses.length - visibleExpenses.length === 1 ? 'cheltuială apare' : 'cheltuieli apar'} în detalii.`, left, y, { width });
+        y += 17;
+      }
+    }
+
+    const attentionTone = dueMinor ? tones.collection : outstandingAdvanceMinor ? tones.warning : tones.positive;
+    const attentionParts = [dueMinor ? `${money(dueMinor)} de încasat de la ${debtorCount} ${debtorCount === 1 ? 'copil' : 'copii'}` : '',
+      outstandingAdvanceMinor ? `${money(outstandingAdvanceMinor)} de restituit pentru sume avansate` : ''].filter(Boolean);
+    const attentionText = attentionParts.length ? attentionParts.join(' · ') : 'Nu există sume de încasat sau avansuri de restituit.';
+    doc.roundedRect(left, y + 3, width, 42, 7).fill(attentionTone.fill);
+    doc.font('Bold').fontSize(8).fillColor(attentionTone.ink).text('DE URMĂRIT', left + 11, y + 11,
+      { width: 70, lineBreak: false, characterSpacing: .6 });
+    doc.font('Regular').fontSize(8).fillColor(attentionTone.ink).text(attentionText, left + 88, y + 10,
+      { width: width - 99, height: 25, ellipsis: true });
+    doc.y = y + 58; doc.x = left;
+    note('Detaliile, reconcilierea și istoricul complet urmează în paginile următoare.');
+  };
+
+  const headerY = doc.y, logoSize = 42, centerInset = logoSize + 14;
+  if (branding.school) doc.image(branding.school, doc.page.margins.left, headerY, { fit: [logoSize, logoSize], align: 'center', valign: 'center' });
+  if (branding.class) doc.image(branding.class, doc.page.width - doc.page.margins.right - logoSize, headerY, { fit: [logoSize, logoSize], align: 'center', valign: 'center' });
+  doc.font('Bold').fontSize(9).fillColor(green).text('CASIERUL CLASEI', doc.page.margins.left + centerInset, headerY + 5,
+    { width: width - centerInset * 2, align: 'center', characterSpacing: 1.2 });
+  doc.font('Regular').fontSize(9).fillColor(muted)
+    .text(`${state.settings.schoolName || 'Școala'} · ${state.settings.className || 'Clasa'}`, doc.page.margins.left + centerInset, headerY + 23,
+      { width: width - centerInset * 2, align: 'center' })
+    .text(state.settings.schoolYear || 'An școlar nespecificat', { width: width - centerInset * 2, align: 'center' });
+  const titleY = Math.max(headerY + logoSize, doc.y) + 16;
+  const titleWidth = width - 104;
+  doc.font('Bold').fontSize(19);
+  const titleHeight = doc.heightOfString(documentTitle(report), { width: titleWidth, lineGap: 2 });
+  const panelHeight = Math.max(76, titleHeight + 40);
+  doc.roundedRect(doc.page.margins.left, titleY, width, panelHeight, 10).fill(paper.fill);
+  // A little strip of paper tape and a notebook sit clear of all report data.
+  doc.save().translate(doc.page.margins.left + 22, titleY - 4).rotate(-4)
+    .roundedRect(0, 0, 37, 9, 1).fill('#f4dda7').restore();
+  drawReportNotebook(doc, doc.page.width - doc.page.margins.right - 72, titleY + (panelHeight - 58) / 2);
+  doc.font('Bold').fontSize(7).fillColor(paper.ink).text('DIN CAIETUL CLASEI', doc.page.margins.left + 16, titleY + 13,
+    { width: titleWidth, characterSpacing: 1.1 });
+  doc.font('Bold').fontSize(19).fillColor(dark).text(documentTitle(report), doc.page.margins.left + 16, titleY + 29,
+    { width: titleWidth, lineGap: 2 });
+  doc.y = titleY + panelHeight + 11; doc.x = doc.page.margins.left;
+  doc.font('Regular').fontSize(8).fillColor(muted)
+    .text(`${report.code} · Situație la ${dateTimeFormat.format(new Date(report.createdAt))} · Revizia registrului ${report.stateRevision}`, { width });
+  if (report.replacesCode) doc.moveDown(.35).font('Bold').fillColor('#8a4b08').text(`Raport corectiv: înlocuiește ${report.replacesCode}.`);
+  doc.moveDown(.7).fillColor(dark);
+
+  const transactions = activeTransactions(state);
+  if (report.type === 'matrix') matrixReport();
+  if (report.type === 'class') {
+    classExecutiveSummary();
+    doc.addPage();
+    doc.font('Bold').fontSize(15).fillColor(dark).text('Detalii și reconciliere', doc.page.margins.left, doc.y, { width });
+    doc.moveDown(.25);
+    note('Valorile de mai jos explică rezumatul și păstrează trasabilitatea completă a fondului clasei.');
+    section('Situația fondului');
+    metric('Sold inițial', money(state.settings.openingBalanceMinor));
+    metric('Bani primiți și păstrați în fond', money(state.summary.totalReceivedMinor));
+    metric('Plăți directe către beneficiari', money(state.summary.totalDirectMinor ?? 0));
+    metric('Sume avansate temporar fondului', money(state.summary.totalAdvancedMinor ?? 0));
+    metric('Bani dați mai departe și restituiți', money(state.summary.totalPaidMinor));
+    metric('Numerar disponibil în fond', money(state.summary.balanceMinor), 'info');
+    metric('De restituit pentru sume avansate', money(state.summary.totalAdvanceOutstandingMinor ?? 0),
+      state.summary.totalAdvanceOutstandingMinor ? 'warning' : 'positive');
+    metric('Sold după restituirea sumelor avansate', money(state.summary.netBalanceMinor ?? state.summary.balanceMinor),
+      (state.summary.netBalanceMinor ?? state.summary.balanceMinor) < 0 ? 'negative' : 'info');
+    metric('Din sold: avansuri nealocate', money(state.summary.totalCreditMinor));
+    metric('Contribuții acoperite din fond', money(state.summary.totalCoveredMinor ?? 0));
+    metric('Ajustări de rotunjire', money(state.summary.totalAdjustedMinor ?? 0));
+    metric('Total de încasat', money(state.summary.totalDueMinor), state.summary.totalDueMinor ? 'negative' : 'positive');
+    metric('Copii cu sume de achitat', String(state.children.filter(child => child.dueMinor > 0).length), state.summary.totalDueMinor ? 'negative' : 'positive');
+    note('Reconciliere: sold inițial + bani primiți de la copii + sume avansate temporar − bani dați și restituiți = numerar disponibil. Sumele avansate rămase apar separat ca datorie a clasei.');
+
+    const advances = (state.advances || []).filter(entry => !entry.reversed);
+    section('Sume avansate fondului');
+    if (!advances.length) note('Nu există sume avansate temporar fondului.');
+    for (const advance of advances) {
+      const expense = state.expenses.find(entry => entry.id === advance.expenseId);
+      item(advance.person, money(advance.amountMinor),
+        `${dateTimeFormat.format(new Date(advance.occurredAt))} · Restituit ${money(advance.repaidMinor)} · Acoperit din fond ${money(advance.waivedMinor ?? 0)} · De restituit ${money(advance.outstandingMinor)}${expense ? ` · ${expense.title}` : ''}`,
+        advance.comment, advance.outstandingMinor ? 'warning' : 'positive');
+    }
+
+    section('Cheltuieli');
+    for (const expense of state.expenses.filter(entry => !entry.cancelled).reverse()) {
+      const due = expenseStatus(state, expense);
+      const contributionMinor = reportedContributionMinor(expense);
+      const tone = due.amountMinor === 0 ? 'positive' : expense.collectedMinor + (expense.directMinor ?? 0) > 0 ? 'warning' : 'negative';
+      item(expense.title, money(expense.totalMinor),
+        `${contributionMinor === null ? '' : `Contribuție per copil ${money(contributionMinor)} · `}Încasat în fond ${money(expense.collectedMinor)} · Plătit direct ${money(expense.directMinor ?? 0)} · Acoperit din fond ${money(expense.coveredMinor ?? 0)} · Ajustări ${money(expense.adjustedMinor ?? 0)} · Dat mai departe ${money(expense.paidOutMinor)} · De achitat: ${due.count} copii · ${money(due.amountMinor)} · Documente partajate: ${sharedAttachments(state, 'expense', expense.id).length}`,
+        expense.comment, tone, expense);
+    }
+    const payments = transactions.filter(tx => tx.type === 'payment');
+    section('Bani dați mai departe');
+    if (!payments.length) note('Nu ai înregistrat bani dați mai departe.');
+    for (const payment of payments) {
+      const expense = state.expenses.find(entry => entry.id === payment.expenseId);
+      item(payment.destination || 'Plată', money(payment.amountMinor),
+        `${dateTimeFormat.format(new Date(payment.occurredAt))}${expense ? ` · ${expense.title}` : ' · Fără cheltuială asociată'} · Documente partajate: ${sharedAttachments(state, 'payment', payment.id).length}`, payment.comment, 'info');
+    }
+    const corrections = state.transactions.filter(tx => tx.type === 'reversal');
+    if (corrections.length) {
+      section('Corecții păstrate în istoric');
+      note('Corecțiile asigură trasabilitatea registrului. Operațiunile și valorile anulate de mai jos nu mai influențează soldurile curente. Înregistrările corecte refăcute ulterior sunt incluse separat în totalurile curente.');
+      for (const correction of corrections) {
+        const original = state.transactions.find(tx => tx.id === correction.reversesId);
+        const valueMinor = original?.type === 'collection' ? original.amountMinor - original.changeMinor : original?.amountMinor ?? correction.amountMinor;
+        const allocations = (original?.allocations || correction.allocations || []).map(allocation => {
+          const expense = state.expenses.find(entry => entry.id === allocation.expenseId);
+          return `${expense?.title || 'Cheltuială'}: ${money(allocation.amountMinor)}`;
+        }).join(' · ');
+        const expense = original?.expenseId ? state.expenses.find(entry => entry.id === original.expenseId) : null;
+        const details = [dateTimeFormat.format(new Date(correction.occurredAt)), `Valoare anulată ${money(valueMinor)}`,
+          original?.destination ? `Destinație: ${original.destination}` : '', allocations ? `Repartizare: ${allocations}` : expense ? `Cheltuială: ${expense.title}` : '',
+          `Impact curent asupra soldurilor: ${money(0)}`].filter(Boolean).join(' · ');
+        item(correctionTitles[original?.type] || 'Operațiune anulată', '', details,
+          correction.comment ? `Motiv: ${correction.comment}` : '', 'correction');
+      }
+    }
+  }
+
+  if (report.type === 'expense') {
+    const expense = state.expenses.find(entry => entry.id === report.subjectId);
+    const due = expenseStatus(state, expense);
+    const childContributions = state.children.map(child => child.contributions.find(entry => entry.expenseId === expense.id)).filter(Boolean);
+    const fullyPaid = childContributions.filter(entry => entry.remainingMinor === 0).length;
+    const partiallyPaid = childContributions.filter(entry => entry.paidMinor + (entry.directMinor ?? 0) + (entry.coveredMinor ?? 0) > 0 && entry.remainingMinor > 0).length;
+    section('Rezumat');
+    metric('Necesar total', money(expense.totalMinor));
+    const contributionMinor = reportedContributionMinor(expense);
+    if (contributionMinor !== null) metric('Contribuție per copil', money(contributionMinor), 'info');
+    metric('Încasat în fond de la părinți', money(expense.collectedMinor), expense.collectedMinor ? 'positive' : null);
+    metric('Plătit direct beneficiarilor', money(expense.directMinor ?? 0), expense.directMinor ? 'info' : null);
+    metric('Acoperit din fond', money(expense.coveredMinor ?? 0), expense.coveredMinor ? 'info' : null);
+    metric('Ajustări de rotunjire', money(expense.adjustedMinor ?? 0), expense.adjustedMinor ? 'info' : null);
+    coverage(expense);
+    metric('Bani dați mai departe', money(expense.paidOutMinor), expense.paidOutMinor ? 'info' : null);
+    const relatedAdvances = (state.advances || []).filter(entry => !entry.reversed && entry.expenseId === expense.id);
+    metric('Sume avansate temporar pentru cheltuială', money(sum(relatedAdvances.map(entry => entry.amountMinor))), relatedAdvances.length ? 'warning' : null);
+    metric('Participanți', String(expense.contributions.length));
+    metric('Contribuții închise integral', String(fullyPaid), 'positive');
+    metric('Contribuții acoperite parțial', String(partiallyPaid), partiallyPaid ? 'warning' : null);
+    metric('De achitat', `${due.count} copii · ${money(due.amountMinor)}`, due.amountMinor ? 'negative' : 'positive');
+    if (expense.dueDate) metric('Termen', dateFormat.format(new Date(`${expense.dueDate}T12:00:00Z`)));
+    if (expense.comment) note(`Comentariu: ${expense.comment}`);
+    note('Raportul nu publică numele copiilor cu sume de achitat.');
+    const payments = transactions.filter(tx => tx.type === 'payment' && tx.expenseId === expense.id);
+    section('Bani dați mai departe');
+    if (!payments.length) note('Nu ai înregistrat bani dați mai departe pentru această cheltuială.');
+    for (const payment of payments) item(payment.destination || 'Plată', money(payment.amountMinor), dateTimeFormat.format(new Date(payment.occurredAt)), payment.comment, 'info');
+    const documents = [...sharedAttachments(state, 'expense', expense.id),
+      ...payments.flatMap(payment => sharedAttachments(state, 'payment', payment.id))];
+    section('Documente justificative partajate');
+    if (!documents.length) note('Nu există documente justificative vizibile părinților pentru această cheltuială.');
+    for (const document of documents) item(document.filename, `${Math.max(1, Math.round(document.size / 1024))} KB`,
+      `${dateTimeFormat.format(new Date(document.createdAt))} · SHA-256 ${document.sha256}`, '', 'info');
+    if (relatedAdvances.length) {
+      section('Finanțare temporară');
+      for (const advance of relatedAdvances) item(advance.person, money(advance.amountMinor),
+        `${dateTimeFormat.format(new Date(advance.occurredAt))} · Restituit ${money(advance.repaidMinor)} · Acoperit din fond ${money(advance.waivedMinor ?? 0)} · De restituit ${money(advance.outstandingMinor)}`,
+        advance.comment, advance.outstandingMinor ? 'warning' : 'positive');
+    }
+  }
+
+  if (report.type === 'child') {
+    const child = state.children.find(entry => entry.id === report.subjectId);
+    section('Situație curentă');
+    metric('Total de achitat', money(child.dueMinor), child.dueMinor ? 'negative' : 'positive');
+    metric('Avans disponibil', money(child.creditMinor), child.creditMinor ? 'info' : null);
+    section('Contribuții');
+    if (!child.contributions.length) note('Copilul nu are contribuții înregistrate.');
+    for (const contribution of child.contributions) item(contribution.title, money(contribution.amountMinor),
+      `Încasat în fond ${money(contribution.paidMinor)}${contribution.directMinor ? ` · Plătit direct beneficiarului ${money(contribution.directMinor)}` : ''}${contribution.coveredMinor ? ` · Acoperit din fond ${money(contribution.coveredMinor)}` : ''}${contribution.adjustedMinor ? ` · Ajustare de rotunjire ${money(contribution.adjustedMinor)}` : ''} · De achitat ${money(contribution.remainingMinor)}${contribution.dueDate ? ` · Termen ${dateFormat.format(new Date(`${contribution.dueDate}T12:00:00Z`))}` : ''}`, '',
+      contribution.remainingMinor === 0 ? 'positive' : contribution.paidMinor + (contribution.directMinor ?? 0) + (contribution.coveredMinor ?? 0) ? 'warning' : 'negative');
+    const history = state.transactions.filter(tx => tx.childId === child.id);
+    section('Istoric individual');
+    if (!history.length) note('Nu există operațiuni pentru acest copil.');
+    for (const tx of history) {
+      const label = { collection: 'Încasare', direct_payment: 'Plată directă beneficiarului', credit_apply: 'Avans repartizat', rounding_adjustment: 'Ajustare de rotunjire',
+        advance_waiver: 'Acoperire din fond', refund: 'Avans restituit', reversal: 'Corecție' }[tx.type] || tx.type;
+      const retained = tx.type === 'collection' ? tx.amountMinor - tx.changeMinor : tx.amountMinor;
+      const allocationText = tx.allocations.map(allocation => {
+        const expense = state.expenses.find(entry => entry.id === allocation.expenseId);
+        return `${expense?.title || 'Cheltuială'}: ${money(allocation.amountMinor)}`;
+      }).join(' · ');
+      item(`${label}${tx.reversed ? ' · corectată' : ''}`, money(retained),
+        `${dateTimeFormat.format(new Date(tx.occurredAt))}${tx.type === 'direct_payment' ? ` · Beneficiar: ${tx.destination}` : ''}${tx.changeMinor ? ` · Rest returnat ${money(tx.changeMinor)}` : ''}${allocationText ? ` · ${allocationText}` : ''}`, tx.comment,
+        tx.reversed || tx.type === 'reversal' ? 'correction' : tx.type === 'collection' ? 'positive' : ['direct_payment', 'credit_apply', 'rounding_adjustment', 'advance_waiver'].includes(tx.type) ? 'info' : 'warning');
+    }
+  }
+
+  if (report.type !== 'matrix') {
+    paymentDetails();
+    note('Document generat din registrul „Casierul clasei”. Sumele sunt exprimate în lei și reflectă datele existente la momentul emiterii.');
+  }
+  const pages = doc.bufferedPageRange();
+  for (let index = 0; index < pages.count; index += 1) {
+    doc.switchToPage(index);
+    const bottomMargin = doc.page.margins.bottom;
+    doc.page.margins.bottom = 0;
+    if (index > 0) {
+      doc.font('Bold').fontSize(7).fillColor(green).text('CASIERUL CLASEI', doc.page.margins.left, 24, { width: width / 2, lineBreak: false, characterSpacing: .8 });
+      doc.font('Regular').fontSize(7).fillColor(muted).text(report.code, doc.page.margins.left + width / 2, 24, { width: width / 2, align: 'right', lineBreak: false, characterSpacing: 0 });
+    }
+    const footerY = doc.page.height - 34;
+    doc.strokeColor(line).lineWidth(.6).moveTo(doc.page.margins.left, footerY - 10).lineTo(doc.page.width - doc.page.margins.right, footerY - 10).stroke();
+    doc.strokeColor(paper.tab).lineWidth(2).moveTo(doc.page.margins.left, footerY - 10).lineTo(doc.page.margins.left + 32, footerY - 10).stroke();
+    drawReportPlane(doc, doc.page.margins.left, footerY - 3, 15);
+    doc.font('Regular').fontSize(7.5).fillColor(muted)
+      .text('Cu grijă pentru clasa noastră.', doc.page.margins.left + 22, footerY, { width: width / 2 - 22, lineBreak: false });
+    doc.font('Regular').fontSize(7.5).fillColor(muted)
+      .text(`${report.code} · pagina ${index + 1}/${pages.count}`, doc.page.margins.left + width / 2, footerY, { width: width / 2, align: 'right', lineBreak: false });
+    doc.page.margins.bottom = bottomMargin;
+  }
+  doc.end();
+  return complete;
+}

@@ -1,0 +1,18 @@
+{
+  "name": "casierul-clasei",
+  "version": "0.1.0",
+  "private": true,
+  "license": "GPL-3.0-or-later",
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "start": "node server/index.mjs",
+    "test": "node --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "pdfjs-dist": "^4.10.38",
+    "pdfkit": "^0.20.2"
+  }
+}
