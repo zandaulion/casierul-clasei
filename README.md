@@ -6,6 +6,8 @@ O atmosferă de comunitate școlară, cu ilustrații discrete, culori calde și 
 
 Aplicația: https://casierul-clasei.zandaulion.com
 
+Pentru o instalare nouă pe propriul server, descarcă [pachetul v0.1.0 și suma de verificare](https://github.com/zandaulion/casierul-clasei/releases/tag/v0.1.0). Arhiva include sursa necesară pentru Docker, configurare-model fără secrete, instrucțiuni de instalare și backup și un exemplu inventat. Sursa etichetată pentru lansare nu include capturile de ecran sau datele unei clase. Nu folosi pachetul ca actualizare directă peste o instalare existentă.
+
 ## In English
 
 **Casierul clasei** (“the class treasurer”) is a self-hosted progressive web app for keeping the money of a school class in order: which child owes what for each expense, what was collected, what was paid out, who advanced money to the fund and what is left. It is built for Romanian schools — the interface, PDF reports and WhatsApp reminders are in Romanian and amounts are in lei — but the server, tests and deployment files are documented in English.
@@ -177,4 +179,4 @@ Schița interactivă inițială rămâne în `design/collection-flow.html`; `pre
 
 ## Licență
 
-Acest proiect este distribuit sub licența [GNU General Public License v3.0](LICENSE).
+Codul și documentația originale ale proiectului sunt distribuite sub [GNU General Public License v3.0 sau o versiune ulterioară](LICENSE). Componentele terțe păstrează propriile licențe.
