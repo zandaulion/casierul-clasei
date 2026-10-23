@@ -94,7 +94,8 @@ async function inspectPdf(fixture, type, prefix, { replacesId, subjectId } = {})
 }
 
 async function inspectBytes(pdf, report, filename, type, prefix) {
-  const document = await getDocument({ data: new Uint8Array(pdf), useSystemFonts: false, isEvalSupported: false }).promise;
+  const loadingTask = getDocument({ data: new Uint8Array(pdf), useSystemFonts: false, isEvalSupported: false });
+  const document = await loadingTask.promise;
   try {
     const pages = [];
     if (previewDirectory) {
@@ -114,14 +115,20 @@ async function inspectBytes(pdf, report, filename, type, prefix) {
       const items = content.items.filter(item => typeof item.str === 'string' && item.str.trim());
       pages.push({ number: index, width: viewport.width, height: viewport.height, items,
         text: normalize(items.map(item => item.str).join(' ')),
-        colors: operators.fnArray.flatMap((operator, index) => [OPS.setFillRGBColor, OPS.setStrokeRGBColor].includes(operator) ? [operators.argsArray[index]] : []),
+        colors: operators.fnArray.flatMap((operator, index) => [OPS.setFillRGBColor, OPS.setStrokeRGBColor].includes(operator) ? [rgbComponents(operators.argsArray[index])] : []),
         imageCount: operators.fnArray.filter(operator => [OPS.paintImageXObject, OPS.paintInlineImageXObject, OPS.paintImageXObjectRepeat].includes(operator)).length });
       page.cleanup();
     }
     return { report, filename, pages, text: normalize(pages.map(page => page.text).join(' ')) };
   } finally {
-    await document.destroy();
+    await loadingTask.destroy();
   }
+}
+
+function rgbComponents(args) {
+  assert.equal(args.length, 1, 'PDF.js 6 RGB operators carry one CSS color');
+  assert.match(args[0], /^#[0-9a-f]{6}$/i, 'PDF.js RGB color is a six-digit hex value');
+  return [1, 3, 5].map(offset => Number.parseInt(args[0].slice(offset, offset + 2), 16));
 }
 
 function assertLayout(result, type) {
@@ -489,6 +496,7 @@ test('monochrome cash sheets show settled contributions and leave room for handw
   assert.equal(all.text.includes('NOTĂ PRIVATĂ DAVID'), false);
   assert.equal(all.text.includes('RO49AAAA1B31007593840000'), false);
   assert.ok(all.pages.every(page => page.imageCount === 0), 'no colored logos or raster images');
+  assert.ok(all.pages.some(page => page.colors.length > 0), 'drawing color operators are inspected');
   assert.ok(all.pages.every(page => page.colors.every(color => color[0] === color[1] && color[1] === color[2])), 'all drawing colors are monochrome');
   const single = await inspectPdf(data, 'collection_sheet', 'cash-sheet-single', { subjectId: oneParticipant });
   assertLayout(single, 'collection_sheet');
